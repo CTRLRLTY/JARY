@@ -1,0 +1,55 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "gcc-debug",
+      "description": "Configure with GCC and Debug build type",
+      "hidden": false,
+      "binaryDir": "${sourceDir}/build/",
+      "cacheVariables": {
+          "CMAKE_EXPORT_COMPILE_COMMANDS": "on",
+          "CMAKE_BUILD_TYPE": "Debug",
+          "CMAKE_C_COMPILER": "gcc",
+          "CMAKE_CXX_COMPILER": "g++",
+          "CMAKE_C_FLAGS_DEBUG": "-gdwarf -g3 -DFEATURE_CUSTOM_TOKEN",
+          "CMAKE_CXX_FLAGS_DEBUG": "-Wno-write-strings -gdwarf -g3 -DFEATURE_CUSTOM_TOKEN"
+      }
+    },
+    {
+      "name": "gcc-release",
+      "description": "Configure with GCC and Release build type",
+      "hidden": false,
+      "binaryDir": "${sourceDir}/build/",
+      "cacheVariables": {
+          "CMAKE_EXPORT_COMPILE_COMMANDS": "on",
+          "CMAKE_BUILD_TYPE": "Release",
+          "CMAKE_C_COMPILER": "gcc",
+          "CMAKE_CXX_COMPILER": "g++",
+          "CMAKE_C_FLAGS_RELEASE": "-O3 -DFEATURE_CUSTOM_TOKEN",
+          "CMAKE_CXX_FLAGS_RELEASE": "-O3 -Wno-write-strings -DFEATURE_CUSTOM_TOKEN"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "gcc-debug-build",
+      "configurePreset": "gcc-debug",
+      "hidden": false,
+      "description": "Build using GCC and Debug build type",
+      "jobs": 4
+    },
+    {
+      "name": "gcc-release-build",
+      "configurePreset": "gcc-release",
+      "hidden": false,
+      "description": "Build using GCC and Release build type",
+      "jobs": 4
+    }
+  ]
+}
+  

@@ -1,5 +1,5 @@
-#ifndef TVM_VALUE_H
-#define TVM_VALUE_H
+#ifndef JAYVM_VALUE_H
+#define JAYVM_VALUE_H
 
 #include <stdint.h>
 

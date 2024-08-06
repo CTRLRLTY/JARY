@@ -1,5 +1,5 @@
-#ifndef tvm_token_h
-#define tvm_token_h
+#ifndef JAYVM_TOKEN_H
+#define JAYVM_TOKEN_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -10,16 +10,19 @@
 typedef enum {
     TKN_ERR = -1,
 
-    TKN_EQUAL,
     TKN_LEFT_PAREN,
     TKN_RIGHT_PAREN,
     TKN_LEFT_BRACE,
     TKN_RIGHT_BRACE,
-    TKN_LEFT_PBRACE,
-    TKN_RIGHT_PBRACE,
     TKN_COLON,
     TKN_COMMA,
     TKN_NEWLINE,
+
+// < OPERATOR SYMBOL
+    TKN_EQUAL,
+    TKN_LESSTHAN,
+    TKN_GREATERTHAN,
+// > OPERATOR SYMBOL
 
 // < LITERAL 
     TKN_STRING,
@@ -30,13 +33,13 @@ typedef enum {
     TKN_ANY,
     TKN_AND,
     TKN_OR,
+    TKN_ALL,
 // > LITERAL
 
     TKN_IDENTIFIER,
     TKN_PVAR,
     TKN_RULE,
     TKN_INPUT,
-    TKN_ALL,
     TKN_TARGET,
     TKN_CONDITION,
     TKN_MATCH,
@@ -60,4 +63,4 @@ size_t tkn_lexeme_size(TKN* token);
 bool tkn_lexeme(TKN* token, char *lexeme, size_t lexeme_size);
 
 
-#endif
+#endif // JAYVM_TOKEN_H

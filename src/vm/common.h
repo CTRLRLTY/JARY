@@ -1,5 +1,5 @@
-#ifndef TVM_COMMON_H
-#define TVM_COMMON_H
+#ifndef JAYVM_COMMON_H
+#define JAYVM_COMMON_H
 
 #if defined(_MSC_VER)
     // Microsoft Visual Studio

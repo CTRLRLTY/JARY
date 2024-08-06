@@ -1,5 +1,5 @@
-#ifndef TVM_AST_H
-#define TVM_AST_H
+#ifndef JAYVM_AST_H
+#define JAYVM_AST_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -18,6 +18,8 @@ typedef enum {
     EXPR_FUNC,
 } ExprType;
 
+typedef struct ASTExpr ASTExpr;
+
 typedef enum {
     CON_BINARY,
     CON_UNARY,
@@ -25,11 +27,10 @@ typedef enum {
 
 typedef struct {
     TKN name;
-    // Vector<ASTExpr>
-    Vector params;
+    jary_vec_t(ASTExpr) params;
 } ASTFunc;
 
-typedef struct {
+struct ASTExpr {
     ExprType type;
     union 
     {
@@ -39,19 +40,18 @@ typedef struct {
         TKN boolean;
         TKN any;
         ASTFunc func;
-        // Vector<TKN>
-        Vector property;
+        jary_vec_t(TKN) property;
     } as;
-} ASTExpr;
+};
 
-typedef struct {
+typedef struct ASTCondition {
     ConType type;
     ASTExpr left;
     ASTExpr right;
     TKN op;
 } ASTCondition;
 
-typedef struct {
+typedef struct ASTMatch {
     ConType type;
     ASTExpr left;
     ASTExpr right;
@@ -59,48 +59,44 @@ typedef struct {
     TKN alias;
 } ASTMatch;
 
-typedef struct {
+typedef struct ASTInput {
     TKN name;
     ASTExpr expr;
 } ASTInput;
 
-typedef struct {
+typedef struct ASTTarget {
     TKN name;
     ASTExpr expr;
 } ASTTarget;
 
-typedef struct {
+typedef struct ASTRule {
     TKN name;
 
-    // Vector<ASTInput>
-    Vector inputs;
-    // Vector<ASTMatch>
-    Vector match;
-    // Vector<ASTCondition>
-    Vector conditions;
-    // Vector<ASTTarget>
-    Vector targets;
+    jary_vec_t(ASTInput) inputs;
+    jary_vec_t(ASTMatch) match;
+    jary_vec_t(ASTCondition) conditions;
+    jary_vec_t(ASTTarget) targets;
 } ASTRule;
 
-typedef struct {
+typedef struct ASTImport {
     TKN path;
     TKN alias;
 } ASTImport;
 
-typedef struct {
-    // Vector<ASTImport>
-    Vector imports;
-    // Vector<ASTRule>
-    Vector rule;
+typedef struct ASTProg {
+    jary_vec_t(ASTImport) imports;
+    jary_vec_t(ASTRule) rule;
 } ASTProg;
 
 
-bool ASTProg_init(ASTProg* prog);
-bool ASTProg_free(ASTProg* prog);
-bool ASTRule_init(ASTRule* rule);
-bool ASTRule_free(ASTRule* rule);
-bool ASTFunc_init(ASTFunc* fun);
-bool ASTFunc_free(ASTFunc* fun);
+void ASTProg_init(ASTProg* prog);
+void ASTProg_free(ASTProg* prog);
+
+void ASTRule_init(ASTRule* rule);
+void ASTRule_free(ASTRule* rule);
+
+void ASTFunc_init(ASTFunc* fun);
+void ASTFunc_free(ASTFunc* fun);
 
 
 #endif

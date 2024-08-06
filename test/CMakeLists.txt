@@ -28,8 +28,8 @@ target_link_libraries( scanner_test
 
 target_include_directories( scanner_test
     PRIVATE
-        ${LIBTVM_INCLUDE_DIR}
-        ${LIBTVM_SRC_DIR}
+        ${LIBJAYVM_INCLUDE_DIR}
+        ${LIBJAYVM_SRC_DIR}
 )
 
 add_executable( parser_test
@@ -38,8 +38,8 @@ add_executable( parser_test
 
 target_include_directories( parser_test
     PRIVATE
-        ${LIBTVM_INCLUDE_DIR}
-        ${LIBTVM_SRC_DIR}
+        ${LIBJAYVM_INCLUDE_DIR}
+        ${LIBJAYVM_SRC_DIR}
 )
 
 target_link_libraries( parser_test
@@ -51,13 +51,12 @@ target_link_libraries( parser_test
 
 add_executable( vector_test
     vector_test.cc
-    ${LIBTVM_SRC_DIR}/vector.c
 )
 
 target_include_directories( vector_test
     PRIVATE
-        ${LIBTVM_INCLUDE_DIR}
-        ${LIBTVM_SRC_DIR}
+        ${LIBJAYVM_INCLUDE_DIR}
+        ${LIBJAYVM_SRC_DIR}
 )
 
 target_link_libraries( vector_test

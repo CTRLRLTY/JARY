@@ -1,9 +1,9 @@
-#ifndef tvm_fnv_h
-#define tvm_fnv_h
+#ifndef JAYVM_FNV_H
+#define JAYVM_FNV_H
 
 #include <stddef.h>
 #include <stdint.h>
 
 uint32_t fnv_hash(const char* str, size_t length);
 
-#endif
+#endif //JAYVM_FNV_H

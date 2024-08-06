@@ -49,10 +49,15 @@ Char = #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF];
 import "myprovider.py" as p
 import "myaction.py" as a
 
-rule OutsideWorkHours {     
+ingress data : p.es {
     input:
-        $data = p.queryES("127.0.0.1:9200", "ssh")
+        $index = "mydata"
+        $username = env.something
+        $password = env.password
+        $range = "30 seconds"
+}
 
+rule OutsideWorkHours {     
     match:
         $data.username AS $name
         unixtime($data.timestamp).hour AS $hour
@@ -64,10 +69,7 @@ rule OutsideWorkHours {
         a.notifyAdmin("[OusideWorkHours] "+ $name)
 }
 
-rule BruteForce {     
-    input:
-        $data = p.queryES("127.0.0.1:9200", "ssh")
-
+rule BruteForce {
     match:
         $data.username AS $name
         unixtime($data.timestamp) OVER 1h AS $found

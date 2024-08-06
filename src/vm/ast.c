@@ -1,67 +1,33 @@
 #include "ast.h"
 
-bool ASTProg_init(ASTProg* prog) {
-    if (vec_init(&prog->imports, sizeof(ASTImport)) != VEC_SUCCESS)
-        return false;
-
-    if (vec_init(&prog->rule, sizeof(ASTRule)) != VEC_SUCCESS)
-        return false;
-    
-    return true;
+void ASTProg_init(ASTProg* prog) {
+    jary_vec_init(prog->imports, 10);
+    jary_vec_init(prog->rule, 10);
 }
 
-bool ASTProg_free(ASTProg* prog) {
-    if (vec_free(&prog->imports) != VEC_SUCCESS)
-        return false;
-
-    if (vec_free(&prog->rule) != VEC_SUCCESS)
-        return false;
-
-    return true;
+void ASTProg_free(ASTProg* prog) {
+    jary_vec_free(prog->imports);
+    jary_vec_free(prog->rule);
 }
 
-bool ASTRule_init(ASTRule* rule) {
-    if (vec_init(&rule->inputs, sizeof(ASTInput)) != VEC_SUCCESS)
-        return false;
-    
-    if (vec_init(&rule->match, sizeof(ASTMatch)) != VEC_SUCCESS)
-        return false;
-    
-    if (vec_init(&rule->conditions, sizeof(ASTCondition)) != VEC_SUCCESS)
-        return false;
-    
-    if (vec_init(&rule->targets, sizeof(ASTTarget)) != VEC_SUCCESS)
-        return false;
-
-    return true;
+void ASTRule_init(ASTRule* rule) {
+    jary_vec_init(rule->inputs, 10);
+    jary_vec_init(rule->match, 10);
+    jary_vec_init(rule->conditions, 10);
+    jary_vec_init(rule->targets, 10);
 }
 
-bool ASTRule_free(ASTRule* rule) {
-    if (vec_free(&rule->inputs) != VEC_SUCCESS)
-        return false;
-    
-    if (vec_free(&rule->match) != VEC_SUCCESS)
-        return false;
-    
-    if (vec_free(&rule->conditions) != VEC_SUCCESS)
-        return false;
-    
-    if (vec_free(&rule->targets) != VEC_SUCCESS)
-        return false;
-
-    return true;
+void ASTRule_free(ASTRule* rule) {
+    jary_vec_free(rule->inputs);
+    jary_vec_free(rule->match);
+    jary_vec_free(rule->conditions);
+    jary_vec_free(rule->targets);
 }
 
-bool ASTFunc_init(ASTFunc* fun) {
-    if (vec_init(&fun->params, sizeof(ASTExpr)) != VEC_SUCCESS)
-        return false;
-    
-    return true;
+void ASTFunc_init(ASTFunc* fun) {
+    jary_vec_init(fun->params, 10);
 }
 
-bool ASTFunc_free(ASTFunc* fun) {
-    if (vec_free(&fun->params) != VEC_SUCCESS)
-        return false;
-    
-    return true;
+void ASTFunc_free(ASTFunc* fun) {
+    jary_vec_free(fun->params);
 }

@@ -8,44 +8,47 @@
 #define AS_PTKN(token) (Tkn*)&token
 
 typedef enum {
-    TKN_ERR = -1,
+    TKN_ERR,
 
     TKN_LEFT_PAREN,
     TKN_RIGHT_PAREN,
     TKN_LEFT_BRACE,
     TKN_RIGHT_BRACE,
-    TKN_COLON,
     TKN_COMMA,
+    TKN_COLON,
     TKN_NEWLINE,
+
+    TKN_TARGET,
+    TKN_INPUT,
+    TKN_MATCH,
+    TKN_CONDITION,
+
+    TKN_RULE,
+    TKN_IMPORT,
+    TKN_INGRESS,
 
 // < OPERATOR SYMBOL
     TKN_EQUAL,
     TKN_LESSTHAN,
     TKN_GREATERTHAN,
-// > OPERATOR SYMBOL
-
-// < LITERAL 
-    TKN_STRING,
-    TKN_REGEXP,
-    TKN_NUMBER,
-    TKN_FALSE,
-    TKN_TRUE,
     TKN_ANY,
     TKN_AND,
     TKN_OR,
     TKN_ALL,
+// > OPERATOR SYMBOL
+
+// < LITERAL 
+    TKN_REGEXP,
+    TKN_STRING,
+    TKN_NUMBER,
+    TKN_FALSE,
+    TKN_TRUE,
 // > LITERAL
 
     TKN_IDENTIFIER,
     TKN_PVAR,
-    TKN_RULE,
-    TKN_INPUT,
-    TKN_TARGET,
-    TKN_CONDITION,
-    TKN_MATCH,
 
     TKN_CUSTOM,
-
     TKN_EOF,
 } TknType;
 

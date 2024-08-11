@@ -74,6 +74,8 @@ static ParseError _precedence(Parser* p, ASTExpr* expr, Precedence prec) {
 
     prefixfn = get_rule(prevtkn->type)->prefix;
 
+    assert(prefixfn != NULL);
+
     RETURN_PARSE_ERROR(prefixfn(p, expr));
 
     currtkn = tkns_current(p);
@@ -88,6 +90,8 @@ static ParseError _precedence(Parser* p, ASTExpr* expr, Precedence prec) {
             return ERR_PARSE;
 
         ParseFn infixfn = get_rule(prevtkn->type)->infix;
+
+        assert(infixfn != NULL);
 
         RETURN_PARSE_ERROR(infixfn(p, expr));
         
@@ -297,7 +301,9 @@ static ParseError _entry(Parser* p, ParsedAst* ast, ParsedType* type) {
 }
 
 static ParseRule rules[] = {
-    [TKN_LEFT_PAREN]    = {NULL, _call, PREC_CALL},
+    [TKN_ERR]           = {NULL,     NULL,   PREC_NONE},
+
+    [TKN_LEFT_PAREN]    = {NULL,     _call,  PREC_CALL},
     [TKN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
     [TKN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, 
     [TKN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
@@ -309,12 +315,30 @@ static ParseRule rules[] = {
     [TKN_INPUT]         = {NULL,     NULL,   PREC_NONE},
     [TKN_MATCH]         = {NULL,     NULL,   PREC_NONE},
     [TKN_CONDITION]     = {NULL,     NULL,   PREC_NONE},
+    
+    [TKN_RULE]          = {NULL,     NULL,   PREC_NONE},
+    [TKN_IMPORT]        = {NULL,     NULL,   PREC_NONE},
+    [TKN_INGRESS]       = {NULL,     NULL,   PREC_NONE},
 
+    [TKN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
+    [TKN_LESSTHAN]      = {NULL,     NULL,   PREC_NONE}, 
+    [TKN_GREATERTHAN]   = {NULL,     NULL,   PREC_NONE},
+    [TKN_AND]           = {NULL,     NULL,   PREC_NONE},
+    [TKN_OR]            = {NULL,     NULL,   PREC_NONE},
+    [TKN_ANY]           = {NULL,     NULL,   PREC_NONE},
+    [TKN_ALL]           = {NULL,     NULL,   PREC_NONE},
+
+    [TKN_REGEXP]        = {NULL, NULL, PREC_NONE},
     [TKN_STRING]        = {_literal, NULL, PREC_NONE},
     [TKN_NUMBER]        = {_literal, NULL, PREC_NONE},
     [TKN_FALSE]         = {_literal, NULL, PREC_NONE},
     [TKN_TRUE]          = {_literal, NULL, PREC_NONE},
-    [TKN_IDENTIFIER]    = {_function, NULL, PREC_NONE}
+
+    [TKN_IDENTIFIER]    = {_function, NULL,  PREC_NONE},
+    [TKN_PVAR]          = {NULL,     NULL,   PREC_NONE},
+
+    [TKN_CUSTOM]        = {NULL,     NULL,   PREC_NONE}, 
+    [TKN_EOF]           = {NULL,     NULL,   PREC_NONE}, 
 };
 
 static ParseRule* get_rule(TknType type) {

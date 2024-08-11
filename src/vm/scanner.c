@@ -33,7 +33,7 @@ static TknType check_word(Scanner* sc, size_t start, size_t end, const char* wor
     if (sc->current - sc->start == wordlen && memcmp(buf, word, end) == 0)
         return type;
 
-    return TKN_ERR;
+    return TKN_IDENTIFIER;
 }
 
 static ScanError set_token_name(Scanner* sc, TKN* token, TknType base) {
@@ -61,32 +61,29 @@ static ScanError set_token_name(Scanner* sc, TKN* token, TknType base) {
         set_token(token, sc, check_word(sc, 1, 1, "r", TKN_OR)); break;
     case 'i': // input
         set_token(token, sc, check_word(sc, 1, 4, "nput", TKN_INPUT)); break;
-    case 't': // true
+    case 't': 
         switch (sc->start[1]) {
-            case 'r':
+            case 'r': // true
                 set_token(token, sc, check_word(sc, 2, 2, "ue", TKN_TRUE)); break;
-            case 'a':
+            case 'a': // target
                 set_token(token, sc, check_word(sc, 2, 4, "rget", TKN_TARGET)); break;
         } break;
     case 'r': // rule
         set_token(token, sc, check_word(sc, 1, 3, "ule", TKN_RULE)); break;
-    case 'm':
+    case 'm': // match
         set_token(token, sc, check_word(sc, 1, 4, "atch", TKN_MATCH)); break;
-    default:
-        set_token(token, sc, TKN_ERR);
+    default: {
+    // +1 to include '\0'
+    size_t lexemesz = sc->current - sc->start + 1;
+    char lexeme[lexemesz];
+
+    memcpy(lexeme, sc->start, lexemesz - 1);
+    lexeme[lexemesz-1] = '\0';
+
+    uint32_t lexemehash = fnv_hash(lexeme, lexemesz); 
+    token->hash = lexemehash;
+    set_token(token, sc, base);
     }
-
-    if (token->type == TKN_ERR) {
-        // +1 to include '\0'
-        size_t lexemesz = sc->current - sc->start + 1;
-        char lexeme[lexemesz];
-
-        memcpy(lexeme, sc->start, lexemesz - 1);
-        lexeme[lexemesz-1] = '\0';
-
-        uint32_t lexemehash = fnv_hash(lexeme, lexemesz); 
-        token->hash = lexemehash;
-        set_token(token, sc, base);
     }
 
     return SCAN_SUCCESS;

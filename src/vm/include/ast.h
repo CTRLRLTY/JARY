@@ -7,6 +7,15 @@
 #include "vector.h"
 #include "token.h"
 
+
+#define AS_ASTFunc(__func) _Generic((__func),                                       \
+            ASTExpr*: (ASTFunc*)&((ASTExpr*)(__func))->as.func,                     \
+            ASTFunc*: (ASTFunc*)(__func))
+
+#define ASTFunc_param_size(__func) jary_vec_size(AS_ASTFunc((__func))->params)
+#define ASTFunc_add_param(__func, __data) jary_vec_push(AS_ASTFunc((__func))->params, __data)
+
+
 typedef enum {
     EXPR_STRING,
     EXPR_REGEX,
@@ -18,6 +27,7 @@ typedef enum {
     EXPR_FUNC,
 } ExprType;
 
+typedef struct ASTFunc ASTFunc;
 typedef struct ASTExpr ASTExpr;
 
 typedef enum {
@@ -25,14 +35,14 @@ typedef enum {
     CON_UNARY,
 } ConType;
 
-typedef struct {
+struct ASTFunc {
     TKN name;
     jary_vec_t(ASTExpr) params;
-} ASTFunc;
+};
 
 struct ASTExpr {
     ExprType type;
-    union 
+    union val
     {
         TKN string;
         TKN regex;
@@ -40,7 +50,6 @@ struct ASTExpr {
         TKN boolean;
         TKN any;
         ASTFunc func;
-        jary_vec_t(TKN) property;
     } as;
 };
 
@@ -87,6 +96,7 @@ typedef struct ASTProg {
     jary_vec_t(ASTImport) imports;
     jary_vec_t(ASTRule) rule;
 } ASTProg;
+
 
 
 void ASTProg_init(ASTProg* prog);

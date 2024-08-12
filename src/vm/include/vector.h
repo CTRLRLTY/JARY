@@ -11,42 +11,42 @@ typedef struct jary_vec_metadata_t {
     size_t capacity;
 } jary_vec_metadata_t;
 
-#define jary_vec_t(type) type *
-#define jary_vec_metadata(vec) (&((jary_vec_metadata_t*)(vec))[-1])
-#define jary_vec_init(vec, _capacity)                                                                           \
-    do {                                                                                                        \
-        jary_vec_metadata_t* m = jary_alloc(sizeof(jary_vec_metadata_t) + sizeof(*(vec)) * (_capacity));        \
-        (vec) = (void*)&m[1];                                                                                   \
-        jary_vec_metadata(vec)->count = 0;                                                                      \
-        jary_vec_metadata(vec)->capacity = (_capacity);                                                         \
+#define jary_vec_t(__type) __type *
+#define jary_vec_metadata(__vec) (&((jary_vec_metadata_t*)(__vec))[-1])
+#define jary_vec_init(__vec, __capacity)                                                                             \
+    do {                                                                                                            \
+        jary_vec_metadata_t* m = jary_alloc(sizeof(jary_vec_metadata_t) + sizeof(*(__vec)) * (__capacity));         \
+        (__vec) = (void*)&m[1];                                                                                     \
+        jary_vec_metadata(__vec)->count = 0;                                                                        \
+        jary_vec_metadata(__vec)->capacity = (__capacity);                                                          \
     } while(0)
 
-#define jary_vec_size(vec) jary_vec_metadata(vec)->count
-#define jary_vec_capacity(vec) jary_vec_metadata(vec)->capacity
+#define jary_vec_size(__vec) jary_vec_metadata(__vec)->count
+#define jary_vec_capacity(__vec) jary_vec_metadata(__vec)->capacity
 
-#define jary_vec_grow(vec, _capacity)                                                               \
-    do {                                                                                            \
-        jary_assert((vec) != NULL);                                                                 \
-        jary_vec_metadata_t* m = jary_vec_metadata((vec));                                          \
-        m = jary_realloc(m, sizeof(jary_vec_metadata_t) + sizeof(*(vec)) * (_capacity));            \
-        jary_assert(m != NULL);                                                                     \
-        (vec) = (void*)&m[1];                                                                       \
+#define jary_vec_grow(__vec, __capacity)                                                                \
+    do {                                                                                                \
+        jary_assert((__vec) != NULL);                                                                   \
+        jary_vec_metadata_t* m = jary_vec_metadata((__vec));                                            \
+        m = jary_realloc(m, sizeof(jary_vec_metadata_t) + sizeof(*(__vec)) * (__capacity));             \
+        jary_assert(m != NULL);                                                                         \
+        (__vec) = (void*)&m[1];                                                                         \
     } while(0)
 
-#define jary_vec_push(vec, data)                                                            \
-    do {                                                                                    \
-        jary_assert((vec) != NULL);                                                         \
-        if (jary_vec_size(vec) + 1 >= jary_vec_capacity((vec))) {                           \
-            jary_vec_grow(vec, jary_vec_capacity(vec) + VEC_GROW_NUMBER);                   \
-        }                                                                                   \
-        (vec)[jary_vec_size(vec)] = data;                                                   \
-        jary_vec_metadata((vec))->count++;                                                  \
+#define jary_vec_push(__vec, __data)                                                                   \
+    do {                                                                                               \
+        jary_assert((__vec) != NULL);                                                                  \
+        if (jary_vec_size(__vec) + 1 >= jary_vec_capacity((__vec))) {                                  \
+            jary_vec_grow(__vec, jary_vec_capacity(__vec) + VEC_GROW_NUMBER);                          \
+        }                                                                                              \
+        (__vec)[jary_vec_size(__vec)] = __data;                                                        \
+        jary_vec_metadata((__vec))->count++;                                                           \
     } while(0)
 
-#define jary_vec_free(vec)                                                                  \
-    do {                                                                                    \
-        jary_free(jary_vec_metadata((vec)));                                                \
-        vec = NULL;                                                                         \
+#define jary_vec_free(__vec)                                                                           \
+    do {                                                                                               \
+        jary_free(jary_vec_metadata((__vec)));                                                         \
+        (__vec) = NULL;                                                                                \
     } while(0)
 
 #endif // JAYVM_VECTOR_H

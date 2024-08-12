@@ -161,12 +161,12 @@ static ParseError _call(Parser* p, ASTExpr* expr) {
 
             RETURN_PARSE_ERROR(_expression(p, &paramexpr));
 
-            if (jary_vec_size(expr->as.func.params) == 255) 
+            if (ASTFunc_param_size(expr) == 255) 
                 return ERR_PARSE;
 
-            jary_vec_push(expr->as.func.params, paramexpr);
+            ASTFunc_add_param(expr, paramexpr);
             
-           token = tkns_next(p);
+            token = tkns_next(p);
 
             if (token == NULL)
                 return ERR_PARSE;

@@ -15,7 +15,7 @@
           "CMAKE_EXPORT_COMPILE_COMMANDS": "on",
           "CMAKE_BUILD_TYPE": "Debug",
           "CMAKE_C_COMPILER": "gcc",
-          "CMAKE_C_STANDARD": "17",
+          "CMAKE_C_STANDARD": "11",
           "CMAKE_CXX_COMPILER": "g++",
           "CMAKE_C_FLAGS_DEBUG": "-gdwarf -pedantic-errors -g3 -DFEATURE_CUSTOM_TOKEN",
           "CMAKE_CXX_FLAGS_DEBUG": "-Wno-write-strings -fpermissive -gdwarf -g3 -DFEATURE_CUSTOM_TOKEN"
@@ -30,7 +30,7 @@
           "CMAKE_EXPORT_COMPILE_COMMANDS": "on",
           "CMAKE_BUILD_TYPE": "Release",
           "CMAKE_C_COMPILER": "gcc",
-          "CMAKE_C_STANDARD": "17",
+          "CMAKE_C_STANDARD": "11",
           "CMAKE_CXX_COMPILER": "g++",
           "CMAKE_C_FLAGS_RELEASE": "-O3 -DFEATURE_CUSTOM_TOKEN",
           "CMAKE_CXX_FLAGS_RELEASE": "-O3 -fpermissive -DFEATURE_CUSTOM_TOKEN"

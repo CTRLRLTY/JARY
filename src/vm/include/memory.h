@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-#define jary_alloc(size) malloc(size)
+#define jary_alloc(__size) calloc(1, __size)
 #define jary_realloc(ptr, size)  realloc(ptr, size)
 #define jary_free(ptr) free(ptr)
 

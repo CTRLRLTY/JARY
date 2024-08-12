@@ -10,17 +10,18 @@ TEST(ParserTest, RuleDeclaration) {
 
     Scanner sc;
     jary_vec_t(TKN) tkns;
-    ASTProg prog;
 
     {
+        ASTNode ast;
         jary_vec_init(tkns, 10);
 
         char samplestr[] = 
-        "rule something"
-        "{\n"
-            "input:\n"
-            "$got = myfunc(3)\n"
-        "}";
+        "rule something {"              "\n"
+            "input:"                    "\n"
+            "got = myfunc(3)"           "\n"
+            "got = myfunc(3)"           "\n"
+        "}"
+        ;
 
         ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
 
@@ -30,14 +31,7 @@ TEST(ParserTest, RuleDeclaration) {
             jary_vec_push(tkns, tkn);
         }
 
-        ASSERT_EQ(parse_source(&p, tkns, jary_vec_size(tkns)), PARSE_SUCCESS);
-        
-        while (!parse_ended(&p)) {
-            ParsedAst ast;
-            ParsedType type;
-            ASSERT_EQ(parse_tokens(&p, &ast, &type), PARSE_SUCCESS);
-            ASSERT_EQ(type, PARSED_RULE);
-        }
+        parse_tokens(&p, &ast, tkns, jary_vec_size(tkns));
 
         jary_vec_free(tkns);
     }

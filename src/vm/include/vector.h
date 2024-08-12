@@ -40,7 +40,7 @@ typedef struct jary_vec_metadata_t {
         if (jary_vec_size(__vec) + 1 >= jary_vec_capacity((__vec))) {                                  \
             jary_vec_grow(__vec, jary_vec_capacity(__vec) + VEC_GROW_NUMBER);                          \
         }                                                                                              \
-        (__vec)[jary_vec_size(__vec)] = __data;                                                        \
+        (__vec)[jary_vec_size(__vec)] = (__data);                                                      \
         jary_vec_metadata((__vec))->count++;                                                           \
     } while(0)
 
@@ -49,5 +49,7 @@ typedef struct jary_vec_metadata_t {
         jary_free(jary_vec_metadata((__vec)));                                                         \
         (__vec) = NULL;                                                                                \
     } while(0)
+
+#define jary_vec_last(__vec) &(__vec)[jary_vec_size((__vec)) - 1]
 
 #endif // JAYVM_VECTOR_H

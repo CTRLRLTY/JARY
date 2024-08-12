@@ -28,7 +28,8 @@ typedef struct {
     char* start;
     // current character pointer
     char* current;
-    int line;
+    char* linestart;
+    size_t line;
     size_t srcsz;
 } Scanner;
 

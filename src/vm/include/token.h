@@ -8,12 +8,14 @@
 #define AS_PTKN(token) (Tkn*)&token
 
 typedef enum {
+    TKN_NONE = -1,
     TKN_ERR,
 
     TKN_LEFT_PAREN,
     TKN_RIGHT_PAREN,
     TKN_LEFT_BRACE,
     TKN_RIGHT_BRACE,
+    TKN_DOT,
     TKN_COMMA,
     TKN_COLON,
     TKN_NEWLINE,
@@ -28,6 +30,7 @@ typedef enum {
     TKN_INGRESS,
 
 // < OPERATOR SYMBOL
+    TKN_ASSIGN,
     TKN_EQUAL,
     TKN_LESSTHAN,
     TKN_GREATERTHAN,
@@ -56,6 +59,7 @@ typedef struct {
     TknType type;
     size_t length; // Does not count the quotes ("")
     size_t line;
+    size_t offset;
     char* start;
     uint32_t hash;
 } Tkn;

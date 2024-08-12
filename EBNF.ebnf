@@ -1,8 +1,6 @@
 (* https://www.w3.org/TR/xml/#sec-notation *)
 
-MainScope = S*, (DirectiveDecl | InputDecl | RuleDecl)+, S*
-DirectiveDecl = "directive", #x20, identifier, #x20, directiveBlock;
-directiveBlock = "{", S*, (InputDecl | RuleDecl | ActionDecl), S*, "}";
+Entry = (ImportDecl | IngressDecl | RuleDecl)*
 
 InputDecl = "input", #x20, identifier, #x20, "{", S*, dataList, S*, "}";
 ActionDecl = "action" #x20 identifier #x20 "{" S* actionSection S* "}";

@@ -29,23 +29,20 @@ typedef struct {
 
 // fill token with current and advance
 static TKN* tkns_next(Parser* p) {
-    if (p->idx + 1 >= p->tknsz)
-        return NULL;
+    jary_assert(!(p->idx + 1 >= p->tknsz));
 
     return &p->tkns[p->idx++];  
 }
 
 // fill token with current and advance
 static TKN* tkns_current(Parser* p) {
-    if (p->idx >= p->tknsz)
-        return NULL;
+    jary_assert(!(p->idx >= p->tknsz));
 
     return &p->tkns[p->idx];    
 }
 
 static TKN* tkns_prev(Parser* p) {
-    if (p->idx >= p->tknsz && p->idx-1 < 0)
-        return NULL;
+    jary_assert(!(p->idx >= p->tknsz && p->idx-1 < 0));
 
     return &p->tkns[p->idx-1];   
 }
@@ -55,7 +52,7 @@ static TKN* skip_newline(Parser* p) {
 
     do {
         tkn = tkns_next(p);
-    } while ( tkn != NULL && tkn->type == TKN_NEWLINE );
+    } while (tkn->type == TKN_NEWLINE);
     
     return tkn;
 } 
@@ -69,36 +66,20 @@ static ParseError _precedence(Parser* p, ASTExpr* expr, Precedence prec) {
 
     prevtkn = tkns_next(p);
 
-    if (prevtkn == NULL)
-        return ERR_PARSE;
-
     prefixfn = get_rule(prevtkn->type)->prefix;
-
-    assert(prefixfn != NULL);
 
     RETURN_PARSE_ERROR(prefixfn(p, expr));
 
     currtkn = tkns_current(p);
 
-    if (currtkn == NULL)
-        return ERR_PARSE;
-
     while (prec <= get_rule(currtkn->type)->precedence) {
         prevtkn = tkns_next(p);
 
-        if (prevtkn == NULL)
-            return ERR_PARSE;
-
         ParseFn infixfn = get_rule(prevtkn->type)->infix;
-
-        assert(infixfn != NULL);
 
         RETURN_PARSE_ERROR(infixfn(p, expr));
         
         currtkn = tkns_current(p);
-
-        if (currtkn == NULL)
-            return ERR_PARSE;
     }
     
     return PARSE_SUCCESS;
@@ -106,9 +87,6 @@ static ParseError _precedence(Parser* p, ASTExpr* expr, Precedence prec) {
 
 static ParseError _literal(Parser* p, ASTExpr* expr) {
     TKN* token = tkns_prev(p);
-
-    if (token == NULL)
-        return ERR_PARSE;
 
     switch (token->type) {
     case TKN_STRING:
@@ -138,9 +116,6 @@ static ParseError _expression(Parser* p, ASTExpr* expr) {
 static ParseError _function(Parser* p, ASTExpr* expr) {
     TKN* token = tkns_prev(p);
 
-    if (token == NULL)
-        return ERR_PARSE;
-
     ASTFunc_init(&expr->as.func);
     
     expr->type = EXPR_FUNC;
@@ -152,9 +127,6 @@ static ParseError _function(Parser* p, ASTExpr* expr) {
 static ParseError _call(Parser* p, ASTExpr* expr) {
     TKN* token = tkns_current(p);
 
-    if (token == NULL)
-        return ERR_PARSE;
-
     if (token->type != TKN_RIGHT_PAREN) {
         do {
             ASTExpr paramexpr;
@@ -162,14 +134,11 @@ static ParseError _call(Parser* p, ASTExpr* expr) {
             RETURN_PARSE_ERROR(_expression(p, &paramexpr));
 
             if (ASTFunc_param_size(expr) == 255) 
-                return ERR_PARSE;
+                return ERR_PARSE_FUNC_PARAM_SIZE;
 
             ASTFunc_add_param(expr, paramexpr);
             
             token = tkns_next(p);
-
-            if (token == NULL)
-                return ERR_PARSE;
 
         } while(token->type == TKN_COMMA);
     }
@@ -183,25 +152,16 @@ static ParseError _call(Parser* p, ASTExpr* expr) {
 static ParseError _input_list(Parser* p, jary_vec_t(ASTInput) inputlist) {
     TKN* token = tkns_next(p);
 
-    if (token == NULL)
-        return ERR_PARSE;
-
     if (token->type != TKN_COLON)
         return ERR_PARSE_UNEXPECTED_TKN;
 
     token = tkns_next(p);
-
-    if (token == NULL)
-        return ERR_PARSE;
 
     if (token->type != TKN_NEWLINE)
         return ERR_PARSE_UNEXPECTED_TKN;
     
     do {
         token = tkns_next(p);
-
-        if (token == NULL)
-            return ERR_PARSE;
 
         if (token->type != TKN_PVAR)
             return ERR_PARSE_UNEXPECTED_TKN;
@@ -212,9 +172,6 @@ static ParseError _input_list(Parser* p, jary_vec_t(ASTInput) inputlist) {
 
         token = tkns_next(p);
 
-        if (token == NULL)
-            return ERR_PARSE;
-
         if (token->type != TKN_EQUAL)
             return ERR_PARSE_UNEXPECTED_TKN;
 
@@ -223,20 +180,30 @@ static ParseError _input_list(Parser* p, jary_vec_t(ASTInput) inputlist) {
         jary_vec_push(inputlist, input);
 
         token = tkns_current(p);
-        
-        if (token == NULL)
-            return ERR_PARSE;
 
-    } while (token != NULL && token->type != TKN_NEWLINE);
+    } while (token->type != TKN_NEWLINE);
+
+    return PARSE_SUCCESS;
+}
+
+static ParseError _match_list(Parser* p, jary_vec_t(ASTMatch) matchlist) {
+    TKN* token = tkns_next(p);
+
+    if (token->type != TKN_COLON)
+        return ERR_PARSE_UNEXPECTED_TKN;
+
+    token = tkns_next(p);
+
+    if (token->type != TKN_NEWLINE)
+        return ERR_PARSE_UNEXPECTED_TKN;
+
+    
 
     return PARSE_SUCCESS;
 }
 
 static ParseError _declare_rule(Parser* p, ASTRule* rule) {
     TKN* token = tkns_next(p);
-
-    if (token == NULL)
-        return ERR_PARSE;
 
     if(token->type != TKN_IDENTIFIER)
         return ERR_PARSE_UNEXPECTED_TKN;
@@ -245,16 +212,10 @@ static ParseError _declare_rule(Parser* p, ASTRule* rule) {
 
     token = tkns_next(p);
 
-    if (token == NULL)
-        return ERR_PARSE;
-
     if (token->type != TKN_LEFT_BRACE)
         return ERR_PARSE_UNEXPECTED_TKN;
     
     token = skip_newline(p);
-
-    if (token == NULL)
-        return ERR_PARSE;
 
     switch (token->type) {
         case TKN_INPUT:
@@ -271,9 +232,6 @@ static ParseError _declare_rule(Parser* p, ASTRule* rule) {
     }
 
     token = skip_newline(p);
-
-    if (token == NULL)
-        return ERR_PARSE;
 
     if (token->type != TKN_RIGHT_BRACE)
         return ERR_PARSE_UNEXPECTED_TKN;
@@ -342,15 +300,16 @@ static ParseRule rules[] = {
 };
 
 static ParseRule* get_rule(TknType type) {
+    jary_assert(&rules[type] != NULL);
+
     return &rules[type];
 }
 
 ParseError parse_source(Parser* p, TKN* tkns, size_t length) {
-    if (p == NULL || tkns == NULL)
-        return ERR_PARSE_NULL_ARGS;
+    jary_assert(p != NULL);
+    jary_assert(tkns != NULL);
 
-    if (length <= 0) 
-        return ERR_PARSE_SOURCE_LENGTH;
+    jary_assert(length > 0);
     
     p->tkns = tkns;
     p->tknsz = length;
@@ -360,11 +319,11 @@ ParseError parse_source(Parser* p, TKN* tkns, size_t length) {
 }
 
 ParseError parse_tokens(Parser* p, ParsedAst* ast, ParsedType* type) {
-    if (p == NULL || ast == NULL)
-        return ERR_PARSE_NULL_ARGS;
-
+    jary_assert(p != NULL);
+    jary_assert(ast != NULL);
+    
     if (parse_ended(p))
-        return ERR_PARSE;
+        return ERR_PARSE_ENDED;
 
     RETURN_PARSE_ERROR(_entry(p, ast, type)); 
 

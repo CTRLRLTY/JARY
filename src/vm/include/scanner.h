@@ -10,9 +10,6 @@ typedef enum {
 
     // Scanner already end
     ERR_SCAN_ENDED,
-
-    // Null pointer used as arguments
-    ERR_SCAN_NULL_ARGS,
     
     // No equivalent token for the character(s)
     ERR_SCAN_INV_TOKEN,

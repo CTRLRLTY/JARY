@@ -1,5 +1,6 @@
 #include "scanner.h"
 #include "fnv.h"
+#include "error.h"
 
 #include <ctype.h>
 #include <stdbool.h>
@@ -73,25 +74,26 @@ static ScanError set_token_name(Scanner* sc, TKN* token, TknType base) {
     case 'm': // match
         set_token(token, sc, check_word(sc, 1, 4, "atch", TKN_MATCH)); break;
     default: {
-    // +1 to include '\0'
-    size_t lexemesz = sc->current - sc->start + 1;
-    char lexeme[lexemesz];
+        // +1 to include '\0'
+        size_t lexemesz = sc->current - sc->start + 1;
+        char lexeme[lexemesz];
 
-    memcpy(lexeme, sc->start, lexemesz - 1);
-    lexeme[lexemesz-1] = '\0';
+        memcpy(lexeme, sc->start, lexemesz - 1);
+        lexeme[lexemesz-1] = '\0';
 
-    uint32_t lexemehash = fnv_hash(lexeme, lexemesz); 
-    token->hash = lexemehash;
-    set_token(token, sc, base);
-    }
+        uint32_t lexemehash = fnv_hash(lexeme, lexemesz); 
+        token->hash = lexemehash;
+        set_token(token, sc, base);
+        }
     }
 
     return SCAN_SUCCESS;
 }
 
 ScanError scan_source(Scanner* sc, char* source, size_t length) {
-    if (sc == NULL || source == NULL)
-        return ERR_SCAN_NULL_ARGS;
+    jary_assert(sc != NULL);
+    jary_assert(source != NULL);
+    jary_assert(length > 0);
    
     sc->base = source;
     sc->start = source;
@@ -107,11 +109,11 @@ bool scan_ended(Scanner* sc) {
 }
 
 ScanError scan_token(Scanner* sc, TKN* token) {
+    jary_assert(sc != NULL);
+    jary_assert(token != NULL);
+
     if (scan_ended(sc))
         return ERR_SCAN_ENDED;
-
-    if (sc == NULL || token == NULL)
-        return ERR_SCAN_NULL_ARGS;
 
     token->type = TKN_ERR;
 

@@ -30,6 +30,7 @@ typedef struct jary_vec_metadata_t {
         jary_vec_metadata_t* m = jary_vec_metadata((__vec));                                            \
         m = jary_realloc(m, sizeof(jary_vec_metadata_t) + sizeof(*(__vec)) * (__capacity));             \
         jary_assert(m != NULL);                                                                         \
+        m->capacity = __capacity;                                                                       \
         (__vec) = (void*)&m[1];                                                                         \
     } while(0)
 

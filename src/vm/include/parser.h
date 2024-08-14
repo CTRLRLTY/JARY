@@ -13,6 +13,6 @@ typedef struct {
     size_t idx;
 } Parser;
 
-void parse_tokens(Parser* parser, ASTNode* ast, TKN* tknlist, size_t length);
+void parse_tokens(Parser* parser, ASTNode* ast, ASTMetadata* meta, TKN* tknlist, size_t length);
 
 #endif

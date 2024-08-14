@@ -4,23 +4,23 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "vector.h"
 #include "token.h"
 
 
 typedef enum {
-    AST_ERR,
     AST_ROOT,
+
     AST_RULE,
+    AST_INPUT,
+    AST_CALL,
+
+    AST_ASSIGNMENT,
+    
+    AST_FIELD,
+    AST_EVENT,
+
     AST_NAME,
     AST_LITERAL,
-    AST_FUNC,
-    AST_CALL,
-    AST_ASSIGNMENT,
-    AST_EVENT,
-    AST_FIELD,
-    AST_INPUT,
-    AST_VAR,
 } ASTType;
 
 typedef struct ASTError {
@@ -35,19 +35,21 @@ typedef struct ASTError {
 
 typedef struct ASTNode {
     ASTType type;
-    union value {
-        TKN* tkn;
-        ASTError* err;
-        jary_vec_t(struct ASTNode) params;
-        jary_vec_t(struct ASTNode) sections;
-        jary_vec_t(struct ASTNode) vars;
-        jary_vec_t(struct ASTNode) decls;
-    } value;
-    struct ASTNode* left;
-    struct ASTNode* right;
+    size_t position;
+    TKN* tkn;
+    struct ASTNode* child;
 } ASTNode;
 
-void ast_free(ASTNode* ast);
+typedef struct ASTMetadata {
+    // error node array
+    ASTError* errors;
 
+    // total graph size
+    size_t size;
+} ASTMetadata;
+
+void ast_free(ASTNode* ast);
+size_t ast_degree(ASTNode* ast);
+void ast_meta_free(ASTMetadata* m);
 
 #endif

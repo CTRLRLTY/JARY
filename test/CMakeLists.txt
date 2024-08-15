@@ -46,7 +46,6 @@ target_link_libraries( parser_test
     PRIVATE
         GTest::gtest_main
         parser
-        scan
 )
 
 add_executable( vector_test

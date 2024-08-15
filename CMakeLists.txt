@@ -24,6 +24,7 @@ target_include_directories(scan
 
 add_library(parser
     ${LIBJAYVM_SRC_DIR}/parser.c
+    ${LIBJAYVM_SRC_DIR}/scanner.c
     ${LIBJAYVM_SRC_DIR}/token.c 
     ${LIBJAYVM_SRC_DIR}/fnv.c
     ${LIBJAYVM_SRC_DIR}/ast.c

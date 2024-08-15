@@ -21,17 +21,17 @@ void tree_match(ASTNode* ast, ASTMetadata* m, std::vector<ASTType>& types) {
     while (q.size() > 0) {
         ASTNode* node = q.front();
         q.pop();
-        auto pos = node->position;
+        auto num = node->number;
 
-        if (!marked[pos]) {
-            marked[pos] = true;
-            ASSERT_EQ(node->type, types[pos]) << "node: " << node->type << ", expect: " << types[pos];
+        if (!marked[num]) {
+            marked[num] = true;
+            ASSERT_EQ(node->type, types[num]);
 
             for (size_t i = 0; i < ast_degree(node); i++) {
                 auto neighbor = &node->child[i];
-                auto npos = neighbor->position;
+                auto nnum = neighbor->number;
 
-                if (!marked[npos]) {
+                if (!marked[nnum]) {
                     q.push(neighbor);
                 }
             }
@@ -61,9 +61,9 @@ TEST(ParserTest, RuleDeclaration) {
 
         std::vector<ASTType> expected = {
             AST_ROOT, 
-                AST_RULE, 
-                    AST_NAME, 
-                    AST_INPUT, 
+                AST_RULE,                       // rule
+                    AST_NAME,                   // something
+                    AST_INPUT,                  // input:
                         AST_ASSIGNMENT,         // =
                             AST_NAME,           // got
                             AST_CALL,           // myfunc
@@ -76,15 +76,7 @@ TEST(ParserTest, RuleDeclaration) {
                                 AST_LITERAL,    // 4
         };
 
-        ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
-
-        while (!scan_ended(&sc)) {
-            TKN tkn;
-            ASSERT_EQ(scan_token(&sc, &tkn), SCAN_SUCCESS);
-            jary_vec_push(tkns, tkn);
-        }
-
-        parse_tokens(&p, &ast, &m, tkns, jary_vec_size(tkns));
+        jary_parse(&p, &ast, &m, samplestr, sizeof(samplestr));
 
         tree_match(&ast, &m, expected);
 

@@ -4,15 +4,16 @@
 #include <stdbool.h>
 
 #include "common.h"
+#include "scanner.h"
 #include "ast.h"
 
 
 typedef struct {
     TKN* tkns;
-    size_t tknsz;
+    Scanner* sc;
     size_t idx;
 } Parser;
 
-void parse_tokens(Parser* parser, ASTNode* ast, ASTMetadata* meta, TKN* tknlist, size_t length);
+void jary_parse(Parser* p, ASTNode* ast, ASTMetadata* m, char* src, size_t length);
 
 #endif

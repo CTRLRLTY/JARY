@@ -35,14 +35,19 @@ typedef struct ASTError {
 
 typedef struct ASTNode {
     ASTType type;
-    size_t position;
+    size_t number;
     TKN* tkn;
     struct ASTNode* child;
 } ASTNode;
 
 typedef struct ASTMetadata {
+    // tkns array
+    TKN* tkns;
+    size_t tknsz;
+
     // error node array
     ASTError* errors;
+    size_t errsz;
 
     // total graph size
     size_t size;

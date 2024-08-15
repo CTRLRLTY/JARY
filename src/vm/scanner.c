@@ -75,16 +75,16 @@ static ScanError set_token_name(Scanner* sc, TKN* token, TknType base) {
     case 'm': // match
         set_token(token, sc, check_word(sc, 1, 4, "atch", TKN_MATCH)); break;
     default: {
-        // +1 to include '\0'
-        size_t lexemesz = sc->current - sc->start + 1;
-        char lexeme[lexemesz];
+            // +1 to include '\0'
+            size_t lexemesz = sc->current - sc->start + 1;
+            char lexeme[lexemesz];
 
-        memcpy(lexeme, sc->start, lexemesz - 1);
-        lexeme[lexemesz-1] = '\0';
+            memcpy(lexeme, sc->start, lexemesz - 1);
+            lexeme[lexemesz-1] = '\0';
 
-        uint32_t lexemehash = fnv_hash(lexeme, lexemesz); 
-        token->hash = lexemehash;
-        set_token(token, sc, base);
+            uint32_t lexemehash = fnv_hash(lexeme, lexemesz); 
+            token->hash = lexemehash;
+            set_token(token, sc, base);
         }
     }
 
@@ -222,12 +222,12 @@ SCAN:
 
         set_token(token, sc, TKN_NUMBER); 
         return SCAN_SUCCESS;
-    default:
-        if (!isalpha(c) && c != '_')
-            return ERR_SCAN_INV_TOKEN;
-
-        return set_token_name(sc, token, TKN_IDENTIFIER);
     }
 
-    return ERR_SCAN_INV_TOKEN;
+    if (!isalpha(c) && c != '_') {
+        set_token(token, sc, TKN_ERR);
+        return ERR_SCAN_INV_TOKEN;
+    }
+
+    return set_token_name(sc, token, TKN_IDENTIFIER);
 }

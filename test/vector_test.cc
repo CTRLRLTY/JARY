@@ -6,16 +6,16 @@ extern "C" {
 
 TEST(VectorTest, Push) {
     {
-        jary_vec_t(int) numbers;
+        vec_t(int) numbers;
 
-        jary_vec_init(numbers, 10);
+        vecinit(numbers, 10);
 
-        jary_vec_push(numbers, 20);
+        vecpush(numbers, 20);
 
-        ASSERT_EQ(jary_vec_size(numbers), 1);
+        ASSERT_EQ(vecsize(numbers), 1);
 
         ASSERT_EQ(numbers[0], 20);
 
-        jary_vec_free(numbers);
+        vecfree(numbers);
     }
 }

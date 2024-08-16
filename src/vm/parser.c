@@ -66,7 +66,7 @@ error_node(ASTNode* ast, TKN* tkn, TknType expect, ASTError** errs, const char* 
         .msg = (msg != NULL) ? strdup(msg) : NULL
     };
 
-    jary_vec_push(*errs, err);
+    vecpush(*errs, err);
 
     return ERR_PARSE_PANIC;
 }
@@ -86,7 +86,7 @@ static bool is_section(TknType type) {
 
 static bool ended(Parser* p) {
     bool scend = scan_ended(p->sc);
-    bool tknend = p->idx + 1 >= jary_vec_size(p->tkns);
+    bool tknend = p->idx + 1 >= vecsize(p->tkns);
 
     return scend && tknend;
 }
@@ -105,14 +105,14 @@ static TKN* prev(Parser* p) {
 
 // fill token with current and advance
 static TKN* next(Parser* p) {
-    if (p->idx + 1 >= jary_vec_size(p->tkns)) {
+    if (p->idx + 1 >= vecsize(p->tkns)) {
         jary_assert(!ended(p));
 
         TKN tkn = {.type = TKN_ERR};
 
         scan_token(p->sc, &tkn);
 
-        jary_vec_push(p->tkns, tkn);
+        vecpush(p->tkns, tkn);
     }
 
     return &p->tkns[p->idx++];  
@@ -120,7 +120,7 @@ static TKN* next(Parser* p) {
 
 // fill token with current and advance
 static TKN* current(Parser* p) {
-    jary_assert(p->idx < jary_vec_size(p->tkns));
+    jary_assert(p->idx < vecsize(p->tkns));
 
     return &p->tkns[p->idx];    
 }
@@ -156,7 +156,7 @@ static void block_add_def(size_t block, ASTMetadata* m, TKN* tkn) {
     
     jary_assert(dblock != NULL);
 
-    jary_vec_push(dblock->def, *tkn);
+    vecpush(dblock->def, *tkn);
 }
 
 static void block_add_use(size_t block, ASTMetadata* m, TKN* tkn) {
@@ -164,7 +164,7 @@ static void block_add_use(size_t block, ASTMetadata* m, TKN* tkn) {
     
     jary_assert(dblock != NULL);
 
-    jary_vec_push(dblock->use, *tkn);
+    vecpush(dblock->use, *tkn);
 }
 
 static ParseError _literal(Parser* p, ASTNode* ast, ASTMetadata* m) {
@@ -202,12 +202,12 @@ static ParseError _event(Parser* p, ASTNode* ast, ASTMetadata* m) {
     ast->type = AST_EVENT;
     ast->tkn = prev(p);
     
-    jary_vec_init(ast->child, 1);
+    vecinit(ast->child, 1);
 
     ASTNode expr = NODE();
     RETURN_PANIC(_precedence(p, &expr, m, PREC_PRIMARY));
 
-    jary_vec_push(ast->child, expr);
+    vecpush(ast->child, expr);
 
     return PARSE_SUCCESS;
 }
@@ -224,11 +224,11 @@ static ParseError _call(Parser* p, ASTNode* ast, ASTMetadata* m) {
     size_t block = p->block = ast->number;
 
     BasicBlock dblock = { .def = NULL };
-    jary_vec_init(dblock.def, 10);
-    jary_vec_init(dblock.use, 10);
+    vecinit(dblock.def, 10);
+    vecinit(dblock.use, 10);
 
-    jary_vec_push(m->bbkey, block);
-    jary_vec_push(m->bbval, dblock);
+    vecpush(m->bbkey, block);
+    vecpush(m->bbval, dblock);
 
     do {
         ASTNode expr = NODE();
@@ -239,7 +239,7 @@ static ParseError _call(Parser* p, ASTNode* ast, ASTMetadata* m) {
 
         p->block = oldblock;
 
-        jary_vec_push(ast->child, expr);
+        vecpush(ast->child, expr);
     } while(current(p)->type == TKN_COMMA);
 
     if (next(p)->type != TKN_RIGHT_PAREN) {
@@ -250,8 +250,8 @@ static ParseError _call(Parser* p, ASTNode* ast, ASTMetadata* m) {
     return PARSE_SUCCESS;
 
 PANIC:
-    jary_vec_pop(m->bbkey);
-    jary_vec_pop(m->bbval);
+    vecpop(m->bbkey);
+    vecpop(m->bbval);
     return ERR_PARSE_PANIC;
 }
 
@@ -265,7 +265,7 @@ static ParseError _binary(Parser* p, ASTNode* ast, ASTMetadata* m) {
 
     RETURN_PANIC(_precedence(p, &expr, m, oprule->precedence + 1));
 
-    jary_vec_push(ast->child, expr);
+    vecpush(ast->child, expr);
 
     return PARSE_SUCCESS;
 }
@@ -286,8 +286,8 @@ static ParseError _precedence(Parser* p, ASTNode* expr, ASTMetadata* m,  Precede
     while (rbp < nextprec) {
         ASTNode led = NODE();
         led.number = m->size++;
-        jary_vec_init(led.child, 10);
-        jary_vec_push(led.child, *expr);
+        vecinit(led.child, 10);
+        vecpush(led.child, *expr);
         
         ParseFn infixfn = get_rule(next(p)->type)->infix;
         RETURN_PANIC(infixfn(p, &led, m));
@@ -307,7 +307,7 @@ static ParseError _list(Parser* p, ASTNode* sect, ASTMetadata* m) {
 
     RETURN_PANIC(_expression(p, &expr, m));
 
-    jary_vec_push(sect->child, expr);
+    vecpush(sect->child, expr);
 
     return PARSE_SUCCESS;
 }
@@ -326,11 +326,11 @@ static ParseError _section(Parser* p, ASTNode* sect, ASTMetadata* m) {
     
     size_t block = p->block = sect->number;
     BasicBlock dblock = { .def = NULL };
-    jary_vec_init(dblock.def, 10);
-    jary_vec_init(dblock.use, 10);
+    vecinit(dblock.def, 10);
+    vecinit(dblock.use, 10);
 
-    jary_vec_push(m->bbkey, block);
-    jary_vec_push(m->bbval, dblock);
+    vecpush(m->bbkey, block);
+    vecpush(m->bbval, dblock);
 
     for (TKN* tkn = current(p);
             tkn->type != TKN_RIGHT_BRACE        &&
@@ -347,7 +347,7 @@ static ParseError _section(Parser* p, ASTNode* sect, ASTMetadata* m) {
         }
 
         if (next(p)->type != TKN_NEWLINE) {
-            error_node(jary_vec_last(sect->child), back(p), TKN_NEWLINE, &m->errors, NULL);
+            error_node(veclast(sect->child), back(p), TKN_NEWLINE, &m->errors, NULL);
             continue;
         }
     }
@@ -386,19 +386,19 @@ static ParseError _declaration(Parser* p, ASTNode* decl, ASTMetadata* m) {
         .number = m->size++
     };
 
-    jary_vec_init(decl->child, 10);
-    jary_vec_push(decl->child, nodename);
+    vecinit(decl->child, 10);
+    vecpush(decl->child, nodename);
 
     while (!ended(p) && current(p)->type != TKN_RIGHT_BRACE) {
         ASTNode sect = NODE();
         size_t graphsz = sect.number = m->size++;
-        jary_vec_init(sect.child, 10);
+        vecinit(sect.child, 10);
 
         if (_section(p, &sect, m) != PARSE_SUCCESS) {
             syncsection(p, &m->size, graphsz);
         }
 
-        jary_vec_push(decl->child, sect);
+        vecpush(decl->child, sect);
     }
 
     if (next(p)->type != TKN_RIGHT_BRACE) {
@@ -409,17 +409,17 @@ static ParseError _declaration(Parser* p, ASTNode* decl, ASTMetadata* m) {
 }
 
 static void _entry(Parser* p, ASTNode* ast, ASTMetadata* m) {
-    jary_vec_init(ast->child, 10);
+    vecinit(ast->child, 10);
     ast->type = AST_ROOT;
     ast->number = m->size++;
 
     size_t block = p->block = ast->number;
     BasicBlock dblock = { .def = NULL };
-    jary_vec_init(dblock.def, 10);
-    jary_vec_init(dblock.use, 10);
+    vecinit(dblock.def, 10);
+    vecinit(dblock.use, 10);
 
-    jary_vec_push(m->bbkey, block);
-    jary_vec_push(m->bbval, dblock);
+    vecpush(m->bbkey, block);
+    vecpush(m->bbval, dblock);
 
     while (!ended(p)) {
         ASTNode decl = NODE();
@@ -428,7 +428,7 @@ static void _entry(Parser* p, ASTNode* ast, ASTMetadata* m) {
         if (_declaration(p, &decl, m) != PARSE_SUCCESS) 
             synchronize(p, &m->size, size, TKN_RIGHT_BRACE);
         else
-            jary_vec_push(ast->child, decl);
+            vecpush(ast->child, decl);
 
         p->block = ast->number;
     }
@@ -491,25 +491,25 @@ void jary_parse(Parser* p, ASTNode* ast, ASTMetadata* m, char* src, size_t lengt
     TKN tkn = {.type = TKN_ERR};
     scan_token(&scan, &tkn);
     
-    jary_vec_init(p->tkns, 20);
-    jary_vec_push(p->tkns, tkn);
+    vecinit(p->tkns, 20);
+    vecpush(p->tkns, tkn);
     p->idx = 0;
     p->sc = &scan;
 
     // -1 represent not in a block
     p->block = -1;
 
-    jary_vec_init(m->errors, 10);
-    jary_vec_init(m->bbkey, 10);
-    jary_vec_init(m->bbval, 10);
+    vecinit(m->errors, 10);
+    vecinit(m->bbkey, 10);
+    vecinit(m->bbval, 10);
     m->size = 0;
 
     _entry(p, ast, m); 
 
     m->tkns = p->tkns;
-    m->tknsz = jary_vec_size(p->tkns);
-    m->errsz = jary_vec_size(m->errors);
-    m->bbsz = jary_vec_size(m->bbkey);
+    m->tknsz = vecsize(p->tkns);
+    m->errsz = vecsize(m->errors);
+    m->bbsz = vecsize(m->bbkey);
 
-    jary_assert(jary_vec_size(m->bbkey) == jary_vec_size(m->bbval));
+    jary_assert(vecsize(m->bbkey) == vecsize(m->bbval));
 }

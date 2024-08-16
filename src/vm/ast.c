@@ -3,7 +3,7 @@
 #include "vector.h"
 
 size_t ast_degree(ASTNode* ast) {
-    size_t sz = jary_vec_size(ast->child);
+    size_t sz = vecsize(ast->child);
 
     return sz;
 }
@@ -18,11 +18,11 @@ void ast_meta_free(ASTMetadata* m) {
 
 
 BasicBlock* find_basic_block(size_t** bbkey, BasicBlock** bbval, size_t block) {
-    jary_assert(jary_vec_size(*bbkey) == jary_vec_size(*bbval));
+    jary_assert(vecsize(*bbkey) == vecsize(*bbval));
 
     size_t* keys = *bbkey;
     BasicBlock* vals = *bbval;
-    size_t length = jary_vec_size(keys);
+    size_t length = vecsize(keys);
 
     for (size_t i = 0; i < length; ++i) {
         if (block == keys[i])

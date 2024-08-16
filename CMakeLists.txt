@@ -51,3 +51,4 @@ target_include_directories(parser
 
 # CHILD BUILD
 add_subdirectory(test)
+add_subdirectory(tool)

@@ -3,7 +3,6 @@
 
 #include <stdbool.h>
 
-#include "common.h"
 #include "scanner.h"
 #include "ast.h"
 

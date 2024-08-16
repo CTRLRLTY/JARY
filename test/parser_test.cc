@@ -3,20 +3,20 @@
 #include <queue>
 
 extern "C" {
-#include "scanner.h"
 #include "parser.h"
-#include "vector.h"
 }
 
 
 // Breadth-First-Search ASTType matching 
 void tree_match(ASTNode* ast, ASTMetadata* m, std::vector<ASTType>& types) {
-    ASSERT_EQ(m->size, types.size());
+    EXPECT_EQ(m->size, types.size());
     
     std::queue<ASTNode*> q;
     std::vector<bool> marked(m->size, false);
 
     q.push(ast);
+
+    size_t idx = 0;
 
     while (q.size() > 0) {
         ASTNode* node = q.front();
@@ -25,7 +25,7 @@ void tree_match(ASTNode* ast, ASTMetadata* m, std::vector<ASTType>& types) {
 
         if (!marked[num]) {
             marked[num] = true;
-            ASSERT_EQ(node->type, types[num]);
+            ASSERT_EQ(node->type, types[idx++]) << "nodenum: " << num;
 
             for (size_t i = 0; i < ast_degree(node); i++) {
                 auto neighbor = &node->child[i];
@@ -37,19 +37,18 @@ void tree_match(ASTNode* ast, ASTMetadata* m, std::vector<ASTType>& types) {
             }
         }
     }
-    
+
+    for (const auto& mark : marked) {
+        ASSERT_EQ(mark, true);
+    }
 }
 
 TEST(ParserTest, RuleDeclaration) {
     Parser p;
 
-    Scanner sc;
-    jary_vec_t(TKN) tkns;
-
     {
         ASTNode ast = {};
         ASTMetadata m = {};
-        jary_vec_init(tkns, 10);
 
         char samplestr[] = 
         "rule something {"              "\n"
@@ -61,25 +60,90 @@ TEST(ParserTest, RuleDeclaration) {
 
         std::vector<ASTType> expected = {
             AST_ROOT, 
-                AST_RULE,                       // rule
+                AST_DECL,                       // rule
                     AST_NAME,                   // something
-                    AST_INPUT,                  // input:
-                        AST_ASSIGNMENT,         // =
+                    AST_SECTION,                // input:
+                        AST_BINARY,             // =
+                        AST_BINARY,             // =
                             AST_NAME,           // got
                             AST_CALL,           // myfunc
-                                AST_NAME,       // ()
-                                AST_LITERAL,    // 3
-                        AST_ASSIGNMENT,         // =
                             AST_NAME,           // corn
                             AST_CALL,           // ()
+                                AST_NAME,       // ()
+                                AST_LITERAL,    // 3
                                 AST_NAME,       // myfunc
                                 AST_LITERAL,    // 4
         };
 
         jary_parse(&p, &ast, &m, samplestr, sizeof(samplestr));
 
+        EXPECT_EQ(m.bbsz, 4);
+        EXPECT_EQ(m.errsz, 0);
+
         tree_match(&ast, &m, expected);
 
-        jary_vec_free(tkns);
+        ast_free(&ast);
+        ast_meta_free(&m);
+    }
+
+    {
+        ASTNode ast = {};
+        ASTMetadata m = {};
+
+        char samplestr[] = 
+        "rule something {"              "\n"
+            "input:"                    "\n"
+            "got = myfunc(3"           "\n"
+        "}"
+        ;
+
+        std::vector<ASTType> expected = {
+            AST_ROOT, 
+                AST_DECL,                       // rule
+                    AST_NAME,                   // something
+                    AST_SECTION,                // input:
+        };
+
+        jary_parse(&p, &ast, &m, samplestr, sizeof(samplestr));
+
+        tree_match(&ast, &m, expected);
+
+        ASSERT_EQ(m.bbsz, 2);
+        ASSERT_EQ(m.errsz, 1);
+
+        ast_free(&ast);
+        ast_meta_free(&m);
+    }
+
+    {
+        ASTNode ast = {};
+        ASTMetadata m = {};
+
+        char samplestr[] = 
+        "rule something {"              "\n" // 3
+            "input:"                    "\n" // 1
+                "$got = myfunc(3)"      "\n" // $ got = myfunc () 3
+        "}"
+        ;
+
+        std::vector<ASTType> expected = {
+            AST_ROOT, 
+                AST_DECL,                       // rule
+                    AST_NAME,                   // something
+                    AST_SECTION,                // input:
+                        AST_BINARY,             // =
+                            AST_EVENT,          // $
+                            AST_CALL,           // ()
+                                AST_NAME,       // got
+                                AST_NAME,       // myfunc
+                                AST_LITERAL,    // 3
+        };
+
+        jary_parse(&p, &ast, &m, samplestr, sizeof(samplestr));
+
+        tree_match(&ast, &m, expected);
+
+        ast_free(&ast);
+        ast_meta_free(&m);
     }
 }

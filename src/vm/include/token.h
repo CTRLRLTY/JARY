@@ -49,7 +49,7 @@ typedef enum {
 // > LITERAL
 
     TKN_IDENTIFIER,
-    TKN_PVAR,
+    TKN_DOLLAR,
 
     TKN_CUSTOM,
     TKN_EOF,

@@ -44,12 +44,7 @@ typedef struct jary_vec_metadata_t {
         jary_vec_metadata((__vec))->count++;                                                           \
     } while(0)
 
-#define jary_vec_pop(__vec, __data)                                                                    \
-    do {                                                                                               \
-        jary_assert((__vec) != NULL);                                                                  \
-        if (jary_vec_size(__vec))                                                                      \
-            (__data) = (__vec)[--jary_vec_metadata((__vec))->count];                                   \
-    } while(0)
+#define jary_vec_pop(__vec) (&(__vec)[jary_vec_metadata((__vec))->count--])
 
 #define jary_vec_free(__vec)                                                                           \
     do {                                                                                               \

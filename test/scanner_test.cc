@@ -99,7 +99,8 @@ TEST(ScannerTest, ScanSymbol) {
     {"{", TKN_LEFT_BRACE}, {"}", TKN_RIGHT_BRACE},
     {"<", TKN_LESSTHAN}, {">", TKN_GREATERTHAN},
     {":", TKN_COLON},
-    {",", TKN_COMMA},
+    {",", TKN_COMMA}, 
+    {"$", TKN_DOLLAR},
   };
 
   size_t symsz = sizeof(symbols)/sizeof(symbols[0]);
@@ -141,7 +142,6 @@ TEST(ScannerTest, ScanKeyword) {
     {"match", 6, TKN_MATCH},
     {"target", 7, TKN_TARGET},
     {"condition", 10, TKN_CONDITION},
-    {"$myvar", 7, TKN_PVAR},
   };
 
   size_t kwsz = sizeof(keywords)/sizeof(keywords[0]);

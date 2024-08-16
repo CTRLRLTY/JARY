@@ -79,4 +79,16 @@ rule BruteForce {
         a.notifyAdmin("[Bruteforce] "+ $name + " " + #found)
 }
 
+
+                Right Binding Power
+literal 	:       0
+dollar      :       4
+identifier 	:       0
+logical 	:       3
+alias 		:       5
+
+	
+
+
+
 *)

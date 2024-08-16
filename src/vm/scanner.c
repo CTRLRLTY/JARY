@@ -8,18 +8,6 @@
 
 #include <stdlib.h>
 
-static const char* reserved_keywords[] = {
-    "all",
-    "action",
-    "and", "or",
-    "any",
-    "directive", 
-    "false","true",
-    "forward",
-    "input",
-    "rule",
-};
-
 static void set_token(TKN* token, Scanner* sc, TknType type) {
     token->type = type;
     token->start = sc->start;
@@ -154,7 +142,9 @@ SCAN:
     case ':':
         set_token(token, sc, TKN_COLON); return SCAN_SUCCESS;
     case ',':
-        set_token(token, sc, TKN_COMMA); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_COMMA); return SCAN_SUCCESS;  
+    case '$':
+        set_token(token, sc, TKN_DOLLAR); return SCAN_SUCCESS;
 
     // Ignore
     case ' ':
@@ -184,16 +174,6 @@ SCAN:
         while(sc->current[0] == '\0' && !scan_ended(sc))
             ++sc->current;
         set_token(token, sc, TKN_EOF); 
-        return SCAN_SUCCESS;
-
-    case '$':
-        if (!isalpha(sc->start[1]))
-            return ERR_SCAN_INV_TOKEN; 
-        
-        while ((isalnum(*sc->current) || *sc->current == '_') && !scan_ended(sc))
-            ++sc->current;
-
-        set_token(token, sc, TKN_PVAR); 
         return SCAN_SUCCESS;
     
     case '/': {

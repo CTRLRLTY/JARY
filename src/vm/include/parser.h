@@ -11,6 +11,13 @@
 typedef struct {
     TKN* tkns;
     Scanner* sc;
+
+    // Current Basic Block.
+    //
+    // This field is changed when entering
+    // a new production rule and it is callee-save.
+    size_t block;
+    
     size_t idx;
 } Parser;
 

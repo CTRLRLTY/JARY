@@ -8,7 +8,7 @@
 
 
 typedef struct {
-    TKN* tkns;
+    TKN** tkns;
     Scanner* sc;
 
     // Current Basic Block.
@@ -18,8 +18,10 @@ typedef struct {
     size_t block;
     
     size_t idx;
+
+    size_t depth;
 } Parser;
 
-void jary_parse(Parser* p, ASTNode* ast, ASTMetadata* m, char* src, size_t length);
+void jary_parse(Parser* p, ASTNode* ast, ASTMetadata* m, const char* src, size_t length);
 
 #endif

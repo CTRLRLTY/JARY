@@ -5,6 +5,9 @@
 
 
 size_t tkn_lexeme_size(TKN* token) {
+  if (token == NULL)
+    return 0;
+
   if (token->type == TKN_STRING)
     // +3 to count the quotes and '\0'
     return token->length + 3;
@@ -15,6 +18,9 @@ size_t tkn_lexeme_size(TKN* token) {
 
 // set a cstr representation of the token lexeme
 bool tkn_lexeme(TKN* token, char *lexeme, size_t lexeme_size) {
+  if (token == NULL)
+    return false;
+
   if (tkn_lexeme_size(token) > lexeme_size)
     return false;
 

@@ -12,10 +12,9 @@ typedef enum {
 
     AST_DECL,
     AST_SECTION,
-    AST_CALL,
 
     AST_BINARY,
-    
+    AST_CALL,
     AST_UNARY,
     AST_EVENT,
 
@@ -24,18 +23,17 @@ typedef enum {
 } ASTType;
 
 typedef struct ASTError {
-    TknType got;
-    TknType expect;
     size_t line;
     size_t offset;
     size_t length;
     char* lexeme;
+    char* linestr;
     char* msg;
 } ASTError;
 
 typedef struct ASTNode {
     ASTType type;
-    size_t number;
+    size_t id;
     TKN* tkn;
     struct ASTNode* child;
 } ASTNode;
@@ -47,8 +45,10 @@ typedef struct BasicBlock {
 } BasicBlock;
 
 typedef struct ASTMetadata {
+    char* src;
+
     // tkns array
-    TKN* tkns;
+    TKN** tkns;
     size_t tknsz;
 
     // Basic block table
@@ -62,6 +62,8 @@ typedef struct ASTMetadata {
 
     // total graph size
     size_t size;
+    // maximum depth
+    size_t depth;
 } ASTMetadata;
 
 void ast_free(ASTNode* ast);

@@ -21,7 +21,7 @@ void tree_match(ASTNode* ast, ASTMetadata* m, std::vector<ASTType>& types) {
     while (q.size() > 0) {
         ASTNode* node = q.front();
         q.pop();
-        auto num = node->number;
+        auto num = node->id;
 
         if (!marked[num]) {
             marked[num] = true;
@@ -29,7 +29,7 @@ void tree_match(ASTNode* ast, ASTMetadata* m, std::vector<ASTType>& types) {
 
             for (size_t i = 0; i < ast_degree(node); i++) {
                 auto neighbor = &node->child[i];
-                auto nnum = neighbor->number;
+                auto nnum = neighbor->id;
 
                 if (!marked[nnum]) {
                     q.push(neighbor);

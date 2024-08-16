@@ -1,6 +1,8 @@
 #ifndef JAYVM_VECTOR_H
 #define JAYVM_VECTOR_H
 
+#include <string.h>
+
 #include "memory.h"
 #include "error.h"
 
@@ -41,10 +43,10 @@ typedef struct vecmeta_t {
             vecgrow((__vec), veccap((__vec)) + ARR_GROW_RATE);                                         \
         }                                                                                              \
         (__vec)[vecsize((__vec))] = (__data);                                                          \
-        vecmetadata((__vec))->count++;                                                                 \
+        vecmetadata((__vec))->count = vecsize((__vec)) + 1;                                            \
     } while(0)
 
-#define vecpop(__vec) (&(__vec)[vecmetadata((__vec))->count--])
+#define vecpop(__vec) (&(__vec)[--vecmetadata((__vec))->count])
 
 #define vecfree(__vec)                                                                                 \
     do {                                                                                               \
@@ -52,28 +54,22 @@ typedef struct vecmeta_t {
         (__vec) = NULL;                                                                                \
     } while(0)
 
-#define veclast(__vec) (&(__vec)[vecsize((__vec)) - 1])
+#define veclast(__vec) (&(__vec)[vecsize((__vec)) ? vecsize((__vec)) - 1 : 0])
 
+#define vecset(__vec, __char, __nbytes)                                                               \
+        do {                                                                                          \
+            if (vecsize((__vec)) + (__nbytes) >= veccap((__vec)))                                     \
+                vecgrow((__vec), veccap((__vec)) + (__nbytes) + ARR_GROW_RATE);                       \
+            memset(&(__vec)[vecsize((__vec))], (__char), (__nbytes));                                 \
+            vecmetadata((__vec))->count += (__nbytes);                                                \
+        } while(0)
 
-#define jary_arr_grow(__arr, __pcap, __nmemb)                                                          \
-    do {                                                                                               \
-        jary_assert((__arr) != NULL);                                                                  \
-        (__arr) = jary_realloc(m,  (__nmemb));                                                         \
-        jary_assert((__arr) != NULL);                                                                  \
-        *(__pcap) = (__nmemb)/sizeof(*(__arr));                                                        \
-    } while(0)
-
-
-#define jary_arr_push(__arr, __psize, __pcap, __data)                                                  \
-    do {                                                                                               \
-        jary_assert((__arr) != NULL);                                                                  \
-        if (*(__psize) + 1 >= *(__pcap)) {                                                             \
-            jary_arr_grow((__arr), (__pcap), sizeof(*(__arr)) + ARR_GROW_RATE);                        \
-        }                                                                                              \
-        (__arr)[*(__psize)] = (__data);                                                                \
-        *(__psize) += 1;                                                                               \
-    } while(0)
-
-#define jary_arr_last(__arr, __size) (&(__arr)[(__size) - 1])
+#define veccat(__vec, __src, __nbytes)                                                                \
+        do {                                                                                          \
+            if (vecsize((__vec)) + (__nbytes) >= veccap((__vec)))                                     \
+                vecgrow((__vec), veccap((__vec)) + (__nbytes) + ARR_GROW_RATE);                       \
+            memcpy(&(__vec)[vecsize((__vec))], (__src), (__nbytes));                                  \
+            vecmetadata((__vec))->count += (__nbytes);                                                \
+        } while(0)
 
 #endif // JAYVM_VECTOR_H

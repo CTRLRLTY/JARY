@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 
 #include "vector.h"
 #include "parser.h"
@@ -12,9 +13,7 @@
 
 #define NODE() ((ASTNode){0})
 
-#define MSG_NOT_A_TKN "invalid token"
-#define MSG_NOT_A_SECTION "invalid section"
-#define MSG_NOT_A_DECLARATION "invalid declaration"
+#define MAX(__a, __b) ((__b > __a) ? __b : __a)
 
 
 typedef enum ParseError {
@@ -25,7 +24,7 @@ typedef enum ParseError {
 
 typedef enum Precedence {
   PREC_NONE,
-  PREC_NAME,
+  PREC_ASSIGNMENT,
   PREC_OR,          // or
   PREC_AND,         // and
   PREC_EQUALITY,    // == !=
@@ -49,20 +48,25 @@ static ParseError _precedence(Parser* p, ASTNode* ast, ASTMetadata* m, Precedenc
 static ParseError _expression(Parser* p, ASTNode* ast, ASTMetadata* m);
 
 static ParseError 
-error_node(ASTNode* ast, TKN* tkn, TknType expect, ASTError** errs, const char* msg) {
+error_node(ASTNode* ast, TKN* nextkn, TKN* tkn, ASTError** errs, const char* msg) {
     if (ast != NULL) {
         ast_free(ast);
     }
-        
+    
     char* lexeme = jary_alloc(tkn_lexeme_size(tkn));
+    // +1 for '\0'
+    size_t linestrsz = ((size_t)(nextkn->start - tkn->start)); 
+    linestrsz += tkn->offset;
+    char* linestr = jary_alloc(linestrsz); 
     tkn_lexeme(tkn, lexeme, tkn_lexeme_size(tkn));
+    memcpy(linestr, tkn->linestart, linestrsz);
+    linestr[linestrsz-1] = '\0';
 
     ASTError err = {
-        .got = tkn->type,
-        .expect = expect,
         .line = tkn->line,
         .offset = tkn->offset,
         .lexeme = lexeme,
+        .linestr = linestr,
         .msg = (msg != NULL) ? strdup(msg) : NULL
     };
 
@@ -84,6 +88,19 @@ static bool is_section(TknType type) {
     return false;
 }
 
+static bool is_decl(TknType type) {
+    switch (type) {
+    case TKN_RULE:
+        return true;
+    case TKN_IMPORT:
+        return true;
+    case TKN_INGRESS:
+        return true;
+    }
+
+    return false;
+}
+
 static bool ended(Parser* p) {
     bool scend = scan_ended(p->sc);
     bool tknend = p->idx + 1 >= vecsize(p->tkns);
@@ -94,13 +111,13 @@ static bool ended(Parser* p) {
 static TKN* back(Parser* p) {
     jary_assert(p->idx-1 >= 0);
 
-    return &p->tkns[--p->idx];   
+    return p->tkns[p->idx--];   
 }
 
 static TKN* prev(Parser* p) {
     jary_assert(p->idx-1 >= 0);
 
-    return &p->tkns[p->idx-1];   
+    return p->tkns[p->idx-1];   
 }
 
 // fill token with current and advance
@@ -108,39 +125,79 @@ static TKN* next(Parser* p) {
     if (p->idx + 1 >= vecsize(p->tkns)) {
         jary_assert(!ended(p));
 
-        TKN tkn = {.type = TKN_ERR};
+        TKN* tkn = jary_alloc(sizeof *tkn);
 
-        scan_token(p->sc, &tkn);
+        scan_token(p->sc, tkn);
 
         vecpush(p->tkns, tkn);
     }
 
-    return &p->tkns[p->idx++];  
+    return p->tkns[p->idx++];  
 }
 
 // fill token with current and advance
 static TKN* current(Parser* p) {
     jary_assert(p->idx < vecsize(p->tkns));
 
-    return &p->tkns[p->idx];    
+    return p->tkns[p->idx];    
 }
 
-static void synchronize(Parser* p, size_t* size, size_t newsize, TknType until) {
+static ParseError synchronize(Parser* p, size_t* size, size_t newsize, TknType until) {
     if (size != NULL) 
         *size = newsize;
 
-    while (!ended(p) && next(p)->type != until);
+    do {
+        if (ended(p))
+            return ERR_PARSE_PANIC;
+    } while (next(p)->type != until);
+    
+    back(p);
+    return PARSE_SUCCESS;
 }
 
-static void syncsection(Parser* p, size_t* size, size_t newsize) {
+static ParseError synclist(Parser* p, size_t* size, size_t newsize) {
     if (size != NULL) 
         *size = newsize;
 
-    for(TKN* tkn = next(p); 
-            tkn->type != TKN_RIGHT_BRACE    &&
-            !ended(p)                       && 
-            !is_section(tkn->type)          ; 
-        tkn = next(p));
+    TKN* tkn;
+
+    do {
+        if (ended(p))
+            return ERR_PARSE_PANIC;
+
+        tkn = next(p);
+    } while (
+        tkn->type != TKN_RIGHT_BRACE         &&
+        tkn->type != TKN_NEWLINE             &&
+        !is_decl(tkn->type)                  &&
+        !is_section(tkn->type)               
+    );
+
+    back(p);
+
+    return PARSE_SUCCESS;    
+}
+
+static ParseError syncsection(Parser* p, size_t* size, size_t newsize) {
+    if (size != NULL) 
+        *size = newsize;
+
+    TKN* tkn;
+
+    do {
+        if (ended(p))
+            return ERR_PARSE_PANIC;
+
+        tkn = next(p);
+    } while (
+        tkn->type != TKN_RIGHT_BRACE            &&
+        !is_decl(tkn->type)                     &&
+        !is_section(tkn->type)               
+    );
+
+    back(p);
+
+    return PARSE_SUCCESS;
 }
 
 static ParseRule* get_rule(TknType type);
@@ -148,7 +205,13 @@ static ParseRule* get_rule(TknType type);
 static ParseError _err(Parser* p, ASTNode* ast, ASTMetadata* m) {
     TKN* token = prev(p);
 
-    return error_node(ast, token, TKN_NONE, &m->errors, MSG_NOT_A_TKN);
+    return error_node(ast, current(p), token, &m->errors, "error: unrecognized token");
+}
+
+static ParseError _err_str(Parser* p, ASTNode* ast, ASTMetadata* m) {
+    TKN* token = prev(p);
+
+    return error_node(ast, current(p), token, &m->errors, "error: unterminated string");
 }
 
 static void block_add_def(size_t block, ASTMetadata* m, TKN* tkn) {
@@ -204,16 +267,23 @@ static ParseError _event(Parser* p, ASTNode* ast, ASTMetadata* m) {
     
     vecinit(ast->child, 1);
 
-    ASTNode expr = NODE();
-    RETURN_PANIC(_precedence(p, &expr, m, PREC_PRIMARY));
+    if (next(p)->type != TKN_IDENTIFIER)
+        return error_node(ast, current(p), back(p), &m->errors, NULL);
 
-    vecpush(ast->child, expr);
+    ASTNode name = NODE();
+    if(_name(p, &name, m) != PARSE_SUCCESS)
+        return error_node(ast, current(p), back(p), &m->errors, "Todo: handle this if needed");
+    
+    p->depth++;
+    name.id = m->size++;
+    vecpush(ast->child, name);
 
     return PARSE_SUCCESS;
 }
 
 static ParseError _call(Parser* p, ASTNode* ast, ASTMetadata* m) {
     ast->type = AST_CALL;
+    ast->tkn = prev(p);
 
     if (current(p)->type == TKN_RIGHT_PAREN) {
         next(p); 
@@ -221,7 +291,7 @@ static ParseError _call(Parser* p, ASTNode* ast, ASTMetadata* m) {
     }
 
     size_t oldblock = p->block;
-    size_t block = p->block = ast->number;
+    size_t block = p->block = ast->id;
 
     BasicBlock dblock = { .def = NULL };
     vecinit(dblock.def, 10);
@@ -243,7 +313,7 @@ static ParseError _call(Parser* p, ASTNode* ast, ASTMetadata* m) {
     } while(current(p)->type == TKN_COMMA);
 
     if (next(p)->type != TKN_RIGHT_PAREN) {
-        error_node(ast, back(p), TKN_RIGHT_PAREN, &m->errors, NULL);
+        error_node(ast, current(p), back(p), &m->errors, NULL);
         goto PANIC;
     }
         
@@ -277,54 +347,62 @@ static ParseError _precedence(Parser* p, ASTNode* expr, ASTMetadata* m,  Precede
     jary_assert(prefixfn != NULL);
 
     ASTNode nud = NODE();
-    nud.number = m->size++;
+    nud.id = m->size++;
+    p->depth++;
     RETURN_PANIC(prefixfn(p, &nud, m));
-    *expr = nud;
 
     Precedence nextprec = get_rule(current(p)->type)->precedence;
 
-    while (rbp < nextprec) {
+    if (rbp >= nextprec) {
+        *expr = nud;
+        return PARSE_SUCCESS;
+    }
+
+    do {
         ASTNode led = NODE();
-        led.number = m->size++;
+        led.id = m->size++;
         vecinit(led.child, 10);
-        vecpush(led.child, *expr);
+        vecpush(led.child, nud);
         
         ParseFn infixfn = get_rule(next(p)->type)->infix;
         RETURN_PANIC(infixfn(p, &led, m));
+
         nextprec = get_rule(current(p)->type)->precedence;
+
         *expr = led;
-    }
-    
+    } while (rbp < nextprec);
+
     return PARSE_SUCCESS;
 }
 
 static ParseError _expression(Parser* p, ASTNode* ast, ASTMetadata* m) {
-    return _precedence(p, ast, m, PREC_NAME);
+    return _precedence(p, ast, m, PREC_ASSIGNMENT);
 }
 
-static ParseError _list(Parser* p, ASTNode* sect, ASTMetadata* m) {
-    ASTNode expr = NODE();
-
-    RETURN_PANIC(_expression(p, &expr, m));
-
-    vecpush(sect->child, expr);
+static ParseError _list(Parser* p, ASTNode* expr, ASTMetadata* m) {
+    RETURN_PANIC(_expression(p, expr, m));
 
     return PARSE_SUCCESS;
 }
 
 static ParseError _section(Parser* p, ASTNode* sect, ASTMetadata* m) {
     sect->type = AST_SECTION;
+    sect->tkn = next(p);
 
-    if (!is_section(next(p)->type))
-        return error_node(sect, back(p), TKN_NONE, &m->errors, MSG_NOT_A_SECTION);
+    if (!is_section(sect->tkn->type))
+        return error_node(sect, current(p), back(p), &m->errors, "error: unrecognized section");
 
     if (next(p)->type != TKN_COLON)
-        return error_node(sect, back(p), TKN_COLON, &m->errors, NULL);
+        return error_node(sect, current(p), back(p), &m->errors, "error: expected ':' ");
 
     if (next(p)->type != TKN_NEWLINE)
-        return error_node(sect, back(p), TKN_NEWLINE, &m->errors, NULL);
+        return error_node(sect, current(p), back(p), &m->errors, "error: expected '\n' ");
     
-    size_t block = p->block = sect->number;
+    if (current(p)->type == TKN_RIGHT_BRACE) {
+        return PARSE_SUCCESS;
+    }
+    
+    size_t block = p->block = sect->id;
     BasicBlock dblock = { .def = NULL };
     vecinit(dblock.def, 10);
     vecinit(dblock.use, 10);
@@ -334,23 +412,36 @@ static ParseError _section(Parser* p, ASTNode* sect, ASTMetadata* m) {
 
     for (TKN* tkn = current(p);
             tkn->type != TKN_RIGHT_BRACE        &&
-            tkn->type != TKN_NEWLINE            &&
             !ended(p)                           &&
+            !is_decl(tkn->type)                 &&
             !is_section(tkn->type)              ; 
         tkn = current(p)
     ) {
         size_t size = m->size;
+        ASTNode expr = NODE();
 
-        if (_list(p, sect, m) != PARSE_SUCCESS) {
-            synchronize(p, &m->size, size, TKN_NEWLINE);
-            continue;
+        p->depth = 2;
+
+        if (_list(p, &expr, m) != PARSE_SUCCESS) {
+            RETURN_PANIC(synclist(p, &m->size, size));
         }
 
-        if (next(p)->type != TKN_NEWLINE) {
-            error_node(veclast(sect->child), back(p), TKN_NEWLINE, &m->errors, NULL);
-            continue;
+        TKN* nextkn = next(p);
+
+        if (
+            nextkn->type != TKN_NEWLINE && 
+            nextkn->type != TKN_RIGHT_BRACE) 
+        {
+            ast_free(&expr);
+            back(p);
+            return error_node(sect, prev(p), sect->tkn, &m->errors, "error: unterminated section");
         }
+
+        m->depth = MAX(m->depth, p->depth);
+        vecpush(sect->child, expr);
     }
+
+    p->depth = 2;
 
     return PARSE_SUCCESS;
 }
@@ -359,50 +450,65 @@ static ParseError _declaration(Parser* p, ASTNode* decl, ASTMetadata* m) {
     TKN* decltkn = next(p);
 
     decl->tkn = decltkn;
-    decl->number = m->size++;
+    decl->id = m->size++;
     decl->type = AST_DECL;
 
-    switch (decltkn->type) {
-    case TKN_RULE:
-        break;
-    default:
-        return error_node(decl, back(p), TKN_NONE, &m->errors, MSG_NOT_A_DECLARATION);
+    if (!is_decl(decltkn->type)) {
+        return error_node(decl, back(p), decltkn, &m->errors, "error: invalid declaration");
     }
 
     TKN* nametkn = next(p);
 
     if(nametkn->type != TKN_IDENTIFIER)
-        return error_node(decl, back(p), TKN_IDENTIFIER, &m->errors, NULL);
+        return error_node(decl, back(p), decltkn, &m->errors, "error: expected identifier for declaration");
 
-    if (next(p)->type != TKN_LEFT_BRACE)
-        return error_node(decl, back(p), TKN_LEFT_BRACE, &m->errors, NULL);
+    TKN* leftbrace = next(p);
 
-    if (next(p)->type != TKN_NEWLINE)
-        return error_node(decl, back(p), TKN_NEWLINE, &m->errors, NULL);
+    if (leftbrace->type != TKN_LEFT_BRACE)
+        return error_node(decl, back(p), leftbrace, &m->errors, "error:");
+
+    TKN* newln = next(p);
+
+    if (newln->type != TKN_NEWLINE)
+        return error_node(decl, back(p), newln, &m->errors, NULL);
 
     ASTNode nodename = {
         .type = AST_NAME, 
         .tkn = nametkn,
-        .number = m->size++
+        .id = m->size++
     };
+
+    // old maxdepth
+    size_t maxdepth = m->depth;
 
     vecinit(decl->child, 10);
     vecpush(decl->child, nodename);
 
-    while (!ended(p) && current(p)->type != TKN_RIGHT_BRACE) {
+    while (
+            !ended(p)                               && 
+            current(p)->type != TKN_RIGHT_BRACE     &&
+            !is_decl(current(p)->type)
+        ) {
         ASTNode sect = NODE();
-        size_t graphsz = sect.number = m->size++;
+        size_t graphsz = sect.id = m->size++;
         vecinit(sect.child, 10);
+
+        p->depth = 1;
 
         if (_section(p, &sect, m) != PARSE_SUCCESS) {
             syncsection(p, &m->size, graphsz);
+        } else {
+            m->depth = MAX(m->depth, p->depth);
         }
 
         vecpush(decl->child, sect);
     }
 
-    if (next(p)->type != TKN_RIGHT_BRACE) {
-        return error_node(decl, back(p), TKN_RIGHT_BRACE, &m->errors, NULL);
+    if (ended(p) || next(p)->type != TKN_RIGHT_BRACE) {
+        m->depth = maxdepth;
+        back(p);
+        error_node(decl, prev(p), decltkn, &m->errors, "error: declaration unterminated");
+        return ERR_PARSE_PANIC;
     }
 
     return PARSE_SUCCESS;
@@ -411,9 +517,10 @@ static ParseError _declaration(Parser* p, ASTNode* decl, ASTMetadata* m) {
 static void _entry(Parser* p, ASTNode* ast, ASTMetadata* m) {
     vecinit(ast->child, 10);
     ast->type = AST_ROOT;
-    ast->number = m->size++;
+    ast->id = m->size++;
+    ast->tkn = NULL;
 
-    size_t block = p->block = ast->number;
+    size_t block = p->block = ast->id;
     BasicBlock dblock = { .def = NULL };
     vecinit(dblock.def, 10);
     vecinit(dblock.use, 10);
@@ -425,17 +532,30 @@ static void _entry(Parser* p, ASTNode* ast, ASTMetadata* m) {
         ASTNode decl = NODE();
         size_t size = m->size;
 
-        if (_declaration(p, &decl, m) != PARSE_SUCCESS) 
-            synchronize(p, &m->size, size, TKN_RIGHT_BRACE);
+        p->depth = 0;
+
+        if (_declaration(p, &decl, m) != PARSE_SUCCESS) {
+            ParseError res = synchronize(p, &m->size, size, TKN_RIGHT_BRACE);
+
+            if (res != PARSE_SUCCESS)
+                return;
+
+            next(p); // consume right brace
+        }
         else
             vecpush(ast->child, decl);
+        
+        while (current(p)->type == TKN_NEWLINE)
+            next(p);
 
-        p->block = ast->number;
+        p->block = ast->id;
+        m->depth = MAX(m->depth, p->depth);
     }
 }
 
 static ParseRule rules[] = {
     [TKN_ERR]           = {_err,     NULL,   PREC_NONE},
+    [TKN_ERR_STR]       = {_err_str, NULL,   PREC_NONE},
 
     [TKN_LEFT_PAREN]    = {NULL,     _call,  PREC_CALL},
     [TKN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
@@ -469,7 +589,7 @@ static ParseRule rules[] = {
     [TKN_FALSE]         = {_literal, NULL,   PREC_NONE},
     [TKN_TRUE]          = {_literal, NULL,   PREC_NONE},
 
-    [TKN_IDENTIFIER]    = {_name,    NULL,   PREC_NAME},
+    [TKN_IDENTIFIER]    = {_name,    NULL,   PREC_NONE},
     [TKN_DOLLAR]        = {_event,   NULL,   PREC_NONE},
 
     [TKN_CUSTOM]        = {NULL,     NULL,   PREC_NONE}, 
@@ -480,16 +600,17 @@ static ParseRule* get_rule(TknType type) {
     return &rules[type];
 }
 
-void jary_parse(Parser* p, ASTNode* ast, ASTMetadata* m, char* src, size_t length) {
+void jary_parse(Parser* p, ASTNode* ast, ASTMetadata* m, const char* src, size_t length) {
     jary_assert(p != NULL);
     jary_assert(ast != NULL);
     jary_assert(m != NULL);
     jary_assert(length > 0);
 
     Scanner scan = {.base = NULL};
-    scan_source(&scan, src, length);
-    TKN tkn = {.type = TKN_ERR};
-    scan_token(&scan, &tkn);
+    char* dupsrc = strndup(src, length);
+    scan_source(&scan, dupsrc, length);
+    TKN* tkn = jary_alloc(sizeof *tkn);
+    scan_token(&scan, tkn);
     
     vecinit(p->tkns, 20);
     vecpush(p->tkns, tkn);
@@ -510,6 +631,7 @@ void jary_parse(Parser* p, ASTNode* ast, ASTMetadata* m, char* src, size_t lengt
     m->tknsz = vecsize(p->tkns);
     m->errsz = vecsize(m->errors);
     m->bbsz = vecsize(m->bbkey);
+    m->src = dupsrc;
 
     jary_assert(vecsize(m->bbkey) == vecsize(m->bbval));
 }

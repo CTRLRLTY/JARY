@@ -1,0 +1,12 @@
+rule something {
+    input:
+        boi = "a
+        bro = 3
+}
+
+
+rule something {
+    input:
+        $hey = "aaa"
+        $hey = "aaa"
+}

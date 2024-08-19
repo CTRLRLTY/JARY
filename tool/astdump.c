@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "parser.h"
-#include "vector.h"
 
 static char* ast2string(ASTType type) {
     char* buf = NULL;
@@ -35,137 +34,91 @@ static char* ast2string(ASTType type) {
     return buf;
 }
 
-static void dumpast(ASTNode *ast, const ASTMetadata *m)
-{
-    size_t graphsz = m->size;
-    
-    bool marked[graphsz];
+static void printast(ASTNode* v, ASTMetadata* m, size_t depth) {
+    size_t midpoint = 2 * m->depth + 15;
+    int idofs = m->size / 10;
+    int col1sz = midpoint - 4; 
 
-    memset(marked, 0, sizeof(*marked) * graphsz);
+    char* typestr = ast2string(v->type);
+    size_t typestrsz = strlen(typestr);
+    size_t lexsz = tkn_lexeme_size(v->tkn);
+    size_t printed = 0;
 
-    vec_t(ASTNode *) stck = NULL;
-    vec_t(size_t) depths = NULL;
-
-    size_t index = 0;
-    size_t maxdepth = m->depth;
-
-    vecinit(stck, 10);
-    vecinit(depths, 10);
-
-    vecpush(stck, ast);
-    vecpush(depths, 0);
-
-    size_t midpoint = 2 * maxdepth + 15;
-    size_t idofs = graphsz / 10;
-    size_t col1sz = midpoint - 4; 
-
-    vec_t(char) header;
-    vecinit(header, 100);
-    veccat(header, "Tree ", 5);
-    vecset(header, ' ', col1sz);
-    veccat(header, " ID ", 4);
-    vecset(header, ' ', 3 + idofs);
-    veccat(header, "Token", 5);
-    printf("%s\n\n", header);
-
-    vecfree(header);
-
-    while (vecsize(stck) > 0)
-    {
-        ASTNode* v = *vecpop(stck);
-        size_t depth = *vecpop(depths);
-        size_t vnum = v->id;
-
-        if (!marked[index]) {
-            size_t degree = ast_degree(v);
-            marked[index] = true;
-            index++;
-
-            vec_t(char) line = NULL;
-
-            char* typestr = ast2string(v->type);
-            size_t typestrsz = strlen(typestr);
-            size_t lexsz = tkn_lexeme_size(v->tkn);
-
-            vecinit(line, typestrsz + lexsz + depth * 2 + 100);
-
-            if (v->type != AST_ROOT) {
-                vecpush(line, '|');
-                vecset(line, '_', depth * 2);
-            }
-
-            if (vecsize(line) > 0) {
-                vecpush(line, ' ');
-            }
-
-            veccat(line, typestr, typestrsz);
-            vecpush(line, ' ');
-
-            int diff = midpoint - vecsize(line);
-
-            if (diff > 0) {
-                vecset(line, '.', diff);
-                veccat(line, " |", 2);
-            }
-
-            char tstr[64];
-            snprintf(tstr, 64, " [%ld] ", vnum);
-            size_t tsz = strlen(tstr);
-
-            veccat(line, tstr, tsz);
-
-            size_t vidofs = v->id / 10;
-
-            diff = idofs - vidofs;
-
-            if (diff > 0) {
-                vecset(line, ' ', diff);
-            }
-
-            vecpush(line, '|');
-            vecpush(line, ' ');
-
-            if (v->tkn != NULL) {
-                char lexeme[lexsz];
-                tkn_lexeme(v->tkn, lexeme, lexsz);
-                veccat(line, lexeme, lexsz);
-            } else {
-                vecpush(line, '\0');
-            }
-
-            printf("%s\n", line);
-
-            vecfree(line);
-                
-            free(typestr);
-
-            for (size_t ii = 0; ii < degree; ii++)
-            {
-                ASTNode* w = &v->child[ii];
-                size_t windex = index + ii;
-
-                if (!marked[windex]) {
-                    vecpush(stck, w);
-                    vecpush(depths, depth+1);
-                }
-            }
-        }
+    if (v->type != AST_ROOT) {
+        printed += printf("|");
+        size_t lnsz = depth * 2 + 1;
+        char depthline[lnsz];
+        memset(depthline, '_', lnsz);
+        depthline[lnsz-1] = '\0';
+        printed += printf("%s", depthline);
     }
 
-    printf("\n");
+    if (v->type != AST_ROOT) {
+        printed += printf(" ");
+    }
 
-    vecfree(stck);
-    vecfree(depths);
+    printed += printf("%s ", typestr);
+
+    int diff = midpoint - printed;
+
+    if (diff > 0) {
+        char dots[diff+1];
+        memset(dots, '.', diff);
+        dots[diff] = '\0';
+        printed += printf("%s", dots);
+        printed += printf(" |");
+    }
+
+    printed += printf(" [%ld] ", v->id);
+
+    size_t vidofs = v->id / 10;
+
+    diff = idofs - vidofs;
+
+    if (diff > 0) {
+        char spaces[diff + 1];
+        memset(spaces, ' ', diff);
+        spaces[diff] = '\0';
+        printed += printf("%s", spaces);
+    }
+
+    printed += printf("| ");
+
+    if (v->tkn != NULL) {
+        char lexeme[lexsz];
+        tkn_lexeme(v->tkn, lexeme, lexsz);
+        printf("%s", lexeme);
+    } 
+
+    printf("\n");
+        
+    free(typestr);
+
+    for (size_t i = 0; i < v->degree; ++i) {
+        printast(&v->child[i], m, depth + 1);
+    }
 }
 
-static void dumperrs(const char* path, vec_t(ASTError) errors, size_t errsz) {
-    if (vecsize(errors)) {
-        printf("ERRORS FOUND: %ld\n", vecsize(errors));
+static void dumpast(ASTNode* ast, ASTMetadata* m) {
+    size_t midpoint = 2 * m->depth + 15;
+    int idofs = m->size / 10;
+    int col1sz = midpoint - 4; 
 
-        // using m->errsz instead of vecsize is intentional
-        // its to ensure vecsize() == m->errsz
+    printf("Tree ");
+    printf("%*c ", col1sz, ' ');
+    printf(" ID ");
+    printf("%*c", 3 + idofs, ' ');
+    printf("Token\n\n");
+
+    printast(ast, m, 0);
+}
+
+static void dumperrs(const char* path, ASTError** errors, size_t errsz) {
+    if (errsz) {
+        printf("ERRORS FOUND: %ld\n", errsz);
+
         for (size_t i = 0; i < errsz; ++i) {
-            ASTError err = errors[i];
+            ASTError err = (*errors)[i];
             printf("%s:%ld:%ld %s\n", path, err.line, err.offset, err.msg);
             
             size_t linenum = err.line;
@@ -178,7 +131,6 @@ static void dumperrs(const char* path, vec_t(ASTError) errors, size_t errsz) {
                     printf("%5ld |\t", linenum++);
             }
             printf("\n");
-            // printf("%s\n", line);
             printf("%6c|%*c\n", ' ', (int)err.offset+1, '^');
         }
 
@@ -221,15 +173,14 @@ static void run_file(const char* path)
     char* src;
     size_t length = read_file(path, &src);
     
-    Parser p = {.tkns = NULL};
-    ASTNode* ast = jary_alloc(sizeof(*ast));
-    ASTMetadata m = {.tkns = NULL};
+    ASTNode ast;
+    ASTMetadata m;
 
-    jary_parse(&p, ast, &m, src, length);
+    jary_parse(&ast, &m, src, length);
 
-    dumpast(ast, &m);
+    dumpast(&ast, &m);
     
-    dumperrs(path, m.errors, m.errsz);
+    dumperrs(path, &m.errors, m.errsz);
 
     free(src);
 }

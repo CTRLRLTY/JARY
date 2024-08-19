@@ -27,7 +27,7 @@ void tree_match(ASTNode* ast, ASTMetadata* m, std::vector<ASTType>& types) {
             marked[num] = true;
             ASSERT_EQ(node->type, types[idx++]) << "nodenum: " << num;
 
-            for (size_t i = 0; i < ast_degree(node); i++) {
+            for (size_t i = 0; i < node->degree; i++) {
                 auto neighbor = &node->child[i];
                 auto nnum = neighbor->id;
 
@@ -44,11 +44,9 @@ void tree_match(ASTNode* ast, ASTMetadata* m, std::vector<ASTType>& types) {
 }
 
 TEST(ParserTest, RuleDeclaration) {
-    Parser p;
-
     {
-        ASTNode ast = {};
-        ASTMetadata m = {};
+        ASTNode ast;
+        ASTMetadata m;
 
         char samplestr[] = 
         "rule something {"              "\n"
@@ -75,9 +73,8 @@ TEST(ParserTest, RuleDeclaration) {
                                 AST_LITERAL,    // 4
         };
 
-        jary_parse(&p, &ast, &m, samplestr, sizeof(samplestr));
+        jary_parse(&ast, &m, samplestr, sizeof(samplestr));
 
-        EXPECT_EQ(m.bbsz, 4);
         EXPECT_EQ(m.errsz, 0);
 
         tree_match(&ast, &m, expected);
@@ -104,11 +101,10 @@ TEST(ParserTest, RuleDeclaration) {
                     AST_SECTION,                // input:
         };
 
-        jary_parse(&p, &ast, &m, samplestr, sizeof(samplestr));
+        jary_parse(&ast, &m, samplestr, sizeof(samplestr));
 
         tree_match(&ast, &m, expected);
 
-        ASSERT_EQ(m.bbsz, 2);
         ASSERT_EQ(m.errsz, 1);
 
         ast_free(&ast);
@@ -139,7 +135,7 @@ TEST(ParserTest, RuleDeclaration) {
                                 AST_LITERAL,    // 3
         };
 
-        jary_parse(&p, &ast, &m, samplestr, sizeof(samplestr));
+        jary_parse(&ast, &m, samplestr, sizeof(samplestr));
 
         tree_match(&ast, &m, expected);
 

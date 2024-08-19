@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#define AS_PTKN(token) (Tkn*)&token
 
 extern "C" {
 #include "scanner.h"
@@ -12,7 +13,7 @@ extern "C" {
 
 TEST(ScannerTest, ScanEOF) {
   Scanner sc;
-  TKN token;
+  Tkn token;
 
   char samplestr[] = "\0\0";
 
@@ -31,7 +32,7 @@ TEST(ScannerTest, ScanEOF) {
 
 TEST(ScannerTest, ScanNewline) {
   Scanner sc;
-  TKN token;
+  Tkn token;
 
   char samplestr[] = "\n\n\n\n\n";
 
@@ -52,7 +53,7 @@ TEST(ScannerTest, ScanNewline) {
 
 TEST(ScannerTest, ScanWhitespace) {
   Scanner sc;
-  TKN token;
+  Tkn token;
 
   { // check each whitespace character
     char *spaces[] = {
@@ -89,7 +90,7 @@ TEST(ScannerTest, ScanWhitespace) {
 
 TEST(ScannerTest, ScanSymbol) {
   Scanner sc;
-  TKN token;
+  Tkn token;
 
   struct {
     char* cstr;
@@ -124,7 +125,7 @@ TEST(ScannerTest, ScanSymbol) {
 
 TEST(ScannerTest, ScanKeyword) {
   Scanner sc;
-  TKN token;
+  Tkn token;
 
   struct {
     char* cstr;
@@ -165,7 +166,7 @@ TEST(ScannerTest, ScanKeyword) {
 
 TEST(ScannerTest, ScanString) {
   Scanner sc;
-  TKN token;
+  Tkn token;
 
   { // Basic string test
     char samplestr[] = "\"Hello world\"";
@@ -263,7 +264,7 @@ TEST(ScannerTest, ScanString) {
 
 TEST(ScannerTest, ScanRegexp) {
   Scanner sc;
-  TKN token;
+  Tkn token;
 
   { // Basic regexp
     char samplestr[] = "/Hello world\\//";
@@ -288,7 +289,7 @@ TEST(ScannerTest, ScanRegexp) {
 
 TEST(ScannerTest, ScanIdentifier) {
   Scanner sc;
-  TKN token;
+  Tkn token;
 
   { // legal identifiers
     std::vector<std::string> ident = {

@@ -3,25 +3,8 @@
 
 #include <stdbool.h>
 
-#include "scanner.h"
 #include "ast.h"
 
-
-typedef struct {
-    TKN** tkns;
-    Scanner* sc;
-
-    // Current Basic Block.
-    //
-    // This field is changed when entering
-    // a new production rule and it is callee-save.
-    size_t block;
-    
-    size_t idx;
-
-    size_t depth;
-} Parser;
-
-void jary_parse(Parser* p, ASTNode* ast, ASTMetadata* m, const char* src, size_t length);
+void jary_parse(ASTNode* ast, ASTMetadata* m, const char* src, size_t length);
 
 #endif

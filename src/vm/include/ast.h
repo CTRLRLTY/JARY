@@ -34,27 +34,17 @@ typedef struct ASTError {
 typedef struct ASTNode {
     ASTType type;
     size_t id;
-    TKN* tkn;
+    Tkn* tkn;
     struct ASTNode* child;
+    size_t degree;
 } ASTNode;
-
-// BBs are section and arguments
-typedef struct BasicBlock {
-    TKN* def;
-    TKN* use;
-} BasicBlock;
 
 typedef struct ASTMetadata {
     char* src;
 
     // tkns array
-    TKN** tkns;
+    Tkn** tkns;
     size_t tknsz;
-
-    // Basic block table
-    size_t* bbkey;
-    BasicBlock* bbval;
-    size_t bbsz;
 
     // error node array
     ASTError* errors;
@@ -67,9 +57,6 @@ typedef struct ASTMetadata {
 } ASTMetadata;
 
 void ast_free(ASTNode* ast);
-size_t ast_degree(ASTNode* ast);
 void ast_meta_free(ASTMetadata* m);
-
-BasicBlock* find_basic_block(size_t** bbkey, BasicBlock** bbval, size_t block);
 
 #endif

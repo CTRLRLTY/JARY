@@ -8,7 +8,7 @@
 
 #include <stdlib.h>
 
-static void set_token(TKN* token, Scanner* sc, TknType type) {
+static void set_token(Tkn* token, Scanner* sc, TknType type) {
     token->type = type;
     token->start = sc->start;
     token->linestart = sc->linestart;
@@ -29,7 +29,7 @@ static TknType check_word(Scanner* sc, size_t start, size_t end, const char* wor
     return TKN_IDENTIFIER;
 }
 
-static void set_token_name(Scanner* sc, TKN* token) {
+static void set_token_name(Scanner* sc, Tkn* token) {
     while ((isalnum(*sc->current) || *sc->current == '_') && !scan_ended(sc))
         ++sc->current;
 
@@ -98,7 +98,7 @@ bool scan_ended(Scanner* sc) {
     return (sc->current - sc->base) >= sc->srcsz;
 }
 
-ScanError scan_token(Scanner* sc, TKN* token) {
+ScanError scan_token(Scanner* sc, Tkn* token) {
     jary_assert(sc != NULL);
     jary_assert(token != NULL);
 
@@ -116,7 +116,7 @@ SCAN:
     case '"': {
         char* ch = sc->current;
 
-        while(*sc->current != '"' && !scan_ended(sc)) {
+        while(!scan_ended(sc) && *sc->current != '"') {
             ++sc->current;
         }
 
@@ -157,16 +157,18 @@ SCAN:
     case '\r':
     case '\t': 
         while (
-                (   sc->current[0] == ' ' 
-                    || sc->current[0] == '\r'
-                    || sc->current[0] == '\t'
-                ) && !scan_ended(sc)
+                !scan_ended(sc)                     &
+                (   
+                    sc->current[0] == ' '           ||
+                    sc->current[0] == '\r'          ||
+                    sc->current[0] == '\t'
+                )
             )
             ++sc->current;
         goto SCAN;
         
     case '\n':
-        while (sc->current[0] == '\n' && !scan_ended(sc)) {
+        while (!scan_ended(sc) && sc->current[0] == '\n') {
             ++sc->current;
             ++sc->line; 
         }
@@ -177,7 +179,7 @@ SCAN:
         return SCAN_SUCCESS;
 
     case '\0':
-        while(sc->current[0] == '\0' && !scan_ended(sc))
+        while(!scan_ended(sc) && sc->current[0] == '\0')
             ++sc->current;
 
         set_token(token, sc, TKN_EOF); 
@@ -205,7 +207,7 @@ SCAN:
     case '1': case '2': case '3': 
     case '4': case '5': case '6':
     case '7': case '8': case '9':
-        while (isdigit(*sc->current) && !scan_ended(sc))
+        while (!scan_ended(sc) && isdigit(*sc->current))
             ++sc->current;
 
         set_token(token, sc, TKN_NUMBER); 

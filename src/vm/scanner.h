@@ -34,7 +34,7 @@ typedef struct {
 } Scanner;
 
 ScanError scan_source(Scanner* sc, char* source, size_t source_length);
-ScanError scan_token(Scanner* sc, TKN* token);
+ScanError scan_token(Scanner* sc, Tkn* token);
 bool scan_ended(Scanner* sc);
 
 #endif // JAYVM_SCAN_H

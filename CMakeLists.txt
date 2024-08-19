@@ -3,6 +3,13 @@ cmake_minimum_required(VERSION 3.22)
 # -- CONFIGURATION
 project(jary)
 
+# Enable AddressSanitizer for Debug builds
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+endif()
+
+
 # -- DEFINITIONS
 set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 

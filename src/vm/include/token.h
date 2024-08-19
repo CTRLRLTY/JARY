@@ -4,10 +4,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define TKN Tkn
 #define AS_PTKN(token) (Tkn*)&token
 
-typedef enum {
+typedef enum TknType {
     TKN_ERR,
     TKN_ERR_STR,
 
@@ -54,7 +53,7 @@ typedef enum {
     TKN_EOF,
 } TknType;
 
-typedef struct {
+typedef struct Tkn {
     TknType type;
     size_t length; // Does not count the quotes ("")
     size_t line;
@@ -64,10 +63,10 @@ typedef struct {
     uint32_t hash;
 } Tkn;
 
-size_t tkn_lexeme_size(TKN* token);
+size_t tkn_lexeme_size(Tkn* token);
 
 // set a cstr representation of the token lexeme
-bool tkn_lexeme(TKN* token, char *lexeme, size_t lexeme_size);
+bool tkn_lexeme(Tkn* token, char *lexeme, size_t lexeme_size);
 
 
 #endif // JAYVM_TOKEN_H

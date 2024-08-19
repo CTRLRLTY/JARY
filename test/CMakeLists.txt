@@ -48,21 +48,5 @@ target_link_libraries( parser_test
         parser
 )
 
-add_executable( vector_test
-    vector_test.cc
-)
-
-target_include_directories( vector_test
-    PRIVATE
-        ${LIBJAYVM_INCLUDE_DIR}
-        ${LIBJAYVM_SRC_DIR}
-)
-
-target_link_libraries( vector_test
-    PRIVATE
-        GTest::gtest_main
-)
-
 gtest_discover_tests(scanner_test)
 gtest_discover_tests(parser_test)
-gtest_discover_tests(vector_test)

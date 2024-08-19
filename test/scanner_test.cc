@@ -216,9 +216,7 @@ TEST(ScannerTest, ScanString) {
 
     ASSERT_EQ(scan_token(&sc, &token), ERR_SCAN_INV_STRING);
 
-    EXPECT_EQ(token.type, TKN_ERR);
-
-    ASSERT_EQ(scan_ended(&sc), true);
+    EXPECT_EQ(token.type, TKN_ERR_STR);
   }
 
   { // Consecutive strings

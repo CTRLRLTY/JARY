@@ -7,6 +7,22 @@
   },
   "configurePresets": [
     {
+      "name": "gcc-sanitize",
+      "description": "Configure with GCC and Debug build type",
+      "hidden": false,
+      "binaryDir": "${sourceDir}/build/",
+      "cacheVariables": {
+          "SANITIZE": "on",
+          "CMAKE_EXPORT_COMPILE_COMMANDS": "on",
+          "CMAKE_BUILD_TYPE": "Debug",
+          "CMAKE_C_COMPILER": "gcc",
+          "CMAKE_C_STANDARD": "11",
+          "CMAKE_CXX_COMPILER": "g++",
+          "CMAKE_C_FLAGS_RELEASE": "-O3 -DFEATURE_CUSTOM_TOKEN",
+          "CMAKE_CXX_FLAGS_RELEASE": "-O3 -fpermissive -DFEATURE_CUSTOM_TOKEN"
+      }
+    },
+    {
       "name": "gcc-debug",
       "description": "Configure with GCC and Debug build type",
       "hidden": false,
@@ -38,6 +54,13 @@
     }
   ],
   "buildPresets": [
+    {
+      "name": "gcc-sanitize-build",
+      "configurePreset": "gcc-sanitize",
+      "hidden": false,
+      "description": "Build using GCC and Debug build type",
+      "jobs": 4
+    },
     {
       "name": "gcc-debug-build",
       "configurePreset": "gcc-debug",

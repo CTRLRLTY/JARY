@@ -1,4 +1,5 @@
 rule something {
     input:
-        boi = "a"
+        got = myfunc(3)
+        corn = but(3)
 }

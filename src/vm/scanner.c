@@ -49,7 +49,13 @@ static void set_token_name(Scanner* sc, Tkn* token) {
     case 'c': // condition
         set_token(token, sc, check_word(sc, 1, 8, "ondition", TKN_CONDITION)); return;
     case 'f': // false
-        set_token(token, sc, check_word(sc, 1, 4, "alse", TKN_FALSE)); return;
+        switch (sc->start[1]){
+        case 'a':
+            set_token(token, sc, check_word(sc, 2, 3, "lse", TKN_FALSE)); return;
+        case 'i':
+            set_token(token, sc, check_word(sc, 2, 4, "elds", TKN_FIELDS)); return;
+        }
+        break;
     case 'o': // or
         set_token(token, sc, check_word(sc, 1, 1, "r", TKN_OR)); return;
     case 'i':
@@ -65,8 +71,8 @@ static void set_token_name(Scanner* sc, Tkn* token) {
             } 
             
             break;
-        // case 'm':
-        //     set_token(token, sc, check_word(sc, 2, 4, "port", TKN_IMPORT)); return;
+        case 'm': // import
+            set_token(token, sc, check_word(sc, 2, 4, "port", TKN_IMPORT)); return;
         } break;
     case 't': 
         switch (sc->start[1]) {
@@ -79,6 +85,8 @@ static void set_token_name(Scanner* sc, Tkn* token) {
         set_token(token, sc, check_word(sc, 1, 3, "ule", TKN_RULE)); return;
     case 'm': // match
         set_token(token, sc, check_word(sc, 1, 4, "atch", TKN_MATCH)); return;
+    case 'n': // not
+        set_token(token, sc, check_word(sc, 1, 2, "ot", TKN_NOT)); return;
     }
 
     // +1 to include '\0'
@@ -147,8 +155,6 @@ SCAN:
         set_token(token, sc, TKN_RIGHT_PAREN); return;
     case '=': 
         set_token(token, sc, TKN_EQUAL); return;
-    case '!':
-        set_token(token, sc, TKN_BANG); return;
     case '{': 
         set_token(token, sc, TKN_LEFT_BRACE); return;
     case '}':
@@ -159,6 +165,8 @@ SCAN:
         set_token(token, sc, TKN_GREATERTHAN); return;
     case ':':
         set_token(token, sc, TKN_COLON); return;
+    case '~':
+        set_token(token, sc, TKN_TILDE); return;
     case '+':      
         set_token(token, sc, TKN_PLUS); return;
     case '-':      

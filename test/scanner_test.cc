@@ -38,9 +38,9 @@ TEST(ScannerTest, ScanNewline) {
 
   EXPECT_EQ(token.type, TKN_NEWLINE);
 
-  char buf[tkn_lexeme_size(&token)];
+  char buf[lexsize(&token)];
 
-  ASSERT_EQ(tkn_lexeme(&token, buf, sizeof(buf)), true);
+  ASSERT_EQ(lexemestr(&token, buf, sizeof(buf)), true);
 
   scan_token(&sc, &token);
 
@@ -94,7 +94,7 @@ TEST(ScannerTest, ScanSymbol) {
   } symbols[] = {
     {"(", TKN_LEFT_PAREN}, {")", TKN_RIGHT_PAREN},
     {"{", TKN_LEFT_BRACE}, {"}", TKN_RIGHT_BRACE},
-    {"!", TKN_BANG}, {"=", TKN_EQUAL},
+    {"=", TKN_EQUAL}, {"~", TKN_TILDE},
     {"<", TKN_LESSTHAN}, {">", TKN_GREATERTHAN},
     {":", TKN_COLON},
     {",", TKN_COMMA}, 
@@ -135,11 +135,16 @@ TEST(ScannerTest, ScanKeyword) {
     {"false", 6, TKN_FALSE}, 
     {"true", 5, TKN_TRUE},
     {"or", 3, TKN_OR},
+    {"not", 4, TKN_NOT},
     {"input", 6, TKN_INPUT},
     {"rule", 5, TKN_RULE},
+    {"import", 7, TKN_IMPORT},
+    {"ingress", 8, TKN_INGRESS},
+    {"include", 8, TKN_INCLUDE},
     {"match", 6, TKN_MATCH},
     {"target", 7, TKN_TARGET},
     {"condition", 10, TKN_CONDITION},
+    {"fields", 7, TKN_FIELDS},
   };
 
   size_t kwsz = sizeof(keywords)/sizeof(keywords[0]);
@@ -155,7 +160,7 @@ TEST(ScannerTest, ScanKeyword) {
 
     scan_token(&sc, &token);
 
-    ASSERT_EQ(token.type, TKN_EOF);
+    ASSERT_EQ(token.type, TKN_EOF) << keywords[i].cstr;
 
     ASSERT_EQ(scan_ended(&sc), true);
   }
@@ -176,7 +181,7 @@ TEST(ScannerTest, ScanString) {
 
     EXPECT_STREQ(token.start, samplestr);
 
-    EXPECT_EQ(tkn_lexeme_size(&token), sizeof(samplestr)); 
+    EXPECT_EQ(lexsize(&token), sizeof(samplestr)); 
 
     scan_token(&sc, &token);
 
@@ -197,7 +202,7 @@ TEST(ScannerTest, ScanString) {
 
     EXPECT_STREQ(token.start, samplestr);
 
-    EXPECT_EQ(tkn_lexeme_size(&token), sizeof(samplestr));
+    EXPECT_EQ(lexsize(&token), sizeof(samplestr));
 
     scan_token(&sc, &token);
 
@@ -237,7 +242,7 @@ TEST(ScannerTest, ScanString) {
 
       scan_token(&sc, &token);
 
-      size_t lexsz = tkn_lexeme_size(&token);
+      size_t lexsz = lexsize(&token);
 
       EXPECT_EQ(token.type, TKN_STRING);
 
@@ -245,7 +250,7 @@ TEST(ScannerTest, ScanString) {
 
       char buf[lexsz];
 
-      ASSERT_EQ(tkn_lexeme(&token, buf, sizeof(buf)), true) << "string: " << str;
+      ASSERT_EQ(lexemestr(&token, buf, sizeof(buf)), true) << "string: " << str;
 
       EXPECT_STREQ(buf, str);
 
@@ -275,7 +280,7 @@ TEST(ScannerTest, ScanRegexp) {
 
     EXPECT_STREQ(token.start, samplestr);
 
-    EXPECT_EQ(tkn_lexeme_size(&token), sizeof(samplestr)); 
+    EXPECT_EQ(lexsize(&token), sizeof(samplestr)); 
 
     scan_token(&sc, &token);
 

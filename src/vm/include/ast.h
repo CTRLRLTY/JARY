@@ -20,6 +20,7 @@ typedef enum {
     AST_MEMBER,
 
     AST_NAME,
+    AST_PATH,
     AST_LITERAL,
 } ASTType;
 

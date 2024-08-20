@@ -21,6 +21,7 @@ typedef enum TknType {
     TKN_INPUT,
     TKN_MATCH,
     TKN_CONDITION,
+    TKN_FIELDS,
 
     TKN_RULE,
     TKN_IMPORT,
@@ -33,8 +34,9 @@ typedef enum TknType {
     TKN_STAR,
     TKN_SLASH,
 
-    TKN_BANG,
+    TKN_NOT,
     TKN_EQUAL,
+    TKN_TILDE,
     TKN_LESSTHAN,
     TKN_GREATERTHAN,
     TKN_ANY,
@@ -68,10 +70,10 @@ typedef struct Tkn {
     uint32_t hash;
 } Tkn;
 
-size_t tkn_lexeme_size(Tkn* token);
+size_t lexsize(Tkn* token);
 
 // set a cstr representation of the token lexeme
-bool tkn_lexeme(Tkn* token, char *lexeme, size_t lexeme_size);
+bool lexemestr(Tkn* token, char *lexeme, size_t lexeme_size);
 
 
 #endif // JAYVM_TOKEN_H

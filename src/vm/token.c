@@ -4,7 +4,7 @@
 #include "token.h"
 
 
-size_t tkn_lexeme_size(Tkn* token) {
+size_t lexsize(Tkn* token) {
   if (token == NULL)
     return 0;
 
@@ -17,11 +17,11 @@ size_t tkn_lexeme_size(Tkn* token) {
 }
 
 // set a cstr representation of the token lexeme
-bool tkn_lexeme(Tkn* token, char *lexeme, size_t lexeme_size) {
+bool lexemestr(Tkn* token, char *lexeme, size_t length) {
   if (token == NULL)
     return false;
 
-  if (tkn_lexeme_size(token) > lexeme_size)
+  if (lexsize(token) > length)
     return false;
 
   if (token->type == TKN_STRING)
@@ -30,7 +30,7 @@ bool tkn_lexeme(Tkn* token, char *lexeme, size_t lexeme_size) {
   else
     memcpy(lexeme, token->start, token->length);
 
-  lexeme[lexeme_size-1] = '\0';
+  lexeme[length-1] = '\0';
 
   return true;
 }

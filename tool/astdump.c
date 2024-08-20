@@ -30,6 +30,8 @@ static char* ast2string(ASTType type) {
         buf = strdup("member"); break;
     case AST_NAME:
         buf = strdup("name"); break;
+    case AST_PATH:
+        buf = strdup("path"); break;
     case AST_LITERAL:
         buf = strdup("literal"); break;
     default:
@@ -46,7 +48,7 @@ static void printast(ASTNode* v, ASTMetadata* m, size_t depth) {
 
     char* typestr = ast2string(v->type);
     size_t typestrsz = strlen(typestr);
-    size_t lexsz = tkn_lexeme_size(v->tkn);
+    size_t lexsz = lexsize(v->tkn);
     size_t printed = 0;
 
     if (v->type != AST_ROOT) {
@@ -91,7 +93,7 @@ static void printast(ASTNode* v, ASTMetadata* m, size_t depth) {
 
     if (v->tkn != NULL) {
         char lexeme[lexsz];
-        tkn_lexeme(v->tkn, lexeme, lexsz);
+        lexemestr(v->tkn, lexeme, lexsz);
         printf("%s", lexeme);
     } 
 

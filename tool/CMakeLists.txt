@@ -7,6 +7,13 @@ target_link_libraries( astdump
         parser
 )
 
+if(UNIX)
+    target_link_libraries( astdump
+        PRIVATE
+            m # math
+    )
+endif()
+
 target_include_directories( astdump
     PRIVATE
         ${LIBJAYVM_INCLUDE_DIR}

@@ -17,6 +17,7 @@ typedef enum {
     AST_CALL,
     AST_UNARY,
     AST_EVENT,
+    AST_MEMBER,
 
     AST_NAME,
     AST_LITERAL,
@@ -56,7 +57,7 @@ typedef struct ASTMetadata {
     size_t depth;
 } ASTMetadata;
 
-void ast_free(ASTNode* ast);
-void ast_meta_free(ASTMetadata* m);
+void free_ast(ASTNode* ast);
+void free_ast_meta(ASTMetadata* m);
 
 #endif

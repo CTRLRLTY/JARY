@@ -54,7 +54,7 @@ TEST(ParserTest, RuleDeclaration) {
 
         treematch(&ast, &expected, 0);
 
-        ast_free(&ast);
-        ast_meta_free(&m);
+        free_ast(&ast);
+        free_ast_meta(&m);
     }
 }

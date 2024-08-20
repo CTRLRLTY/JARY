@@ -1,8 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "parser.h"
+#include "memory.h"
+
 
 static char* ast2string(ASTType type) {
     char* buf = NULL;
@@ -23,6 +26,8 @@ static char* ast2string(ASTType type) {
         buf = strdup("unary"); break;
     case AST_EVENT:
         buf = strdup("event"); break;
+    case AST_MEMBER:
+        buf = strdup("member"); break;
     case AST_NAME:
         buf = strdup("name"); break;
     case AST_LITERAL:
@@ -36,7 +41,7 @@ static char* ast2string(ASTType type) {
 
 static void printast(ASTNode* v, ASTMetadata* m, size_t depth) {
     size_t midpoint = 2 * m->depth + 15;
-    int idofs = m->size / 10;
+    int idofs = (m->size) ? (int)log10((double) m->size) : 0;
     int col1sz = midpoint - 4; 
 
     char* typestr = ast2string(v->type);
@@ -92,7 +97,7 @@ static void printast(ASTNode* v, ASTMetadata* m, size_t depth) {
 
     printf("\n");
         
-    free(typestr);
+    jary_free(typestr);
 
     for (size_t i = 0; i < v->degree; ++i) {
         printast(&v->child[i], m, depth + 1);
@@ -152,7 +157,7 @@ static size_t read_file(const char* path, char** dst)
     size_t file_size = ftell(file);
     rewind(file);
 
-    char* buffer = (char*)malloc(file_size + 1);
+    char* buffer = jary_alloc(file_size + 1);
     size_t bytes_read = fread(buffer, sizeof(char), file_size, file);
 
     if(bytes_read < file_size)
@@ -177,17 +182,23 @@ static void run_file(const char* path)
     ASTMetadata m;
 
     jary_parse(&ast, &m, src, length);
+    jary_free(src);
 
+    printf("\n");
     dumpast(&ast, &m);
-    
-    dumperrs(path, &m.errors, m.errsz);
 
-    free(src);
+    if (m.errsz) {
+        printf("\n");
+        dumperrs(path, &m.errors, m.errsz);
+    }
+    printf("\n");
+
+    free_ast(&ast);
+    free_ast_meta(&m);
 }
 
 int main(int argc, const char** argv)
 {
-
     if (argc == 2)
         run_file(argv[1]);
     else 

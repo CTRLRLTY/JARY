@@ -4,8 +4,6 @@
 
 #include <gtest/gtest.h>
 
-#define AS_PTKN(token) (Tkn*)&token
-
 extern "C" {
 #include "scanner.h"
 #include "fnv.h"
@@ -38,15 +36,15 @@ TEST(ScannerTest, ScanNewline) {
 
   ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
 
-  ASSERT_EQ(scan_token(&sc, AS_PTKN(token)), SCAN_SUCCESS);
+  ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
 
   EXPECT_EQ(token.type, TKN_NEWLINE);
 
-  char buf[tkn_lexeme_size(AS_PTKN(token))];
+  char buf[tkn_lexeme_size(&token)];
 
-  ASSERT_EQ(tkn_lexeme(AS_PTKN(token), buf, sizeof(buf)), true);
+  ASSERT_EQ(tkn_lexeme(&token, buf, sizeof(buf)), true);
 
-  ASSERT_EQ(scan_token(&sc, AS_PTKN(token)), SCAN_SUCCESS);
+  ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
 
   ASSERT_EQ(token.type, TKN_EOF);
 }
@@ -98,6 +96,7 @@ TEST(ScannerTest, ScanSymbol) {
   } symbols[] = {
     {"(", TKN_LEFT_PAREN}, {")", TKN_RIGHT_PAREN},
     {"{", TKN_LEFT_BRACE}, {"}", TKN_RIGHT_BRACE},
+    {"!", TKN_BANG}, {"=", TKN_EQUAL},
     {"<", TKN_LESSTHAN}, {">", TKN_GREATERTHAN},
     {":", TKN_COLON},
     {",", TKN_COMMA}, 
@@ -173,15 +172,15 @@ TEST(ScannerTest, ScanString) {
 
     ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
 
-    ASSERT_EQ(scan_token(&sc, AS_PTKN(token)), SCAN_SUCCESS);
+    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
 
     EXPECT_EQ(token.type, TKN_STRING);
 
     EXPECT_STREQ(token.start, samplestr);
 
-    EXPECT_EQ(tkn_lexeme_size(AS_PTKN(token)), sizeof(samplestr)); 
+    EXPECT_EQ(tkn_lexeme_size(&token), sizeof(samplestr)); 
 
-    ASSERT_EQ(scan_token(&sc, AS_PTKN(token)), SCAN_SUCCESS);
+    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
 
     ASSERT_EQ(token.type, TKN_EOF);
 
@@ -194,15 +193,15 @@ TEST(ScannerTest, ScanString) {
     
     ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
 
-    ASSERT_EQ(scan_token(&sc, AS_PTKN(token)), SCAN_SUCCESS);
+    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
 
     EXPECT_EQ(token.type, TKN_STRING);
 
     EXPECT_STREQ(token.start, samplestr);
 
-    EXPECT_EQ(tkn_lexeme_size(AS_PTKN(token)), sizeof(samplestr));
+    EXPECT_EQ(tkn_lexeme_size(&token), sizeof(samplestr));
 
-    ASSERT_EQ(scan_token(&sc, AS_PTKN(token)), SCAN_SUCCESS);
+    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
 
     ASSERT_EQ(token.type, TKN_EOF);
 
@@ -237,15 +236,18 @@ TEST(ScannerTest, ScanString) {
 
     for (uint8_t i = 0; i < 3; ++i) {
       char* str = str1 + sizeof(str1) * i;
-      ASSERT_EQ(scan_token(&sc, AS_PTKN(token)), SCAN_SUCCESS) << "string: " << str;
+
+      ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS) << "string: " << str;
+
+      size_t lexsz = tkn_lexeme_size(&token);
 
       EXPECT_EQ(token.type, TKN_STRING);
 
-      EXPECT_EQ(tkn_lexeme_size(AS_PTKN(token)), sizeof(str1)) << "string: " << str;
+      EXPECT_EQ(lexsz, sizeof(str1)) << "string: " << str;
 
-      char buf[tkn_lexeme_size(AS_PTKN(token))];
+      char buf[lexsz];
 
-      ASSERT_EQ(tkn_lexeme(AS_PTKN(token), buf, sizeof(buf)), true) << "string: " << str;
+      ASSERT_EQ(tkn_lexeme(&token, buf, sizeof(buf)), true) << "string: " << str;
 
       EXPECT_STREQ(buf, str);
 
@@ -269,15 +271,15 @@ TEST(ScannerTest, ScanRegexp) {
 
     ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
 
-    ASSERT_EQ(scan_token(&sc, AS_PTKN(token)), SCAN_SUCCESS);
+    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
 
     EXPECT_EQ(token.type, TKN_REGEXP);
 
     EXPECT_STREQ(token.start, samplestr);
 
-    EXPECT_EQ(tkn_lexeme_size(AS_PTKN(token)), sizeof(samplestr)); 
+    EXPECT_EQ(tkn_lexeme_size(&token), sizeof(samplestr)); 
 
-    ASSERT_EQ(scan_token(&sc, AS_PTKN(token)), SCAN_SUCCESS);
+    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
 
     ASSERT_EQ(token.type, TKN_EOF);
 

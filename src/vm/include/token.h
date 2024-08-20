@@ -4,8 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define AS_PTKN(token) (Tkn*)&token
-
 typedef enum TknType {
     TKN_ERR,
     TKN_ERR_STR,
@@ -26,9 +24,16 @@ typedef enum TknType {
 
     TKN_RULE,
     TKN_IMPORT,
+    TKN_INCLUDE,
     TKN_INGRESS,
 
 // < OPERATOR SYMBOL
+    TKN_PLUS,
+    TKN_MINUS,
+    TKN_STAR,
+    TKN_SLASH,
+
+    TKN_BANG,
     TKN_EQUAL,
     TKN_LESSTHAN,
     TKN_GREATERTHAN,

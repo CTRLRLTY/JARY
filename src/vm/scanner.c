@@ -52,8 +52,22 @@ static void set_token_name(Scanner* sc, Tkn* token) {
         set_token(token, sc, check_word(sc, 1, 4, "alse", TKN_FALSE)); return;
     case 'o': // or
         set_token(token, sc, check_word(sc, 1, 1, "r", TKN_OR)); return;
-    case 'i': // input
-        set_token(token, sc, check_word(sc, 1, 4, "nput", TKN_INPUT)); return;
+    case 'i':
+        switch (sc->start[1]) {
+        case 'n':
+            switch (sc->start[2]) {
+            case 'c': // include
+                set_token(token, sc, check_word(sc, 3, 4, "lude", TKN_INCLUDE)); return;
+            case 'g': // ingress
+                set_token(token, sc, check_word(sc, 3, 4, "ress", TKN_INGRESS)); return;
+            case 'p': // input
+                set_token(token, sc, check_word(sc, 3, 2, "ut", TKN_INPUT)); return;
+            } 
+            
+            break;
+        // case 'm':
+        //     set_token(token, sc, check_word(sc, 2, 4, "port", TKN_IMPORT)); return;
+        } break;
     case 't': 
         switch (sc->start[1]) {
             case 'r': // true
@@ -103,7 +117,7 @@ ScanError scan_token(Scanner* sc, Tkn* token) {
     jary_assert(token != NULL);
 
     if (scan_ended(sc))
-        return ERR_SCAN_ENDED;
+        goto INV_TKN;
 
     token->type = TKN_ERR;
 
@@ -137,6 +151,8 @@ SCAN:
         set_token(token, sc, TKN_RIGHT_PAREN); return SCAN_SUCCESS;
     case '=': 
         set_token(token, sc, TKN_EQUAL); return SCAN_SUCCESS;
+    case '!':
+        set_token(token, sc, TKN_BANG); return SCAN_SUCCESS;
     case '{': 
         set_token(token, sc, TKN_LEFT_BRACE); return SCAN_SUCCESS;
     case '}':
@@ -147,6 +163,14 @@ SCAN:
         set_token(token, sc, TKN_GREATERTHAN); return SCAN_SUCCESS;
     case ':':
         set_token(token, sc, TKN_COLON); return SCAN_SUCCESS;
+    case '+':      
+        set_token(token, sc, TKN_PLUS); return SCAN_SUCCESS;
+    case '-':      
+        set_token(token, sc, TKN_MINUS); return SCAN_SUCCESS;
+    case '*':      
+        set_token(token, sc, TKN_STAR); return SCAN_SUCCESS;
+    case '.':
+        set_token(token, sc, TKN_DOT); return SCAN_SUCCESS;
     case ',':
         set_token(token, sc, TKN_COMMA); return SCAN_SUCCESS;  
     case '$':
@@ -195,8 +219,9 @@ SCAN:
 
         if (*(sc->current++) != '/') {
             sc->current = ch;
-            set_token(token, sc, TKN_ERR);
-            return ERR_SCAN_INV_TOKEN;
+
+            set_token(token, sc, TKN_SLASH);
+            return SCAN_SUCCESS;
         }
 
         set_token(token, sc, TKN_REGEXP);
@@ -222,6 +247,7 @@ SCAN:
         return SCAN_SUCCESS;
     }
 
+INV_TKN:
     set_token(token, sc, TKN_ERR);
     return ERR_SCAN_INV_TOKEN;
 }

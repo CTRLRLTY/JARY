@@ -88,7 +88,7 @@ static ParseError
 error_node(ASTNode *ast, Tkn *nextkn, Tkn *tkn, ASTError **errs, size_t *errsz, const char *msg)
 {
     if (ast != NULL) {
-        ast_free(ast);
+        free_ast(ast);
     }
     
     char* lexeme = jary_alloc(tkn_lexeme_size(tkn));
@@ -142,6 +142,8 @@ static bool is_decl(TknType type) {
         return true;
     case TKN_INGRESS:
         return true;
+    case TKN_INCLUDE:
+        return true;
     }
 
     return false;
@@ -173,8 +175,6 @@ static Tkn *next(Parser *p)
 {
     if (p->idx + 1 >= p->tknsz)
     {
-        jary_assert(!ended(p));
-
         Tkn *tkn = jary_alloc(sizeof *tkn);
 
         scan_token(p->sc, tkn);
@@ -295,7 +295,10 @@ static ParseError _unary(Parser* p, ASTNode* ast, ASTMetadata* m) {
     ast->type = AST_UNARY;
     ast->tkn = prev(p);
 
-    RETURN_PANIC(_precedence(p, ast, m, PREC_UNARY));
+    ASTNode expr = NODE();
+    RETURN_PANIC(_precedence(p, &expr, m, PREC_UNARY));
+
+    addchild(ast, expr);
 
     return PARSE_SUCCESS;
 }
@@ -305,14 +308,34 @@ static ParseError _event(Parser* p, ASTNode* ast, ASTMetadata* m) {
     ast->tkn = prev(p);
 
     if (next(p)->type != TKN_IDENTIFIER)
-        return error_node(ast, current(p), back(p), &m->errors, &m->errsz, NULL);
+        return error_node(ast, back(p), ast->tkn, &m->errors, &m->errsz, "error: expected identifier");
 
     ASTNode name = NODE();
-    if(_name(p, &name, m) != PARSE_SUCCESS)
-        return error_node(ast, current(p), back(p), &m->errors, &m->errsz, "Todo: handle this if needed");
+    
+    _name(p, &name, m);  
 
     p->depth++;
     name.id = m->size++;
+    addchild(ast, name);
+
+    return PARSE_SUCCESS;
+}
+
+static ParseError _dot(Parser* p, ASTNode* ast, ASTMetadata* m) {
+    ast->tkn = prev(p);
+    ast->type = AST_MEMBER;
+
+    Tkn* nametkn = next(p);
+
+    if (nametkn->type != TKN_IDENTIFIER)
+        return error_node(ast, back(p), ast->tkn, &m->errors, &m->errsz, "error: expected identifier");
+
+    ASTNode name = NODE();
+
+    name.id = m->size++;
+    
+    _name(p, &name, m);  
+
     addchild(ast, name);
 
     return PARSE_SUCCESS;
@@ -360,9 +383,20 @@ static ParseError _binary(Parser *p, ASTNode *ast, ASTMetadata *m)
     ast->type = AST_BINARY;
     ASTNode expr = NODE();
 
-    RETURN_PANIC(_precedence(p, &expr, m, oprule->precedence + 1));
+    RETURN_PANIC(_precedence(p, &expr, m, oprule->precedence));
 
     addchild(ast, expr);
+
+    return PARSE_SUCCESS;
+}
+
+static ParseError _grouping(Parser *p, ASTNode *ast, ASTMetadata *m) {
+    RETURN_PANIC(_expression(p, ast, m));
+
+    Tkn* rightbrace = next(p);
+    if (rightbrace->type != TKN_RIGHT_PAREN) {
+        return error_node(ast, back(p), rightbrace, &m->errors, &m->errsz, "error: unterminated grouping");
+    }
 
     return PARSE_SUCCESS;
 }
@@ -376,27 +410,24 @@ static ParseError _precedence(Parser* p, ASTNode* expr, ASTMetadata* m,  Precede
     ASTNode nud = NODE();
     nud.id = m->size++;
     p->depth++;
+    
     RETURN_PANIC(prefixfn(p, &nud, m));
+
+    *expr = nud;
 
     Precedence nextprec = get_rule(current(p)->type)->precedence;
 
-    if (rbp >= nextprec) {
-        *expr = nud;
-        return PARSE_SUCCESS;
-    }
-
-    do {
+    while (rbp < nextprec) {
         ASTNode led = NODE();
         led.id = m->size++;
-        addchild(&led, nud);
+        addchild(&led, *expr);
 
         ParseFn infixfn = get_rule(next(p)->type)->infix;
         RETURN_PANIC(infixfn(p, &led, m));
-
-        nextprec = get_rule(current(p)->type)->precedence;
-
         *expr = led;
-    } while (rbp < nextprec);
+        
+        nextprec = get_rule(current(p)->type)->precedence;
+    }
 
     return PARSE_SUCCESS;
 }
@@ -450,7 +481,7 @@ static ParseError _section(Parser* p, ASTNode* sect, ASTMetadata* m) {
             nextkn->type != TKN_NEWLINE && 
             nextkn->type != TKN_RIGHT_BRACE) 
         {
-            ast_free(&expr);
+            free_ast(&expr);
             back(p);
             return error_node(sect, prev(p), sect->tkn, &m->errors, &m->errsz, "error: unterminated section");
         }
@@ -471,8 +502,24 @@ static ParseError _declaration(Parser *p, ASTNode *decl, ASTMetadata *m)
     decl->tkn = decltkn;
     decl->type = AST_DECL;
 
-    if (!is_decl(decltkn->type))
+    switch (decltkn->type)
     {
+    case TKN_INCLUDE: {
+        if (next(p)->type != TKN_STRING) {
+            return error_node(decl, back(p), decltkn, &m->errors, &m->errsz, "error: expected string");
+        }
+            
+        Tkn* delim = next(p);
+
+        if (delim->type != TKN_NEWLINE && delim->type != TKN_EOF)
+            return error_node(decl, back(p), decltkn, &m->errors, &m->errsz, "error: unterminated include");
+
+        goto SUCCESS;
+    }
+    case TKN_RULE:
+    case TKN_INGRESS:
+        break;
+    default:
         return error_node(decl, back(p), decltkn, &m->errors, &m->errsz, "error: invalid declaration");
     }
 
@@ -527,6 +574,7 @@ static ParseError _declaration(Parser *p, ASTNode *decl, ASTMetadata *m)
         return ERR_PARSE_PANIC;
     }
 
+SUCCESS:
     return PARSE_SUCCESS;
 }
 
@@ -559,46 +607,52 @@ static void _entry(Parser *p, ASTNode *root, ASTMetadata *m)
 }
 
 static ParseRule rules[] = {
-    [TKN_ERR]           = {_err,     NULL,   PREC_NONE},
-    [TKN_ERR_STR]       = {_err_str, NULL,   PREC_NONE},
+    [TKN_ERR]           = {_err,        NULL,   PREC_NONE},
+    [TKN_ERR_STR]       = {_err_str,    NULL,   PREC_NONE},
 
-    [TKN_LEFT_PAREN]    = {NULL,     _call,  PREC_CALL},
-    [TKN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
-    [TKN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, 
-    [TKN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
-    [TKN_DOT]           = {NULL,     NULL,   PREC_CALL},
-    [TKN_COMMA]         = {NULL,     NULL,   PREC_NONE},
-    [TKN_COLON]         = {NULL,     NULL,   PREC_NONE},
-    [TKN_NEWLINE]       = {NULL,     NULL,   PREC_NONE},
+    [TKN_LEFT_PAREN]    = {_grouping,   _call,  PREC_CALL},
+    [TKN_RIGHT_PAREN]   = {NULL,        NULL,   PREC_NONE},
+    [TKN_LEFT_BRACE]    = {NULL,        NULL,   PREC_NONE}, 
+    [TKN_RIGHT_BRACE]   = {NULL,        NULL,   PREC_NONE},
+    [TKN_DOT]           = {NULL,        _dot,   PREC_CALL},
+    [TKN_COMMA]         = {NULL,        NULL,   PREC_NONE},
+    [TKN_COLON]         = {NULL,        NULL,   PREC_NONE},
+    [TKN_NEWLINE]       = {NULL,        NULL,   PREC_NONE},
 
-    [TKN_TARGET]        = {NULL,     NULL,   PREC_NONE},
-    [TKN_INPUT]         = {NULL,     NULL,   PREC_NONE},
-    [TKN_MATCH]         = {NULL,     NULL,   PREC_NONE},
-    [TKN_CONDITION]     = {NULL,     NULL,   PREC_NONE},
+    [TKN_TARGET]        = {NULL,        NULL,   PREC_NONE},
+    [TKN_INPUT]         = {NULL,        NULL,   PREC_NONE},
+    [TKN_MATCH]         = {NULL,        NULL,   PREC_NONE},
+    [TKN_CONDITION]     = {NULL,        NULL,   PREC_NONE},
     
-    [TKN_RULE]          = {NULL,     NULL,   PREC_NONE},
-    [TKN_IMPORT]        = {NULL,     NULL,   PREC_NONE},
-    [TKN_INGRESS]       = {NULL,     NULL,   PREC_NONE},
+    [TKN_RULE]          = {NULL,        NULL,   PREC_NONE},
+    [TKN_IMPORT]        = {NULL,        NULL,   PREC_NONE},
+    [TKN_INCLUDE]       = {NULL,        NULL,   PREC_NONE},
+    [TKN_INGRESS]       = {NULL,        NULL,   PREC_NONE},
 
-    [TKN_EQUAL]         = {NULL,  _binary,   PREC_EQUALITY},
-    [TKN_LESSTHAN]      = {NULL,  _binary,   PREC_COMPARISON}, 
-    [TKN_GREATERTHAN]   = {NULL,  _binary,   PREC_COMPARISON},
-    [TKN_AND]           = {NULL,  _binary,   PREC_AND },
-    [TKN_OR]            = {NULL,  _binary,   PREC_OR  },
-    [TKN_ANY]           = {NULL,     NULL,   PREC_NONE},
-    [TKN_ALL]           = {NULL,     NULL,   PREC_NONE},
+    [TKN_PLUS]          = {NULL,     _binary,   PREC_TERM},
+    [TKN_MINUS]         = {NULL,     _binary,   PREC_TERM},
+    [TKN_SLASH]         = {NULL,     _binary,   PREC_FACTOR},
+    [TKN_STAR]          = {NULL,     _binary,   PREC_FACTOR},
+    [TKN_BANG]          = {_unary,      NULL,   PREC_NONE},
+    [TKN_EQUAL]         = {NULL,     _binary,   PREC_EQUALITY},
+    [TKN_LESSTHAN]      = {NULL,     _binary,   PREC_COMPARISON}, 
+    [TKN_GREATERTHAN]   = {NULL,     _binary,   PREC_COMPARISON},
+    [TKN_AND]           = {NULL,     _binary,   PREC_AND},
+    [TKN_OR]            = {NULL,     _binary,   PREC_OR},
+    [TKN_ANY]           = {NULL,        NULL,   PREC_NONE},
+    [TKN_ALL]           = {NULL,        NULL,   PREC_NONE},
 
-    [TKN_REGEXP]        = {NULL,     NULL,   PREC_NONE},
-    [TKN_STRING]        = {_literal, NULL,   PREC_NONE},
-    [TKN_NUMBER]        = {_literal, NULL,   PREC_NONE},
-    [TKN_FALSE]         = {_literal, NULL,   PREC_NONE},
-    [TKN_TRUE]          = {_literal, NULL,   PREC_NONE},
+    [TKN_REGEXP]        = {NULL,        NULL,   PREC_NONE},
+    [TKN_STRING]        = {_literal,    NULL,   PREC_NONE},
+    [TKN_NUMBER]        = {_literal,    NULL,   PREC_NONE},
+    [TKN_FALSE]         = {_literal,    NULL,   PREC_NONE},
+    [TKN_TRUE]          = {_literal,    NULL,   PREC_NONE},
 
-    [TKN_IDENTIFIER]    = {_name,    NULL,   PREC_NONE},
-    [TKN_DOLLAR]        = {_event,   NULL,   PREC_NONE},
+    [TKN_IDENTIFIER]    = {_name,       NULL,   PREC_NONE},
+    [TKN_DOLLAR]        = {_event,      NULL,   PREC_NONE},
 
-    [TKN_CUSTOM]        = {NULL,     NULL,   PREC_NONE}, 
-    [TKN_EOF]           = {NULL,     NULL,   PREC_NONE}, 
+    [TKN_CUSTOM]        = {NULL,        NULL,   PREC_NONE}, 
+    [TKN_EOF]           = {NULL,        NULL,   PREC_NONE}, 
 };
 
 static ParseRule* get_rule(TknType type) {
@@ -643,4 +697,6 @@ void jary_parse(ASTNode *ast, ASTMetadata *m, const char *src, size_t length)
 
     m->tkns = p->tkns;
     m->tknsz = p->tknsz;
+
+    jary_free(p);
 }

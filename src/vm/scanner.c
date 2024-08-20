@@ -93,7 +93,7 @@ static void set_token_name(Scanner* sc, Tkn* token) {
     set_token(token, sc, TKN_IDENTIFIER);
 }
 
-ScanError scan_source(Scanner* sc, char* source, size_t length) {
+void scan_source(Scanner* sc, char* source, size_t length) {
     jary_assert(sc != NULL);
     jary_assert(source != NULL);
     jary_assert(length > 0);
@@ -104,22 +104,18 @@ ScanError scan_source(Scanner* sc, char* source, size_t length) {
     sc->current = source;
     sc->line = 1;
     sc->srcsz = length;
-
-    return SCAN_SUCCESS;
 }
 
 bool scan_ended(Scanner* sc) {
     return (sc->current - sc->base) >= sc->srcsz;
 }
 
-ScanError scan_token(Scanner* sc, Tkn* token) {
+void scan_token(Scanner* sc, Tkn* token) {
     jary_assert(sc != NULL);
     jary_assert(token != NULL);
 
     if (scan_ended(sc))
         goto INV_TKN;
-
-    token->type = TKN_ERR;
 
 SCAN:
     sc->start = sc->current;
@@ -137,44 +133,44 @@ SCAN:
         if (scan_ended(sc)) {
             sc->current = ch;
             set_token(token, sc, TKN_ERR_STR);
-            return ERR_SCAN_INV_STRING;
+            return;
         }
 
         ++sc->current; // forward enclosing "
         set_token(token, sc, TKN_STRING); 
         token->length -= 2; // -2 to not count the quotes \"\"
-        return SCAN_SUCCESS;
+        return;
     }
     case '(':
-        set_token(token, sc, TKN_LEFT_PAREN); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_LEFT_PAREN); return;
     case ')':
-        set_token(token, sc, TKN_RIGHT_PAREN); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_RIGHT_PAREN); return;
     case '=': 
-        set_token(token, sc, TKN_EQUAL); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_EQUAL); return;
     case '!':
-        set_token(token, sc, TKN_BANG); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_BANG); return;
     case '{': 
-        set_token(token, sc, TKN_LEFT_BRACE); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_LEFT_BRACE); return;
     case '}':
-        set_token(token, sc, TKN_RIGHT_BRACE); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_RIGHT_BRACE); return;
     case '<':
-        set_token(token, sc, TKN_LESSTHAN); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_LESSTHAN); return;
     case '>':
-        set_token(token, sc, TKN_GREATERTHAN); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_GREATERTHAN); return;
     case ':':
-        set_token(token, sc, TKN_COLON); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_COLON); return;
     case '+':      
-        set_token(token, sc, TKN_PLUS); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_PLUS); return;
     case '-':      
-        set_token(token, sc, TKN_MINUS); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_MINUS); return;
     case '*':      
-        set_token(token, sc, TKN_STAR); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_STAR); return;
     case '.':
-        set_token(token, sc, TKN_DOT); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_DOT); return;
     case ',':
-        set_token(token, sc, TKN_COMMA); return SCAN_SUCCESS;  
+        set_token(token, sc, TKN_COMMA); return;  
     case '$':
-        set_token(token, sc, TKN_DOLLAR); return SCAN_SUCCESS;
+        set_token(token, sc, TKN_DOLLAR); return;
 
     // Ignore
     case ' ':
@@ -200,14 +196,14 @@ SCAN:
         set_token(token, sc, TKN_NEWLINE); 
         sc->linestart = sc->current;
         ++sc->line;
-        return SCAN_SUCCESS;
+        return;
 
     case '\0':
         while(!scan_ended(sc) && sc->current[0] == '\0')
             ++sc->current;
 
         set_token(token, sc, TKN_EOF); 
-        return SCAN_SUCCESS;
+        return;
     
     case '/': {
         char* ch = sc->current;
@@ -221,12 +217,12 @@ SCAN:
             sc->current = ch;
 
             set_token(token, sc, TKN_SLASH);
-            return SCAN_SUCCESS;
+            return;
         }
 
         set_token(token, sc, TKN_REGEXP);
         
-        return SCAN_SUCCESS;
+        return;
     }
 
     case '1': case '2': case '3': 
@@ -236,18 +232,16 @@ SCAN:
             ++sc->current;
 
         set_token(token, sc, TKN_NUMBER); 
-        return SCAN_SUCCESS;
+        return;
     default:
         if (!isalpha(c) && c != '_') {
-            set_token(token, sc, TKN_ERR);
-            return ERR_SCAN_INV_TOKEN;
+            goto INV_TKN;
         }
 
         set_token_name(sc, token);
-        return SCAN_SUCCESS;
+        return;
     }
 
 INV_TKN:
     set_token(token, sc, TKN_ERR);
-    return ERR_SCAN_INV_TOKEN;
 }

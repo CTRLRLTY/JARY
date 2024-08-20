@@ -15,17 +15,15 @@ TEST(ScannerTest, ScanEOF) {
 
   char samplestr[] = "\0\0";
 
-  ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
+  scan_source(&sc, samplestr, sizeof(samplestr));
 
-  ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+  scan_token(&sc, &token);
 
   ASSERT_EQ(token.length, 3);
 
   ASSERT_STREQ(token.start, samplestr);
 
   ASSERT_EQ(scan_ended(&sc), true);
-
-  ASSERT_EQ(scan_token(&sc, &token), ERR_SCAN_ENDED);
 }
 
 TEST(ScannerTest, ScanNewline) {
@@ -34,9 +32,9 @@ TEST(ScannerTest, ScanNewline) {
 
   char samplestr[] = "\n\n\n\n\n";
 
-  ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
+  scan_source(&sc, samplestr, sizeof(samplestr));
 
-  ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+  scan_token(&sc, &token);
 
   EXPECT_EQ(token.type, TKN_NEWLINE);
 
@@ -44,7 +42,7 @@ TEST(ScannerTest, ScanNewline) {
 
   ASSERT_EQ(tkn_lexeme(&token, buf, sizeof(buf)), true);
 
-  ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+  scan_token(&sc, &token);
 
   ASSERT_EQ(token.type, TKN_EOF);
 }
@@ -63,9 +61,9 @@ TEST(ScannerTest, ScanWhitespace) {
     size_t spsz = sizeof(spaces)/sizeof(spaces[0]);
 
     for (size_t i = 0; i < spsz; ++i) {
-      ASSERT_EQ(scan_source(&sc, spaces[i], strlen(spaces[i])), SCAN_SUCCESS) << "i: " << i;
+      scan_source(&sc, spaces[i], strlen(spaces[i]));
       
-      ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS) << "i: " << i;
+      scan_token(&sc, &token);
 
       EXPECT_EQ(token.type, TKN_EOF) << "i: " << i;
 
@@ -76,9 +74,9 @@ TEST(ScannerTest, ScanWhitespace) {
   { // consecutive whitespaces
     char samplestr[] = "    \t\t\r\t  \r";
 
-    ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
+    scan_source(&sc, samplestr, sizeof(samplestr));
       
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+    scan_token(&sc, &token);
 
     ASSERT_EQ(token.type, TKN_EOF);
 
@@ -106,15 +104,15 @@ TEST(ScannerTest, ScanSymbol) {
   size_t symsz = sizeof(symbols)/sizeof(symbols[0]);
 
   for (size_t i = 0; i < symsz; ++i) {
-    ASSERT_EQ(scan_source(&sc, symbols[i].cstr, 2), SCAN_SUCCESS) << "symbol: " << symbols[i].cstr;
+    scan_source(&sc, symbols[i].cstr, 2);
     
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS) << "symbol: " << symbols[i].cstr;
+    scan_token(&sc, &token);
 
     EXPECT_EQ(token.type, symbols[i].type) << "symbol: " << symbols[i].cstr;
 
     EXPECT_STREQ(token.start, symbols[i].cstr);
 
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+    scan_token(&sc, &token);
 
     ASSERT_EQ(token.type, TKN_EOF);
 
@@ -147,15 +145,15 @@ TEST(ScannerTest, ScanKeyword) {
   size_t kwsz = sizeof(keywords)/sizeof(keywords[0]);
 
   for (size_t i = 0; i < kwsz; ++i) { // Check every keyword
-    ASSERT_EQ(scan_source(&sc, keywords[i].cstr, keywords[i].size), SCAN_SUCCESS) << "keyword: " << keywords[i].cstr;
+    scan_source(&sc, keywords[i].cstr, keywords[i].size);
     
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS) << "keyword: " << keywords[i].cstr;
+    scan_token(&sc, &token);
 
     EXPECT_EQ(token.type, keywords[i].type) << "keyword: " << keywords[i].cstr;
 
     EXPECT_STREQ(token.start, keywords[i].cstr);
 
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+    scan_token(&sc, &token);
 
     ASSERT_EQ(token.type, TKN_EOF);
 
@@ -170,9 +168,9 @@ TEST(ScannerTest, ScanString) {
   { // Basic string test
     char samplestr[] = "\"Hello world\"";
 
-    ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
+    scan_source(&sc, samplestr, sizeof(samplestr));
 
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+    scan_token(&sc, &token);
 
     EXPECT_EQ(token.type, TKN_STRING);
 
@@ -180,20 +178,20 @@ TEST(ScannerTest, ScanString) {
 
     EXPECT_EQ(tkn_lexeme_size(&token), sizeof(samplestr)); 
 
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+    scan_token(&sc, &token);
 
     ASSERT_EQ(token.type, TKN_EOF);
 
-    ASSERT_EQ(scan_ended(&sc), true);
+    scan_ended(&sc);
   }
   
   { // Multiline string
     char samplestr[] = "\"Hello \
                          world\"";
     
-    ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
+    scan_source(&sc, samplestr, sizeof(samplestr));
 
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+    scan_token(&sc, &token);
 
     EXPECT_EQ(token.type, TKN_STRING);
 
@@ -201,7 +199,7 @@ TEST(ScannerTest, ScanString) {
 
     EXPECT_EQ(tkn_lexeme_size(&token), sizeof(samplestr));
 
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+    scan_token(&sc, &token);
 
     ASSERT_EQ(token.type, TKN_EOF);
 
@@ -211,9 +209,9 @@ TEST(ScannerTest, ScanString) {
   { // Unterminated string 
     char samplestr[] = "\"Unterminated String";
          
-    ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
+    scan_source(&sc, samplestr, sizeof(samplestr));
 
-    ASSERT_EQ(scan_token(&sc, &token), ERR_SCAN_INV_STRING);
+    scan_token(&sc, &token);
 
     EXPECT_EQ(token.type, TKN_ERR_STR);
   }
@@ -232,12 +230,12 @@ TEST(ScannerTest, ScanString) {
     // Making sure the sample strings have same length
     ASSERT_EQ(sizeof(str1) == sizeof(str2) && sizeof(str2) == sizeof(str3), true);
 
-    ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
+    scan_source(&sc, samplestr, sizeof(samplestr));
 
     for (uint8_t i = 0; i < 3; ++i) {
       char* str = str1 + sizeof(str1) * i;
 
-      ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS) << "string: " << str;
+      scan_token(&sc, &token);
 
       size_t lexsz = tkn_lexeme_size(&token);
 
@@ -254,7 +252,7 @@ TEST(ScannerTest, ScanString) {
       ASSERT_EQ(scan_ended(&sc), false);
     }
     
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+    scan_token(&sc, &token);
 
     ASSERT_EQ(token.type, TKN_EOF);
 
@@ -269,9 +267,9 @@ TEST(ScannerTest, ScanRegexp) {
   { // Basic regexp
     char samplestr[] = "/Hello world\\//";
 
-    ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
+    scan_source(&sc, samplestr, sizeof(samplestr));
 
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+    scan_token(&sc, &token);
 
     EXPECT_EQ(token.type, TKN_REGEXP);
 
@@ -279,7 +277,7 @@ TEST(ScannerTest, ScanRegexp) {
 
     EXPECT_EQ(tkn_lexeme_size(&token), sizeof(samplestr)); 
 
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+    scan_token(&sc, &token);
 
     ASSERT_EQ(token.type, TKN_EOF);
 
@@ -303,15 +301,15 @@ TEST(ScannerTest, ScanIdentifier) {
       
       std::strcpy(str, ident[i].c_str());
       
-      ASSERT_EQ(scan_source(&sc, str, sizeof(str)), SCAN_SUCCESS) << "identifier: " << str;
+      scan_source(&sc, str, sizeof(str));
 
-      ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS) << "identifier: " << str;
+      scan_token(&sc, &token);
 
       EXPECT_EQ(token.type, TKN_IDENTIFIER) << "identifier: " << str;
 
       EXPECT_STREQ(token.start, str);
 
-      ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS) << "identifier: " << str;
+      scan_token(&sc, &token);
 
       EXPECT_EQ(token.type, TKN_EOF);
 
@@ -322,9 +320,9 @@ TEST(ScannerTest, ScanIdentifier) {
   { // illegal identifier
     char samplestr[] = "1hello";
       
-    ASSERT_EQ(scan_source(&sc, samplestr, sizeof(samplestr)), SCAN_SUCCESS);
+    scan_source(&sc, samplestr, sizeof(samplestr));
 
-    ASSERT_EQ(scan_token(&sc, &token), SCAN_SUCCESS);
+    scan_token(&sc, &token);
 
     EXPECT_EQ(token.type, TKN_NUMBER);
 

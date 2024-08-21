@@ -115,33 +115,22 @@ static void dumpast(ASTNode* ast, ASTMetadata* m) {
     printf("%*c ", col1sz, ' ');
     printf(" ID ");
     printf("%*c", 3 + idofs, ' ');
-    printf("Token\n\n");
+    printf("Token\n");
 
-    printast(ast, m, 0);
+    if (m->size) {
+        printast(ast, m, 0);   
+    }
 }
 
 static void dumperrs(const char* path, ASTError** errors, size_t errsz) {
-    if (errsz) {
-        printf("ERRORS FOUND: %ld\n", errsz);
-
-        for (size_t i = 0; i < errsz; ++i) {
-            ASTError err = (*errors)[i];
-            printf("%s:%ld:%ld %s\n", path, err.line, err.offset, err.msg);
-            
-            size_t linenum = err.line;
-            printf("%5ld |\t", linenum++);
-
-            char* line = err.linestr;
-            for(size_t j = 0; line[j] != '\0'; ++j) {
-                printf("%c", line[j]);
-                if (line[j] == '\n')
-                    printf("%5ld |\t", linenum++);
-            }
-            printf("\n");
-            printf("%6c|%*c\n", ' ', (int)err.offset+1, '^');
+    for (size_t i = 0; i < errsz; ++i) {
+        ASTError err = (*errors)[i];
+        printf("%s:%ld:%ld %s\n", path, err.line, err.offset, err.msg);
+        
+        if (err.lexeme) {
+            printf("%5ld |\t",  err.line);
+            printf("%s\n", err.lexeme);
         }
-
-        printf("\n\n");
     }
 }
 
@@ -186,13 +175,21 @@ static void run_file(const char* path)
     jary_parse(&ast, &m, src, length);
     jary_free(src);
 
+    printf( "===================" "\n"
+            "| JARY AST DUMP ! |" "\n"
+            "===================" "\n");
+            
     printf("\n");
+
     dumpast(&ast, &m);
 
-    if (m.errsz) {
-        printf("\n");
-        dumperrs(path, &m.errors, m.errsz);
-    }
+    printf("\n");
+    printf("File Path     : %s\n", path);
+    printf("Maximum Depth : %ld\n", m.depth);
+    printf("Total nodes   : %ld\n", m.size);
+    printf("ERRORS FOUND  : %ld\n", m.errsz);
+
+    dumperrs(path, &m.errors, m.errsz);
     printf("\n");
 
     free_ast(&ast);

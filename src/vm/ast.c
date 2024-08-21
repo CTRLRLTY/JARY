@@ -4,7 +4,6 @@
 
 static void free_ast_err(ASTError* err) {
     jary_free(err->lexeme);
-    jary_free(err->linestr);
     jary_free(err->msg);
 }
 

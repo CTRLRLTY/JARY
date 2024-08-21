@@ -66,7 +66,6 @@ typedef struct Tkn {
     size_t line;
     size_t offset;
     char* start;
-    char* linestart;
     uint32_t hash;
 } Tkn;
 

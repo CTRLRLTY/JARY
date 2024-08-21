@@ -11,10 +11,8 @@
 static void set_token(Tkn* token, Scanner* sc, TknType type) {
     token->type = type;
     token->start = sc->start;
-    token->linestart = sc->linestart;
     token->length = (size_t) (sc->current - sc->start);
-    token->offset = (size_t) (sc->current - sc->linestart);
-    token->offset -= token->length;
+    token->offset = (size_t) (sc->start - sc->linestart);
     token->offset += 1;
     token->line = sc->line;
 }
@@ -196,14 +194,27 @@ SCAN:
         goto SCAN;
         
     case '\n':
-        while (!scan_ended(sc) && sc->current[0] == '\n') {
+        ++sc->line;
+        sc->linestart = sc->current;
+CONSUME_WHITESPACE_BEFORE_NEWLINE:
+        while ( 
+            sc->current[0] == ' '   ||
+            sc->current[0] == '\r'  ||
+            sc->current[0] == '\t'  )
+        {
+           ++sc->current;
+        }
+        
+    
+        while (!scan_ended(sc) &&  sc->current[0] == '\n')
+        {
             ++sc->current;
             ++sc->line; 
+            sc->linestart = sc->current;
+            goto CONSUME_WHITESPACE_BEFORE_NEWLINE;
         }
         
         set_token(token, sc, TKN_NEWLINE); 
-        sc->linestart = sc->current;
-        ++sc->line;
         return;
 
     case '\0':

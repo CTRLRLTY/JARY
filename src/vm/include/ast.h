@@ -29,12 +29,12 @@ typedef struct ASTError {
     size_t offset;
     size_t length;
     char* lexeme;
-    char* linestr;
     char* msg;
 } ASTError;
 
 typedef struct ASTNode {
     ASTType type;
+    // id is assigned on the order of it being processed
     size_t id;
     Tkn* tkn;
     struct ASTNode* child;

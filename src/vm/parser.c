@@ -49,6 +49,9 @@ typedef struct Parser
     size_t tknsz;
     Scanner *sc;
 
+    // last non newline tkn
+    Tkn* lastkn;
+
     size_t idx;
     size_t depth;
 } Parser;
@@ -85,28 +88,25 @@ static ParseError _precedence(Parser* p, ASTNode* ast, ASTMetadata* m, Precedenc
 static ParseError _expression(Parser* p, ASTNode* ast, ASTMetadata* m);
 
 static ParseError
-error_node(ASTNode *ast, Tkn *nextkn, Tkn *tkn, ASTError **errs, size_t *errsz, const char *msg)
+error_node(ASTNode *ast, Tkn* tkn, ASTError **errs, size_t *errsz, const char *msg)
 {
+    size_t line = tkn->line;
+    size_t lineofs = tkn->offset;
+    size_t sz = lexsize(tkn);
+    char* lexeme = jary_alloc(sz);
+    lexemestr(tkn, lexeme, sz);
+
     if (ast != NULL) {
         free_ast(ast);
-    }
-    
-    char* lexeme = jary_alloc(lexsize(tkn));
-    // +1 for '\0'
-    size_t linestrsz = ((size_t)(nextkn->start - tkn->start)); 
-    linestrsz += tkn->offset;
 
-    char* linestr = jary_alloc(linestrsz); 
-    lexemestr(tkn, lexeme, lexsize(tkn));
-    memcpy(linestr, tkn->linestart, linestrsz);
-    linestr[linestrsz-1] = '\0';
+        ast->degree = 0;
+    }
 
     ASTError errnode = {
-        .line = tkn->line,
-        .offset = tkn->offset,
+        .line = line,
+        .offset = lineofs,
         .lexeme = lexeme,
-        .linestr = linestr,
-        .msg = (msg != NULL) ? strdup(msg) : NULL};
+        .msg = strdup(msg)};
 
 
     if (*errsz == 0) {
@@ -155,21 +155,7 @@ static bool ended(Parser* p) {
     return scend && tknend;
 }
 
-static Tkn *back(Parser *p)
-{
-    jary_assert(p->idx-1 >= 0);
-
-    return p->tkns[p->idx--];
-}
-
-static Tkn *prev(Parser *p)
-{
-    jary_assert(p->idx-1 >= 0);
-
-    return p->tkns[p->idx-1];
-}
-
-// fill token with current and advance
+// fill token with current then advance
 static Tkn *next(Parser *p)
 {
     if (p->idx + 1 >= p->tknsz)
@@ -177,6 +163,17 @@ static Tkn *next(Parser *p)
         Tkn *tkn = jary_alloc(sizeof *tkn);
 
         scan_token(p->sc, tkn);
+
+        switch (tkn->type)
+        {
+        case TKN_EOF:
+        case TKN_NEWLINE:
+            break;
+        
+        default:
+            p->lastkn = tkn;
+        }
+
         addtkn(p, tkn);
     }
 
@@ -215,7 +212,7 @@ static ParseError synclist(Parser *p, size_t *size, size_t newsize)
         !is_decl(tkn->type) &&
         !is_section(tkn->type));
 
-    back(p);
+    p->idx--;
 
     return PARSE_SUCCESS;
 }
@@ -237,65 +234,54 @@ static ParseError syncsection(Parser *p, size_t *size, size_t newsize)
         !is_decl(tkn->type) &&
         !is_section(tkn->type));
 
-    back(p);
+    p->idx--;
 
     return PARSE_SUCCESS;
 }
 
 static ParseError syncdecl(Parser *p, size_t *size, size_t newsize)
 {
-    if (size != NULL) 
-        *size = newsize;
+    *size = newsize;
 
     Tkn *tkn;
 
     do {
         if (ended(p))
-            return ERR_PARSE_PANIC;
+            goto SYNCED;
 
         tkn = next(p);
     } while (!is_decl(tkn->type));
 
-    back(p);
+    p->idx--;
 
+SYNCED:
     return PARSE_SUCCESS;
 }
 
 static ParseRule* get_rule(TknType type);
 
 static ParseError _err(Parser* p, ASTNode* ast, ASTMetadata* m) {
-    Tkn *token = prev(p);
-
-    return error_node(ast, current(p), token, &m->errors, &m->errsz, "error: unrecognized token");
+    return error_node(ast, ast->tkn, &m->errors, &m->errsz, "error: unrecognized token");
 }
 
 static ParseError _err_str(Parser* p, ASTNode* ast, ASTMetadata* m) {
-    Tkn *token = prev(p);
-
-    return error_node(ast, current(p), token, &m->errors, &m->errsz, "error: unterminated string");
+    return error_node(ast, ast->tkn, &m->errors, &m->errsz, "error: unterminated string");
 }
 
 static ParseError _literal(Parser* p, ASTNode* ast, ASTMetadata* m) {
-    Tkn *token = prev(p);
-
     ast->type = AST_LITERAL;
-    ast->tkn = token;
 
     return PARSE_SUCCESS;
 }
 
 static ParseError _name(Parser* p, ASTNode* ast, ASTMetadata* m) {
-    Tkn *token = prev(p);
-
     ast->type = AST_NAME;
-    ast->tkn = token;
 
     return PARSE_SUCCESS;
 }
 
 static ParseError _unary(Parser* p, ASTNode* ast, ASTMetadata* m) {
     ast->type = AST_UNARY;
-    ast->tkn = prev(p);
 
     ASTNode expr = NODE();
     PASS_PANIC(_precedence(p, &expr, m, PREC_UNARY));
@@ -307,34 +293,35 @@ static ParseError _unary(Parser* p, ASTNode* ast, ASTMetadata* m) {
 
 static ParseError _event(Parser* p, ASTNode* ast, ASTMetadata* m) {
     ast->type = AST_EVENT;
-    ast->tkn = prev(p);
 
     if (next(p)->type != TKN_IDENTIFIER)
-        return error_node(ast, back(p), ast->tkn, &m->errors, &m->errsz, "error: expected identifier");
+        return error_node(ast, ast->tkn, &m->errors, &m->errsz, "error: expected identifier");
 
-    ASTNode name = NODE();
+    ASTNode name = { 
+        .id = m->size++
+    };
     
     _name(p, &name, m);  
 
     p->depth++;
-    name.id = m->size++;
     addchild(ast, name);
 
     return PARSE_SUCCESS;
 }
 
 static ParseError _dot(Parser* p, ASTNode* ast, ASTMetadata* m) {
-    ast->tkn = prev(p);
     ast->type = AST_MEMBER;
 
     Tkn* nametkn = next(p);
 
     if (nametkn->type != TKN_IDENTIFIER)
-        return error_node(ast, back(p), ast->tkn, &m->errors, &m->errsz, "error: expected identifier");
+        return error_node(ast, ast->tkn, &m->errors, &m->errsz, "error: expected identifier");
 
-    ASTNode name = NODE();
-
-    name.id = m->size++;
+    
+    ASTNode name = {
+        .tkn = nametkn,
+        .id = m->size++
+    };
     
     _name(p, &name, m);  
 
@@ -345,7 +332,6 @@ static ParseError _dot(Parser* p, ASTNode* ast, ASTMetadata* m) {
 
 static ParseError _call(Parser* p, ASTNode* ast, ASTMetadata* m) {
     ast->type = AST_CALL;
-    ast->tkn = prev(p);
 
     if (current(p)->type == TKN_RIGHT_PAREN) {
         next(p); 
@@ -366,7 +352,7 @@ static ParseError _call(Parser* p, ASTNode* ast, ASTMetadata* m) {
 
     if (next(p)->type != TKN_RIGHT_PAREN)
     {
-        error_node(ast, current(p), back(p), &m->errors, &m->errsz, NULL);
+        error_node(ast, p->lastkn, &m->errors, &m->errsz, "error: expected ')' after");
         goto PANIC;
     }
 
@@ -376,18 +362,16 @@ PANIC:
     return ERR_PARSE_PANIC;
 }
 
-static ParseError _binary(Parser *p, ASTNode *ast, ASTMetadata *m)
+static ParseError _binary(Parser *p, ASTNode *binop, ASTMetadata *m)
 {
-    Tkn *optkn = prev(p);
-    ParseRule* oprule = get_rule(optkn->type);
+    binop->type = AST_BINARY;
+    ParseRule* oprule = get_rule(binop->tkn->type);
 
-    ast->tkn = optkn;
-    ast->type = AST_BINARY;
     ASTNode expr = NODE();
 
     PASS_PANIC(_precedence(p, &expr, m, oprule->precedence));
 
-    addchild(ast, expr);
+    addchild(binop, expr);
 
     return PARSE_SUCCESS;
 }
@@ -397,22 +381,25 @@ static ParseError _grouping(Parser *p, ASTNode *ast, ASTMetadata *m) {
 
     Tkn* rightbrace = next(p);
     if (rightbrace->type != TKN_RIGHT_PAREN) {
-        return error_node(ast, back(p), rightbrace, &m->errors, &m->errsz, "error: unterminated grouping");
+        return error_node(ast, rightbrace, &m->errors, &m->errsz, "error: unterminated grouping");
     }
 
     return PARSE_SUCCESS;
 }
 
 static ParseError _precedence(Parser* p, ASTNode* expr, ASTMetadata* m,  Precedence rbp) {
-    ParseRule* prefixrule = get_rule(next(p)->type);
+    ASTNode nud = {
+        .tkn = next(p),
+        .id = m->size++
+    };
+    
+    ParseRule* prefixrule = get_rule(nud.tkn->type);
     ParseFn prefixfn = prefixrule->prefix;
+
+    p->depth++;
     
     if (prefixfn == NULL)
-        return error_node(expr, back(p), current(p), &m->errors, &m->errsz, "error: invalid expression null denotation");
-
-    ASTNode nud = NODE();
-    nud.id = m->size++;
-    p->depth++;
+        return error_node(&nud, nud.tkn, &m->errors, &m->errsz, "error: invalid expression null denotation");
     
     PASS_PANIC(prefixfn(p, &nud, m));
 
@@ -421,12 +408,16 @@ static ParseError _precedence(Parser* p, ASTNode* expr, ASTMetadata* m,  Precede
     Precedence nextprec = get_rule(current(p)->type)->precedence;
 
     while (rbp < nextprec) {
-        ASTNode led = NODE();
-        led.id = m->size++;
+        ASTNode led = {
+            .tkn = next(p),
+            .id = m->size++
+        };
+
         addchild(&led, *expr);
 
-        ParseFn infixfn = get_rule(next(p)->type)->infix;
+        ParseFn infixfn = get_rule(led.tkn->type)->infix;
         PASS_PANIC(infixfn(p, &led, m));
+
         *expr = led;
         
         nextprec = get_rule(current(p)->type)->precedence;
@@ -439,24 +430,14 @@ static ParseError _expression(Parser* p, ASTNode* ast, ASTMetadata* m) {
     return _precedence(p, ast, m, PREC_ASSIGNMENT);
 }
 
-static ParseError _list(Parser* p, ASTNode* expr, ASTMetadata* m) {
-    PASS_PANIC(_expression(p, expr, m));
-
-    return PARSE_SUCCESS;
-}
-
 static ParseError _section(Parser* p, ASTNode* sect, ASTMetadata* m) {
     sect->type = AST_SECTION;
-    sect->tkn = next(p);
 
     if (!is_section(sect->tkn->type))
-        return error_node(sect, back(p), sect->tkn, &m->errors, &m->errsz, "error: unrecognized section");
+        return error_node(sect, sect->tkn, &m->errors, &m->errsz, "error: invalid section");
 
     if (next(p)->type != TKN_COLON)
-        return error_node(sect, back(p), sect->tkn, &m->errors, &m->errsz, "error: expected ':' ");
-
-    if (next(p)->type != TKN_NEWLINE)
-        return error_node(sect, back(p), sect->tkn, &m->errors, &m->errsz, "error: expected '\n' ");
+        return error_node(sect, sect->tkn, &m->errors, &m->errsz, "error: expected ':' after");
     
     skipnewline(p);
 
@@ -472,41 +453,39 @@ static ParseError _section(Parser* p, ASTNode* sect, ASTMetadata* m) {
          !is_section(tkn->type);
          tkn = current(p))
     {
-        size_t size = m->size;
+        size_t oldgraphsz = m->size;
         ASTNode expr = NODE();
 
         p->depth = 2;
 
-        if (_list(p, &expr, m) != PARSE_SUCCESS) {
-            PASS_PANIC(synclist(p, &m->size, size));
+        if (_expression(p, &expr, m) != PARSE_SUCCESS) {
+            synclist(p, &m->size, oldgraphsz);
+            goto NEXT_LIST;
         }
-
-        skipnewline(p);
 
         m->depth = MAX(m->depth, p->depth);
         addchild(sect, expr);
-    }
 
-    p->depth = 2;
+NEXT_LIST:
+        skipnewline(p);
+    }
 
     return PARSE_SUCCESS;
 }
 
 static ParseError _declaration(Parser *p, ASTNode *decl, ASTMetadata *m)
 {
-    Tkn *decltkn = next(p);
-
-    decl->tkn = decltkn;
     decl->type = AST_DECL;
+    // old maxdepth
+    size_t maxdepth = m->depth;
 
-    switch (decltkn->type)
+    switch (decl->tkn->type)
     {
     case TKN_INCLUDE: {
         Tkn* strtkn = next(p);
 
-        if (strtkn->type != TKN_STRING) {
-            return error_node(decl, back(p), decltkn, &m->errors, &m->errsz, "error: expected string");
-        }
+        if (strtkn->type != TKN_STRING) 
+            return error_node(decl, decl->tkn, &m->errors, &m->errsz, "error: expected string after");
 
         ASTNode path = {
             .type = AST_PATH,
@@ -514,6 +493,7 @@ static ParseError _declaration(Parser *p, ASTNode *decl, ASTMetadata *m)
             .id = m->size++};
 
         addchild(decl, path);
+        p->depth = 2;
 
         goto SUCCESS;
     }
@@ -523,68 +503,71 @@ static ParseError _declaration(Parser *p, ASTNode *decl, ASTMetadata *m)
     case TKN_INGRESS:
         break;
     default:
-        return error_node(decl, back(p), decltkn, &m->errors, &m->errsz, "error: invalid declaration");
+        error_node(decl, decl->tkn, &m->errors, &m->errsz, "error: invalid declaration");
+        goto PANIC;
     }
 
     Tkn *nametkn = next(p);
 
-    if (nametkn->type != TKN_IDENTIFIER)
-        return error_node(decl, back(p), decltkn, &m->errors, &m->errsz, "error: expected identifier for declaration");
+    if (nametkn->type != TKN_IDENTIFIER) {
+        error_node(decl, decl->tkn, &m->errors, &m->errsz, "error: expected identifier after");
+        goto PANIC;
+    }
 
     ASTNode nodename = {
         .type = AST_NAME,
         .tkn = nametkn,
         .id = m->size++};
 
-    // old maxdepth
-    size_t maxdepth = m->depth;
-
     addchild(decl, nodename);
+    p->depth = 2;
 
-    if (decltkn->type == TKN_IMPORT)
+    if (decl->tkn->type == TKN_IMPORT)
         goto SUCCESS;
 
-    Tkn *leftbrace = next(p);
-
-    if (leftbrace->type != TKN_LEFT_BRACE)
-        return error_node(decl, back(p), leftbrace, &m->errors, &m->errsz, "error: expected left brace");
-
-    Tkn *newln = next(p);
-
-    if (newln->type != TKN_NEWLINE)
-        return error_node(decl, back(p), newln, &m->errors, &m->errsz, NULL);
+    if (next(p)->type != TKN_LEFT_BRACE) {
+        error_node(decl, nametkn, &m->errors, &m->errsz, "error: expected '{' after");
+        goto PANIC;
+    }
+        
+    skipnewline(p);
 
     while (
         !ended(p) &&
         current(p)->type != TKN_RIGHT_BRACE &&
         !is_decl(current(p)->type))
     {
-        ASTNode sect = NODE();
-        size_t graphsz = sect.id = m->size++;
+        ASTNode sect = {
+            .tkn = next(p),
+            .id = m->size++,
+        };
 
-        p->depth = 1;
+        p->depth = 2;
 
         if (_section(p, &sect, m) != PARSE_SUCCESS) {
-            syncsection(p, &m->size, graphsz);
-            continue;
-        } else {
-            m->depth = MAX(m->depth, p->depth);
-        }
-
-        skipnewline(p);
+            syncsection(p, &m->size, sect.id);
+            goto NEXT_SECTION;
+        } 
         
         addchild(decl, sect);
+
+NEXT_SECTION:
+        skipnewline(p);
     }
 
     if (ended(p) || next(p)->type != TKN_RIGHT_BRACE) {
-        m->depth = maxdepth;
-        back(p);
-        error_node(decl, prev(p), decltkn, &m->errors, &m->errsz, "error: declaration unterminated");
-        return ERR_PARSE_PANIC;
+        error_node(decl, p->lastkn, &m->errors, &m->errsz, "error: expected '}' after");
+        goto PANIC;
     }
 
 SUCCESS:
+    m->depth = MAX(m->depth, p->depth);
     return PARSE_SUCCESS;
+
+PANIC:
+    p->depth = 1;
+    m->depth = maxdepth;
+    return ERR_PARSE_PANIC;
 }
 
 static void _entry(Parser *p, ASTNode *root, ASTMetadata *m)
@@ -596,24 +579,30 @@ static void _entry(Parser *p, ASTNode *root, ASTMetadata *m)
     skipnewline(p);
 
     while (!ended(p)) {
-        ASTNode decl = NODE();
-        size_t size = decl.id = m->size++;
+        ASTNode decl = {
+            .tkn = next(p),
+            .id = m->size++,
+        };
 
-        p->depth = 0;
+        p->depth = 1;
 
         if (_declaration(p, &decl, m) != PARSE_SUCCESS) {
-            if (syncdecl(p, &m->size, size))
-                return;
-        }
-        else
-        {
-            addchild(root, decl);
+            if (syncdecl(p, &m->size, decl.id) != PARSE_SUCCESS) {
+                goto PANIC;
+            }
 
-            skipnewline(p);
-
-            m->depth = MAX(m->depth, p->depth);
+            goto NEXT_DECL;
         }
+
+        addchild(root, decl);
+NEXT_DECL:
+        skipnewline(p);
     }
+
+    return;
+
+PANIC:
+    error_node(root, p->lastkn, &m->errors, &m->errsz, "error: FATAL ERROR BABY! TODO: give better explanation");
 }
 
 static ParseRule rules[] = {
@@ -688,6 +677,7 @@ void jary_parse(ASTNode *ast, ASTMetadata *m, const char *src, size_t length)
     p->sc = &scan;
     p->idx = 0;
     p->depth = 0;
+    p->lastkn = NULL;
     Tkn *tkn = jary_alloc(sizeof *tkn);
     scan_token(&scan, tkn);
     addtkn(p, tkn);

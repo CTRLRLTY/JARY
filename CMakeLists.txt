@@ -4,23 +4,22 @@ cmake_minimum_required(VERSION 3.22)
 project(jary)
 
 # Enable AddressSanitizer for Debug builds
-if(CMAKE_BUILD_TYPE MATCHES Debug AND SANITIZE)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+if(CMAKE_BUILD_TYPE STREQUAL Debug AND SANITIZE)
+    if(CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$")
+        message(STATUS "Using ASAN")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+    endif()
 endif()
 
-
 # -- DEFINITIONS
-set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
+set(LIB_DIR ${CMAKE_SOURCE_DIR}/lib)
 
-file(GLOB LIBJAYVM_SRC_DIR ${SRC_DIR}/vm)
-file(GLOB LIBJAYVM_INCLUDE_DIR ${LIBJAYVM_SRC_DIR}/include)
+file(GLOB LIBJAYVM_SRC_DIR ${LIB_DIR}/vm)
+file(GLOB LIBJAYVM_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
 # -- TARGETS
 add_library(scan 
     ${LIBJAYVM_SRC_DIR}/scanner.c
-    ${LIBJAYVM_SRC_DIR}/token.c 
-    ${LIBJAYVM_SRC_DIR}/fnv.c
 )
 target_include_directories(scan
     PUBLIC
@@ -32,9 +31,6 @@ target_include_directories(scan
 add_library(parser
     ${LIBJAYVM_SRC_DIR}/parser.c
     ${LIBJAYVM_SRC_DIR}/scanner.c
-    ${LIBJAYVM_SRC_DIR}/token.c 
-    ${LIBJAYVM_SRC_DIR}/fnv.c
-    ${LIBJAYVM_SRC_DIR}/ast.c
 )
 target_include_directories(parser
     PUBLIC
@@ -56,6 +52,5 @@ target_include_directories(parser
 # target_include_directories(jary PRIVATE ${SRC_DIR})
 # target_link_libraries(jary PRIVATE vm)
 
-# CHILD BUILD
-add_subdirectory(test)
+# add_subdirectory(test)
 add_subdirectory(tool)

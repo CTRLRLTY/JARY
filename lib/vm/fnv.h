@@ -4,6 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-uint32_t fnv_hash(const char* str, size_t length);
+uint32_t fnv_hash(const char *str, size_t length);
 
-#endif //JAYVM_FNV_H
+#endif // JAYVM_FNV_H

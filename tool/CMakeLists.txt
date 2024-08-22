@@ -1,21 +1,20 @@
-add_executable( astdump
-    astdump.c
+add_executable( jastdmp
+    jastdmp/main.c
 )
 
-target_link_libraries( astdump
+target_link_libraries( jastdmp
     PRIVATE
         parser
 )
 
 if(UNIX)
-    target_link_libraries( astdump
+    target_link_libraries( jastdmp
         PRIVATE
             m # math
     )
 endif()
 
-target_include_directories( astdump
+target_include_directories( jastdmp
     PRIVATE
-        ${LIBJAYVM_INCLUDE_DIR}
         ${LIBJAYVM_SRC_DIR}
 )

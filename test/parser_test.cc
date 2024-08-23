@@ -49,7 +49,7 @@ TEST(ParserTest, RuleDeclaration) {
         AST_LITERAL,  // 3
     };
 
-    jary_parse(&ast, &m, samplestr, sizeof(samplestr));
+    jry_parse(&ast, &m, samplestr, sizeof(samplestr));
 
     EXPECT_EQ(m.errsz, 0);
 

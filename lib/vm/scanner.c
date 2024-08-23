@@ -6,8 +6,8 @@
 #include <stdbool.h>
 #include <string.h>
 
-size_t ji_scan(const char *src, size_t length, jy_tkn_type_t *type,
-	       size_t *line, size_t *ofs, char **lexeme, size_t *lexsz)
+size_t jry_scan(const char *src, size_t length, jy_tkn_type_t *type,
+		size_t *line, size_t *ofs, char **lexeme, size_t *lexsz)
 {
 #define READ	  ((size_t) (current - src))
 #define ENDED()	  (READ >= length && current[0] == '\0')
@@ -249,7 +249,7 @@ END_UPDATE:
 		*ofs += READ;
 
 	*lexsz	= (size_t) (current - start) + 1;
-	*lexeme = jary_alloc(*lexsz);
+	*lexeme = jry_alloc(*lexsz);
 	memcpy(*lexeme, start, *lexsz);
 	(*lexeme)[*lexsz - 1] = '\0';
 

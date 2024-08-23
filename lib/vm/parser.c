@@ -8,8 +8,6 @@
 #include <stdbool.h>
 #include <string.h>
 
-#define GROW_RATE     10
-
 #define MAX(__a, __b) ((__b > __a) ? __b : __a)
 
 typedef struct parser {
@@ -57,29 +55,12 @@ inline static void adderr(jy_parse_errs_t *errs, size_t line, size_t ofs,
 			  const char *lexeme, size_t lexsz, const char *msg,
 			  size_t msgsz)
 {
-	size_t rate = GROW_RATE;
+	jry_mem_push(errs->lines, errs->size, line);
+	jry_mem_push(errs->ofs, errs->size, ofs);
+	jry_mem_push(errs->lexemes, errs->size, strndup(lexeme, lexsz));
+	jry_mem_push(errs->msgs, errs->size, strndup(msg, msgsz));
 
-	if (errs->size == 0) {
-		errs->lines   = jary_alloc(sizeof(line) * rate);
-		errs->ofs     = jary_alloc(sizeof(ofs) * rate);
-		errs->lexemes = jary_alloc(sizeof(msg) * rate);
-		errs->msgs    = jary_alloc(sizeof(msgsz) * rate);
-	} else if ((errs->size % rate) == 0) {
-		rate	    += errs->size;
-
-		errs->lines  = jary_realloc(errs->lines, sizeof(line) * rate);
-		errs->ofs    = jary_realloc(errs->ofs, sizeof(ofs) * rate);
-		errs->lexemes =
-			jary_realloc(errs->lexemes, sizeof(lexeme) * rate);
-		errs->msgs = jary_realloc(errs->msgs, sizeof(msg) * rate);
-	}
-
-	errs->lines[errs->size]	   = line;
-	errs->ofs[errs->size]	   = ofs;
-	errs->lexemes[errs->size]  = strndup(lexeme, lexsz);
-	errs->msgs[errs->size]	   = strndup(msg, msgsz);
-
-	errs->size		  += 1;
+	errs->size += 1;
 }
 
 inline static void errtkn(jy_parse_errs_t *errs, jy_tkns_t *tkns, size_t tknid,
@@ -98,27 +79,10 @@ inline static void errtkn(jy_parse_errs_t *errs, jy_tkns_t *tkns, size_t tknid,
 inline static size_t addast(jy_asts_t *asts, jy_ast_type_t type, size_t tkn,
 			    size_t *child, size_t childsz)
 {
-	size_t rate = GROW_RATE;
-
-	if (asts->size == 0) {
-		asts->types   = jary_alloc(sizeof(type) * rate);
-		asts->tkns    = jary_alloc(sizeof(tkn) * rate);
-		asts->child   = jary_alloc(sizeof(child) * rate);
-		asts->childsz = jary_alloc(sizeof(childsz) * rate);
-	} else if ((asts->size % rate) == 0) {
-		rate	    += asts->size;
-
-		asts->types  = jary_realloc(asts->types, sizeof(type) * rate);
-		asts->tkns   = jary_realloc(asts->tkns, sizeof(tkn) * rate);
-		asts->child  = jary_realloc(asts->child, sizeof(child) * rate);
-		asts->childsz =
-			jary_realloc(asts->childsz, sizeof(childsz) * rate);
-	}
-
-	asts->types[asts->size]	  = type;
-	asts->tkns[asts->size]	  = tkn;
-	asts->child[asts->size]	  = child;
-	asts->childsz[asts->size] = childsz;
+	jry_mem_push(asts->types, asts->size, type);
+	jry_mem_push(asts->tkns, asts->size, tkn);
+	jry_mem_push(asts->child, asts->size, child);
+	jry_mem_push(asts->childsz, asts->size, childsz);
 
 	return asts->size++;
 }
@@ -130,7 +94,7 @@ inline static void popast(jy_asts_t *asts)
 	size_t	 id    = asts->size - 1;
 	size_t **child = &asts->child[id];
 
-	jary_free(*child);
+	jry_free(*child);
 
 	*child	    = NULL;
 
@@ -146,10 +110,10 @@ inline static size_t addchild(jy_asts_t *asts, size_t astid, size_t childid)
 	size_t	*childsz = &asts->childsz[astid];
 
 	if (*childsz == 0) {
-		*child = jary_alloc(sizeof(**child));
+		*child = jry_alloc(sizeof(**child));
 	} else {
 		size_t degree = *childsz + 1;
-		*child	      = jary_realloc(*child, sizeof(**child) * degree);
+		*child	      = jry_realloc(*child, sizeof(**child) * degree);
 	}
 
 	(*child)[*childsz] = childid;
@@ -160,29 +124,11 @@ inline static size_t addchild(jy_asts_t *asts, size_t astid, size_t childid)
 inline static size_t addtkn(jy_tkns_t *tkns, jy_tkn_type_t type, size_t line,
 			    size_t ofs, char *lexeme, size_t lexsz)
 {
-	size_t rate = GROW_RATE;
-
-	if (tkns->size == 0) {
-		tkns->types   = jary_alloc(sizeof(type) * rate);
-		tkns->lines   = jary_alloc(sizeof(line) * rate);
-		tkns->ofs     = jary_alloc(sizeof(ofs) * rate);
-		tkns->lexemes = jary_alloc(sizeof(lexeme) * rate);
-		tkns->lexsz   = jary_alloc(sizeof(lexsz) * rate);
-	} else if ((tkns->size % rate) == 0) {
-		rate	    += tkns->size;
-		tkns->types  = jary_realloc(tkns->types, sizeof(type) * rate);
-		tkns->lines  = jary_realloc(tkns->lines, sizeof(line) * rate);
-		tkns->ofs    = jary_realloc(tkns->ofs, sizeof(ofs) * rate);
-		tkns->lexemes =
-			jary_realloc(tkns->lexemes, sizeof(lexeme) * rate);
-		tkns->lexsz = jary_realloc(tkns->lexsz, sizeof(lexsz) * rate);
-	}
-
-	tkns->types[tkns->size]	  = type;
-	tkns->lines[tkns->size]	  = line;
-	tkns->ofs[tkns->size]	  = ofs;
-	tkns->lexemes[tkns->size] = lexeme;
-	tkns->lexsz[tkns->size]	  = lexsz;
+	jry_mem_push(tkns->types, tkns->size, type);
+	jry_mem_push(tkns->lines, tkns->size, line);
+	jry_mem_push(tkns->ofs, tkns->size, ofs);
+	jry_mem_push(tkns->lexemes, tkns->size, lexeme);
+	jry_mem_push(tkns->lexsz, tkns->size, lexsz);
 
 	return tkns->size++;
 }
@@ -243,15 +189,15 @@ inline static void advance(jy_tkns_t *tkns, const char **src, size_t *srcsz)
 	jy_tkn_type_t type;
 
 	// getting previous line
-	size_t line   = tkns->lines[tkns->size - 1];
+	size_t line  = tkns->lines[tkns->size - 1];
 	// getting previous ofs
-	size_t ofs    = tkns->ofs[tkns->size - 1];
-	size_t lexsz  = 0;
-	char  *lex    = NULL;
+	size_t ofs   = tkns->ofs[tkns->size - 1];
+	size_t lexsz = 0;
+	char  *lex   = NULL;
 
-	size_t read   = ji_scan(*src, *srcsz, &type, &line, &ofs, &lex, &lexsz);
-	*src	     += read;
-	*srcsz	      = (*srcsz > read) ? *srcsz - read : 0;
+	size_t read  = jry_scan(*src, *srcsz, &type, &line, &ofs, &lex, &lexsz);
+	*src   += read;
+	*srcsz	= (*srcsz > read) ? *srcsz - read : 0;
 
 	addtkn(tkns, type, line, ofs, lex, lexsz);
 }
@@ -830,7 +776,7 @@ static rule_t *rule(jy_tkn_type_t type)
 	return &rules[type];
 }
 
-void jary_parse(const char *src, size_t length, jy_asts_t *asts,
+void jry_parse(const char *src, size_t length, jy_asts_t *asts,
 		jy_tkns_t *tkns, jy_parse_errs_t *errs, size_t *depth)
 {
 	parser_t p = {
@@ -848,42 +794,42 @@ void jary_parse(const char *src, size_t length, jy_asts_t *asts,
 		*depth = p.maxdepth;
 }
 
-void jary_free_parse_errs(jy_parse_errs_t *errs)
+void jry_free_parse_errs(jy_parse_errs_t *errs)
 {
-	jary_free(errs->lines);
-	jary_free(errs->ofs);
-	jary_free(errs->lengths);
+	jry_free(errs->lines);
+	jry_free(errs->ofs);
+	jry_free(errs->lengths);
 
 	for (size_t i = 0; i < errs->size; ++i) {
-		jary_free(errs->lexemes[i]);
-		jary_free(errs->msgs[i]);
+		jry_free(errs->lexemes[i]);
+		jry_free(errs->msgs[i]);
 	}
 
-	jary_free(errs->lexemes);
-	jary_free(errs->msgs);
+	jry_free(errs->lexemes);
+	jry_free(errs->msgs);
 }
 
-void jary_free_asts(jy_asts_t *asts)
+void jry_free_asts(jy_asts_t *asts)
 {
-	jary_free(asts->types);
-	jary_free(asts->tkns);
+	jry_free(asts->types);
+	jry_free(asts->tkns);
 
 	for (size_t i = 0; i < asts->size; ++i)
-		jary_free(asts->child[i]);
+		jry_free(asts->child[i]);
 
-	jary_free(asts->child);
-	jary_free(asts->childsz);
+	jry_free(asts->child);
+	jry_free(asts->childsz);
 }
 
-void jary_free_tkns(jy_tkns_t *tkns)
+void jry_free_tkns(jy_tkns_t *tkns)
 {
-	jary_free(tkns->types);
-	jary_free(tkns->lines);
-	jary_free(tkns->ofs);
+	jry_free(tkns->types);
+	jry_free(tkns->lines);
+	jry_free(tkns->ofs);
 
 	for (size_t i = 0; i < tkns->size; ++i)
-		jary_free(tkns->lexemes[i]);
+		jry_free(tkns->lexemes[i]);
 
-	jary_free(tkns->lexemes);
-	jary_free(tkns->lexsz);
+	jry_free(tkns->lexemes);
+	jry_free(tkns->lexsz);
 }

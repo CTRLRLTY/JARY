@@ -102,7 +102,7 @@ static void printast(jy_asts_t *asts, char **lexemes, size_t length,
 
 	printf("\n");
 
-	jary_free(typestr);
+	jry_free(typestr);
 
 	for (size_t i = 0; i < childsz; ++i)
 		printast(asts, lexemes, length, maxdepth, child[i], depth + 1);
@@ -155,7 +155,7 @@ static size_t read_file(const char *path, char **dst)
 	size_t file_size = ftell(file);
 	rewind(file);
 
-	char  *buffer	  = jary_alloc(file_size + 1);
+	char  *buffer	  = jry_alloc(file_size + 1);
 	size_t bytes_read = fread(buffer, sizeof(char), file_size, file);
 
 	if (bytes_read < file_size) {
@@ -179,8 +179,8 @@ static void run_file(const char *path)
 	jy_tkns_t	tkns   = { .size = 0 };
 	jy_parse_errs_t errs   = { .size = 0 };
 
-	jary_parse(src, length, &asts, &tkns, &errs, &depth);
-	jary_free(src);
+	jry_parse(src, length, &asts, &tkns, &errs, &depth);
+	jry_free(src);
 
 	printf("===================================="
 	       "\n"
@@ -206,9 +206,9 @@ static void run_file(const char *path)
 	dumperrs(&errs, path);
 	printf("\n");
 
-	jary_free_asts(&asts);
-	jary_free_tkns(&tkns);
-	jary_free_parse_errs(&errs);
+	jry_free_asts(&asts);
+	jry_free_tkns(&tkns);
+	jry_free_parse_errs(&errs);
 }
 
 int main(int argc, const char **argv)

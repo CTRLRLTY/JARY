@@ -18,7 +18,7 @@ extern "C" {
 //   size_t ofs = 0;
 //   size_t len = sizeof(samplestr);
 //   char* lexeme = NULL;
-//   size_t read = ji_scan(samplestr, len, &type, &line, &ofs, &lexeme);
+//   size_t read = jry_scan(samplestr, len, &type, &line, &ofs, &lexeme);
 
 //   ASSERT_EQ(read, 0);
 //   ASSERT_EQ(line, 1);
@@ -34,13 +34,13 @@ extern "C" {
 //   size_t ofs = 0;
 //   size_t len = sizeof(samplestr);
 //   char* lexeme = NULL;
-//   size_t read = ji_scan(samplestr, len, &type, &line, &ofs, &lexeme);
+//   size_t read = jry_scan(samplestr, len, &type, &line, &ofs, &lexeme);
 
 //   ASSERT_EQ(read, 5);
 //   ASSERT_EQ(type, TKN_NEWLINE);
 //   ASSERT_EQ(line, 6);
 //   ASSERT_STREQ(lexeme, samplestr);
-//   jary_free(lexeme);
+//   jry_free(lexeme);
 // }
 
 // TEST(ScannerTest, ScanWhitespace) {
@@ -51,7 +51,7 @@ extern "C" {
 //   size_t ofs = 0;
 //   size_t len = sizeof(samplestr);
 
-//   size_t read = ji_scan(samplestr, len, &type, &line, &ofs, &lexeme);
+//   size_t read = jry_scan(samplestr, len, &type, &line, &ofs, &lexeme);
   
 //   ASSERT_EQ(read, 12);
 //   ASSERT_EQ(line, 1);
@@ -80,14 +80,14 @@ extern "C" {
 //     size_t ofs = 0;
 //     char* lexeme = NULL;
 
-//     size_t read = ji_scan(symbols[i].cstr, 2, &type, &line, &ofs, &lexeme);
+//     size_t read = jry_scan(symbols[i].cstr, 2, &type, &line, &ofs, &lexeme);
     
 //     ASSERT_EQ(read, 1);
 //     ASSERT_EQ(line, 1);
 //     ASSERT_EQ(type, symbols[i].type) << "i: " << i;
 //     ASSERT_STREQ(lexeme, symbols[i].cstr);
 
-//     jary_free(lexeme);
+//     jry_free(lexeme);
 //   }
 // }
 
@@ -123,14 +123,14 @@ extern "C" {
 //     size_t ofs = 0;
 //     char* lexeme = NULL;
 
-//     size_t read = ji_scan(keywords[i].cstr, keywords[i].size, &type, &line, &ofs, &lexeme);
+//     size_t read = jry_scan(keywords[i].cstr, keywords[i].size, &type, &line, &ofs, &lexeme);
     
 //     ASSERT_EQ(read, keywords[i].size - 1) << "i: " << i;
 //     ASSERT_EQ(line, 1) << "i: " << i;
 //     ASSERT_EQ(type, keywords[i].type) << "i: " << i;
 //     ASSERT_STREQ(lexeme, keywords[i].cstr) << "i: " << i;
 
-//     jary_free(lexeme);
+//     jry_free(lexeme);
 //   }
 // }
 
@@ -142,14 +142,14 @@ extern "C" {
 //     char str[] = "\"hello world\"";
 //     size_t len = sizeof(str);
 
-//     size_t read = ji_scan(str, len, &type, &line, &ofs, &lexeme);
+//     size_t read = jry_scan(str, len, &type, &line, &ofs, &lexeme);
 
 //     ASSERT_EQ(type, TKN_STRING);
 //     ASSERT_EQ(read, sizeof(str) - 1);
 //     ASSERT_STREQ(lexeme, str);
 //     ASSERT_EQ(line, 1);
 
-//     jary_free(lexeme);
+//     jry_free(lexeme);
 // }
 
 // TEST(ScannerTest, ScanRegexp) {
@@ -161,14 +161,14 @@ extern "C" {
 //   size_t len = sizeof(str);
 //   char* lexeme = NULL;
 
-//   size_t read = ji_scan(str, len, &type, &line, &ofs, &lexeme);
+//   size_t read = jry_scan(str, len, &type, &line, &ofs, &lexeme);
 
 //   ASSERT_EQ(type, TKN_REGEXP);
 //   ASSERT_EQ(read, sizeof(str) - 1);
 //   ASSERT_STREQ(lexeme, str);
 //   ASSERT_EQ(line, 1);
 
-//   jary_free(lexeme);
+//   jry_free(lexeme);
 // }
 
 // TEST(ScannerTest, ScanIdentifier) {
@@ -189,12 +189,12 @@ extern "C" {
       
 //       std::strcpy(str, ident[i].c_str());
       
-//       ji_scan(str, len, &type, &line, &ofs, &lexeme);
+//       jry_scan(str, len, &type, &line, &ofs, &lexeme);
 
 //       ASSERT_STREQ(lexeme, str);
 //       ASSERT_EQ(type, TKN_IDENTIFIER);
 
-//       jary_free(lexeme);
+//       jry_free(lexeme);
 //     }
 //   }
 // }

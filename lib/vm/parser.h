@@ -40,11 +40,11 @@ typedef struct jy_tkns {
 	size_t	       size;
 } jy_tkns_t;
 
-void jary_parse(const char *src, size_t length, jy_asts_t *asts,
-		jy_tkns_t *tkns, jy_parse_errs_t *errs, size_t *depth);
+void jry_parse(const char *src, size_t length, jy_asts_t *asts, jy_tkns_t *tkns,
+	       jy_parse_errs_t *errs, size_t *depth);
 
-void jary_free_parse_errs(jy_parse_errs_t *errs);
-void jary_free_asts(jy_asts_t *asts);
-void jary_free_tkns(jy_tkns_t *tkns);
+void jry_free_parse_errs(jy_parse_errs_t *errs);
+void jry_free_asts(jy_asts_t *asts);
+void jry_free_tkns(jy_tkns_t *tkns);
 
 #endif // JAYVM_PARSER_H

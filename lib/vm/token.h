@@ -1,7 +1,7 @@
 #ifndef JAYVM_TOKEN_H
 #define JAYVM_TOKEN_H
 
-typedef enum jy_tkn_type_t {
+typedef enum jy_tkn_type {
 	TKN_NONE = -1,
 	TKN_ERR,
 	TKN_ERR_STR,
@@ -53,6 +53,7 @@ typedef enum jy_tkn_type_t {
 
 	TKN_IDENTIFIER,
 	TKN_DOLLAR,
+	TKN_ALIAS,
 
 	TKN_CUSTOM,
 	TKN_EOF,

@@ -1,9 +1,10 @@
 
 #include "parser.h"
 
-#include "error.h"
-#include "memory.h"
 #include "scanner.h"
+
+#include "jary/error.h"
+#include "jary/memory.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -31,7 +32,7 @@ typedef enum prec {
 	PREC_FACTOR,	 // * /
 	PREC_UNARY,	 // ! -
 	PREC_CALL,	 // . ()
-	PREC_PRIMARY
+	PREC_ALIAS,
 } prec_t;
 
 typedef bool (*parsefn_t)(parser_t *, jy_asts_t *, jy_tkns_t *,
@@ -66,7 +67,7 @@ inline static void adderr(jy_parse_errs_t *errs, size_t line, size_t ofs,
 inline static void errtkn(jy_parse_errs_t *errs, jy_tkns_t *tkns, size_t tknid,
 			  const char *msg, size_t msgsz)
 {
-	jary_assert(tkns->size > tknid);
+	jry_assert(tkns->size > tknid);
 
 	size_t line = tkns->lines[tknid];
 	size_t ofs  = tkns->ofs[tknid];
@@ -89,7 +90,7 @@ inline static size_t addast(jy_asts_t *asts, jy_ast_type_t type, size_t tkn,
 
 inline static void popast(jy_asts_t *asts)
 {
-	jary_assert(asts->size > 0);
+	jry_assert(asts->size > 0);
 
 	size_t	 id    = asts->size - 1;
 	size_t **child = &asts->child[id];
@@ -103,8 +104,8 @@ inline static void popast(jy_asts_t *asts)
 
 inline static size_t addchild(jy_asts_t *asts, size_t astid, size_t childid)
 {
-	jary_assert(asts->size > astid);
-	jary_assert(asts->size > childid);
+	jry_assert(asts->size > astid);
+	jry_assert(asts->size > childid);
 
 	size_t **child	 = &asts->child[astid];
 	size_t	*childsz = &asts->childsz[astid];
@@ -136,7 +137,7 @@ inline static size_t addtkn(jy_tkns_t *tkns, jy_tkn_type_t type, size_t line,
 // return last non newline or eof tkn
 inline static size_t find_last_tkn(jy_tkns_t *tkns)
 {
-	jary_assert(tkns->size > 0);
+	jry_assert(tkns->size > 0);
 
 	size_t	      tkn = tkns->size - 1;
 	jy_tkn_type_t t	  = tkns->types[tkn];
@@ -313,41 +314,41 @@ PANIC:
 static bool _event(parser_t *p, jy_asts_t *asts, jy_tkns_t *tkns,
 		   jy_parse_errs_t *errs, size_t *__)
 {
-	size_t oldepth	   = p->depth++;
-	size_t evast	   = asts->size - 1;
-	asts->types[evast] = AST_EVENT;
+	size_t evast		 = asts->size - 1;
+	asts->types[evast]	 = AST_EVENT;
 
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
+	size_t		 nametkn = p->tkn;
+	enum jy_tkn_type type	 = tkns->types[nametkn];
 
-	if (tkns->types[p->tkn] != TKN_IDENTIFIER) {
-		char msg[] = "error: expected identifier";
-		errtkn(errs, tkns, p->tkn, msg, sizeof(msg));
+	if (type != TKN_IDENTIFIER) {
+		char   msg[] = "error: expected identifier";
+		size_t tkn   = find_last_tkn(tkns);
+		errtkn(errs, tkns, tkn, msg, sizeof(msg));
 		goto PANIC;
 	}
 
-	size_t nameast = addast(asts, AST_NAME, p->tkn, NULL, 0);
+	// consume identifier
+	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
-	addchild(asts, evast, nameast);
+	asts->tkns[evast] = nametkn;
 
-	p->maxdepth = MAX(p->maxdepth, p->depth);
-	p->depth    = oldepth;
 	return ended(tkns->types, tkns->size);
-
 PANIC:
-	p->depth = oldepth;
 	return true;
 }
 
 static bool _dot(parser_t *p, jy_asts_t *asts, jy_tkns_t *tkns,
 		 jy_parse_errs_t *errs, size_t *__)
 {
-	size_t oldepth	       = p->depth++;
-	size_t memberast       = asts->size - 1;
-	asts->types[memberast] = AST_MEMBER;
+	size_t memberast	 = asts->size - 1;
+	asts->types[memberast]	 = AST_MEMBER;
 
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
+	size_t		 nametkn = p->tkn;
+	enum jy_tkn_type type	 = tkns->types[nametkn];
 
-	if (tkns->types[p->tkn] != TKN_IDENTIFIER) {
+	p->depth++;
+
+	if (type != TKN_IDENTIFIER) {
 		char msg[] = "error: expected identifier";
 		errtkn(errs, tkns, p->tkn, msg, sizeof(msg));
 		goto PANIC;
@@ -356,16 +357,13 @@ static bool _dot(parser_t *p, jy_asts_t *asts, jy_tkns_t *tkns,
 	// consume identifier
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
-	size_t nameast = addast(asts, AST_NAME, p->tkn, NULL, 0);
+	size_t nameast = addast(asts, AST_NAME, nametkn, NULL, 0);
 
 	addchild(asts, memberast, nameast);
 
-	p->maxdepth = MAX(p->maxdepth, p->depth);
-	p->depth    = oldepth;
 	return ended(tkns->types, tkns->size);
 
 PANIC:
-	p->depth = oldepth;
 	return true;
 }
 
@@ -458,7 +456,8 @@ PANIC:
 static bool _precedence(parser_t *p, jy_asts_t *asts, jy_tkns_t *tkns,
 			jy_parse_errs_t *errs, size_t *root, prec_t rbp)
 {
-	size_t oldepth	     = p->depth++;
+	p->depth++;
+
 	size_t nudtkn	     = p->tkn;
 
 	rule_t	 *prefixrule = rule(tkns->types[nudtkn]);
@@ -499,19 +498,26 @@ static bool _precedence(parser_t *p, jy_asts_t *asts, jy_tkns_t *tkns,
 		nextprec = rule(tkns->types[p->tkn])->prec;
 	}
 
-	p->maxdepth = MAX(p->maxdepth, p->depth);
-	p->depth    = oldepth;
 	return ended(tkns->types, tkns->size);
 
 PANIC:
-	p->depth = oldepth;
 	return true;
 }
 
 inline static bool _expression(parser_t *p, jy_asts_t *asts, jy_tkns_t *tkns,
 			       jy_parse_errs_t *errs, size_t *topast)
 {
-	return _precedence(p, asts, tkns, errs, topast, PREC_ASSIGNMENT);
+	size_t oldepth = p->depth;
+
+	if (_precedence(p, asts, tkns, errs, topast, PREC_ASSIGNMENT))
+		goto PANIC;
+
+	p->maxdepth = MAX(p->maxdepth, p->depth);
+	p->depth    = oldepth;
+	return false;
+PANIC:
+	p->depth = oldepth;
+	return true;
 }
 
 static bool _section(parser_t *p, jy_asts_t *asts, jy_tkns_t *tkns,
@@ -765,8 +771,11 @@ static rule_t rules[] = {
 	[TKN_NUMBER]	  = { _literal, NULL, PREC_NONE },
 	[TKN_FALSE]	  = { _literal, NULL, PREC_NONE },
 	[TKN_TRUE]	  = { _literal, NULL, PREC_NONE },
+
 	[TKN_IDENTIFIER]  = { _name, NULL, PREC_NONE },
 	[TKN_DOLLAR]	  = { _event, NULL, PREC_NONE },
+	[TKN_ALIAS]	  = { NULL, _binary, PREC_ALIAS },
+
 	[TKN_CUSTOM]	  = { NULL, NULL, PREC_NONE },
 	[TKN_EOF]	  = { NULL, NULL, PREC_NONE },
 };
@@ -776,8 +785,8 @@ static rule_t *rule(jy_tkn_type_t type)
 	return &rules[type];
 }
 
-void jry_parse(const char *src, size_t length, jy_asts_t *asts,
-		jy_tkns_t *tkns, jy_parse_errs_t *errs, size_t *depth)
+void jry_parse(const char *src, size_t length, jy_asts_t *asts, jy_tkns_t *tkns,
+	       jy_parse_errs_t *errs, size_t *depth)
 {
 	parser_t p = {
 		.src   = src,

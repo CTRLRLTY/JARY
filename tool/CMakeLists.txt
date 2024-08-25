@@ -1,20 +1,14 @@
 add_executable( jassy
-    jassy/jassy.c
+	jassy/jassy.c
 )
 
 target_link_libraries( jassy
-    PRIVATE
-        parser
+	PRIVATE
+		parser
 )
 
-if(UNIX)
-    target_link_libraries( jassy
-        PRIVATE
-            m # math
-    )
-endif()
-
 target_include_directories( jassy
-    PRIVATE
-        ${LIBJAYVM_SRC_DIR}
+	PRIVATE
+        	${LIBJAYVM_SRC_DIR}
+        	${LIBJAYVM_INCLUDE_DIR}
 )

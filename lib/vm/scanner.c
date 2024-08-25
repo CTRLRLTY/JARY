@@ -1,6 +1,6 @@
 #include "scanner.h"
 
-#include "memory.h"
+#include "jary/memory.h"
 
 #include <ctype.h>
 #include <stdbool.h>

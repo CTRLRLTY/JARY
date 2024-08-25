@@ -1,9 +1,8 @@
-
-#include "error.h"
-#include "memory.h"
 #include "parser.h"
 
-#include <math.h>
+#include "jary/error.h"
+#include "jary/memory.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,11 +53,8 @@ static char *ast2string(jy_ast_type_t type)
 }
 
 static void printast(jy_asts_t *asts, char **lexemes, size_t length,
-		     size_t maxdepth, size_t id, size_t depth)
+		     size_t midpoint, size_t numsz, size_t id, size_t depth)
 {
-	size_t midpoint = 2 * maxdepth + 15;
-	int    idofs	= (asts->size) ? (int) log10((double) asts->size) : 0;
-
 	jy_ast_type_t type    = asts->types[id];
 	size_t	     *child   = asts->child[id];
 	size_t	      childsz = asts->childsz[id];
@@ -88,14 +84,15 @@ static void printast(jy_asts_t *asts, char **lexemes, size_t length,
 		printed	   += printf("%s |", dots);
 	}
 
-	printed	      += printf(" [%ld] ", id);
-	size_t vidofs  = id / 10;
-	diff	       = idofs - vidofs;
+	printf(" [");
+	printed = printf("%ld", id);
+	printf("] ");
+	diff = numsz - printed;
 
 	if (diff > 0)
-		printed += printf("%*c", diff, ' ');
+		printf("%*c", diff, ' ');
 
-	printed += printf("| ");
+	printf("| ");
 
 	if (tkn < length)
 		printf("%s", lexemes[tkn]);
@@ -105,24 +102,26 @@ static void printast(jy_asts_t *asts, char **lexemes, size_t length,
 	jry_free(typestr);
 
 	for (size_t i = 0; i < childsz; ++i)
-		printast(asts, lexemes, length, maxdepth, child[i], depth + 1);
+		printast(asts, lexemes, length, midpoint, numsz, child[i],
+			 depth + 1);
 }
 
 static void dumpast(jy_asts_t *asts, char **lexemes, size_t length,
 		    size_t maxdepth)
 {
 	size_t midpoint = 2 * maxdepth + 15;
-	int    idofs	= asts->size / 10;
 	int    col1sz	= midpoint - 4;
+
+	int idsz	= snprintf(NULL, 0, "%ld", asts->size);
 
 	printf("Tree ");
 	printf("%*c ", col1sz, ' ');
 	printf(" ID ");
-	printf("%*c", 3 + idofs, ' ');
+	printf(" %*c", idsz + 1, ' ');
 	printf("Token\n");
 
 	if (asts->size)
-		printast(asts, lexemes, length, maxdepth, 0, 0);
+		printast(asts, lexemes, length, midpoint, idsz, 0, 0);
 }
 
 inline static void dumperrs(jy_parse_errs_t *errs, const char *path)

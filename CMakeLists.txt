@@ -14,7 +14,7 @@ endif()
 # -- DEFINITIONS
 set(LIB_DIR ${CMAKE_SOURCE_DIR}/lib)
 
-file(GLOB LIBJAYVM_SRC_DIR ${LIB_DIR}/vm)
+file(GLOB LIBJAYVM_SRC_DIR ${LIB_DIR}/jay)
 file(GLOB LIBJAYVM_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
 # -- TARGETS
@@ -30,6 +30,9 @@ add_library( parser
 add_library( compiler
 	${LIBJAYVM_SRC_DIR}/compiler.c
 	${LIBJAYVM_SRC_DIR}/parser.c
+    	${LIBJAYVM_SRC_DIR}/scanner.c
+	${LIBJAYVM_SRC_DIR}/value.c
+	${LIBJAYVM_SRC_DIR}/fnv.c
 )
 
 target_include_directories( scan

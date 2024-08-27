@@ -1,17 +1,22 @@
 #ifndef JAYVM_VALUE_H
 #define JAYVM_VALUE_H
 
+#include "jary/fnv.h"
+
 #include <stdint.h>
 
 typedef uint64_t jy_val_t;
 
-#define SIGN_BIT ((uint64_t)0x8000000000000000)
-#define QNAN ((uint64_t)0x7ffc000000000000)
-#define TAG_NIL 1 // 01.
-#define TAG_FALSE 2 // 10.
-#define TAG_TRUE 3 // 11.
+struct jy_obj_str {
+	char	 *str;
+	size_t	  size;
+	strhash_t hash;
+};
 
-#define VAL_FALSE ((jy_val_t)(uint64_t)(QNAN | TAG_FALSE))
-#define VAL_TRUE ((jy_val_t)(uint64_t)(QNAN | TAG_TRUE))
+jy_val_t jry_str_val(const char *str, size_t length);
+jy_val_t jry_long_val(int64_t num);
+
+struct jy_obj_str *jry_val_str(jy_val_t val);
+int64_t		   jry_val_long(jy_val_t val);
 
 #endif // JAYVM_VALUE_H

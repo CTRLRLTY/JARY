@@ -1,7 +1,7 @@
 #ifndef JAYVM_TOKEN_H
 #define JAYVM_TOKEN_H
 
-typedef enum jy_tkn_type {
+enum jy_tkn {
 	TKN_NONE = -1,
 	TKN_ERR,
 	TKN_ERR_STR,
@@ -15,31 +15,33 @@ typedef enum jy_tkn_type {
 	TKN_COLON,
 	TKN_NEWLINE,
 
+	TKN_RULE,
+	TKN_IMPORT,
+	TKN_INCLUDE,
+	TKN_INGRESS,
+
 	TKN_TARGET,
 	TKN_INPUT,
 	TKN_MATCH,
 	TKN_CONDITION,
 	TKN_FIELDS,
 
-	TKN_RULE,
-	TKN_IMPORT,
-	TKN_INCLUDE,
-	TKN_INGRESS,
-
 	// < OPERATOR SYMBOL
+
+	TKN_TILDE,
+
 	TKN_PLUS,
 	TKN_MINUS,
 	TKN_STAR,
 	TKN_SLASH,
 
-	TKN_NOT,
 	TKN_EQUAL,
-	TKN_TILDE,
 	TKN_LESSTHAN,
 	TKN_GREATERTHAN,
-	TKN_ANY,
 	TKN_AND,
 	TKN_OR,
+	TKN_NOT,
+	TKN_ANY,
 	TKN_ALL,
 	// > OPERATOR SYMBOL
 
@@ -57,6 +59,6 @@ typedef enum jy_tkn_type {
 
 	TKN_CUSTOM,
 	TKN_EOF,
-} jy_tkn_type_t;
+};
 
 #endif // JAYVM_TOKEN_H

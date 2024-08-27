@@ -13,7 +13,7 @@ extern "C" {
 // TEST(ScannerTest, ScanEOF) {
 //   char samplestr[] = "\0\0";
 
-//   jy_tkn_type_t type;
+//   enum jy_tkn type;
 //   size_t line = 1;
 //   size_t ofs = 0;
 //   size_t len = sizeof(samplestr);
@@ -29,7 +29,7 @@ extern "C" {
 // TEST(ScannerTest, ScanNewline) {
 //   char samplestr[] = "\n\n\n\n\n";
 
-//   jy_tkn_type_t type;
+//   enum jy_tkn type;
 //   size_t line = 1;
 //   size_t ofs = 0;
 //   size_t len = sizeof(samplestr);
@@ -44,7 +44,7 @@ extern "C" {
 // }
 
 // TEST(ScannerTest, ScanWhitespace) {
-//   jy_tkn_type_t type;
+//   enum jy_tkn type;
 //   size_t line = 1;
 //   char* lexeme = NULL;
 //   char samplestr[] = "    \t\t\r\t  \r";
@@ -61,7 +61,7 @@ extern "C" {
 // TEST(ScannerTest, ScanSymbol) {
 //   struct {
 //     char* cstr;
-//     jy_tkn_type_t type;
+//     enum jy_tkn type;
 //   } symbols[] = {
 //     {"(", TKN_LEFT_PAREN}, {")", TKN_RIGHT_PAREN},
 //     {"{", TKN_LEFT_BRACE}, {"}", TKN_RIGHT_BRACE},
@@ -75,7 +75,7 @@ extern "C" {
 //   size_t symsz = sizeof(symbols)/sizeof(symbols[0]);
 
 //   for (size_t i = 0; i < symsz; ++i) {
-//     jy_tkn_type_t type;
+//     enum jy_tkn type;
 //     size_t line = 1;
 //     size_t ofs = 0;
 //     char* lexeme = NULL;
@@ -95,7 +95,7 @@ extern "C" {
 //   struct {
 //     char* cstr;
 //     size_t size;
-//     jy_tkn_type_t type;
+//     enum jy_tkn type;
 //   } keywords[] = {
 //     {"all", 4, TKN_ALL},
 //     {"and", 4, TKN_AND},
@@ -118,7 +118,7 @@ extern "C" {
 //   size_t kwsz = sizeof(keywords)/sizeof(keywords[0]);
 
 //   for (size_t i = 0; i < kwsz; ++i) { // Check every keyword
-//     jy_tkn_type_t type;
+//     enum jy_tkn type;
 //     size_t line = 1;
 //     size_t ofs = 0;
 //     char* lexeme = NULL;
@@ -135,7 +135,7 @@ extern "C" {
 // }
 
 // TEST(ScannerTest, ScanString) {
-//     jy_tkn_type_t type;
+//     enum jy_tkn type;
 //     size_t line = 1;
 //     size_t ofs = 0;
 //     char* lexeme = NULL;
@@ -155,7 +155,7 @@ extern "C" {
 // TEST(ScannerTest, ScanRegexp) {
 //   char str[] = "/Hello world\\//";
 
-//   jy_tkn_type_t type;
+//   enum jy_tkn type;
 //   size_t line = 1;
 //   size_t ofs = 0;
 //   size_t len = sizeof(str);
@@ -181,7 +181,7 @@ extern "C" {
 
 //     for (size_t i = 0; i < ident.size(); ++i) {
 //       char str[ident[i].size() + 1] = "\0";
-//       jy_tkn_type_t type;
+//       enum jy_tkn type;
 //       size_t line = 0;
 //       size_t ofs = 0;
 //       char* lexeme = NULL;

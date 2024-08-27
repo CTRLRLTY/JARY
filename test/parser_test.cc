@@ -6,9 +6,9 @@ extern "C" {
 
 #include <vector>
 
-static void treematch(ASTNode* ast, std::vector<jy_ast_type_t>* types,
+static void treematch(ASTNode* ast, std::vector<enum jy_ast>* types,
                       size_t index) {
-  jy_ast_type_t type = (*types)[index];
+  enum jy_ast type = (*types)[index];
 
   ASSERT_EQ(ast->type, type) << "index: " << index;
 
@@ -32,7 +32,7 @@ TEST(ParserTest, RuleDeclaration) {
         "\n"
         "}";
 
-    std::vector<jy_ast_type_t> expected = {
+    std::vector<enum jy_ast> expected = {
         AST_ROOT,
         AST_DECL,     // rule
         AST_NAME,     // something

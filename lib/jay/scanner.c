@@ -6,8 +6,8 @@
 #include <stdbool.h>
 #include <string.h>
 
-size_t jry_scan(const char *src, size_t length, jy_tkn_type_t *type,
-		size_t *line, size_t *ofs, char **lexeme, size_t *lexsz)
+size_t jry_scan(const char *src, size_t length, enum jy_tkn *type, size_t *line,
+		size_t *ofs, char **lexeme, size_t *lexsz)
 {
 #define READ	  ((size_t) (current - src))
 #define ENDED()	  (READ >= length && current[0] == '\0')
@@ -162,7 +162,9 @@ SCAN:
 
 	switch (start[0]) {
 	case 'a':
-		if (STREQ(start + 1, "ll", 2))
+		if (start[1] == 's')
+			*type = TKN_ALIAS;
+		else if (STREQ(start + 1, "ll", 2))
 			*type = TKN_ALL;
 		else if (STREQ(start + 1, "nd", 2))
 			*type = TKN_AND;

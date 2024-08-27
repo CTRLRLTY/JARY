@@ -4,7 +4,7 @@ add_executable( jassy
 
 target_link_libraries( jassy
 	PRIVATE
-		parser
+		compiler
 )
 
 target_include_directories( jassy

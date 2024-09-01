@@ -30,16 +30,20 @@ enum jy_ktype {
 	JY_K_RULE,
 	JY_K_INGRESS,
 
+	JY_K_FUNC,
+	JY_K_TARGET,
+
 	JY_K_LONG,
 	JY_K_STR,
 	JY_K_BOOL,
 };
 
 struct jy_funcdef {
-	enum jy_ktype type;
-
-	size_t	       paramsz;
-	enum jy_ktype *ptypes;
+	enum jy_ktype  type;
+	enum jy_ktype  return_type;
+	enum jy_ktype *param_types;
+	size_t	       param_sz;
+	void	      *func;
 };
 
 struct jy_names {
@@ -66,10 +70,14 @@ struct jy_chunks {
 };
 
 struct jy_scan_ctx {
-	struct jy_kpool	 pool;
-	struct jy_names	 names;
-	struct jy_chunks cnk;
+	struct jy_kpool	 *pool;
+	struct jy_names	 *names;
+	struct jy_chunks *cnk;
 };
+
+void jry_define_func(struct jy_names *names, const char *name, size_t length,
+		     enum jy_ktype returntype, enum jy_ktype *paramtypes,
+		     size_t paramsz, void *cfunc);
 
 void jry_compile(struct jy_asts *asts, struct jy_tkns *tkns,
 		 struct jy_scan_ctx *ctx, struct jy_cerrs *errs);

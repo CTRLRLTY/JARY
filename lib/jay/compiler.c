@@ -12,16 +12,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct kstack {
-	// constant pool id list
-	size_t *kpid;
-	size_t	size;
+struct kexpr {
+	size_t	      id;
+	enum jy_ktype type;
+	/* data */
 };
 
 // expression compile subroutine signature
 typedef bool (*cmplfn_t)(struct jy_asts *, struct jy_tkns *,
-			 struct jy_scan_ctx *, struct jy_cerrs *,
-			 struct kstack *, size_t);
+			 struct jy_scan_ctx *, struct jy_cerrs *, size_t,
+			 struct kexpr *);
 
 inline static cmplfn_t rule(enum jy_ast type);
 
@@ -35,19 +35,18 @@ static bool isnum(enum jy_ktype type)
 	return false;
 }
 
-inline static void addname(struct jy_names *name, char **str, size_t length,
-			   enum jy_ktype **type)
+inline static void addname(struct jy_names *names, const char *str,
+			   size_t length, enum jy_ktype **type)
 {
-	strhash_t hash = jry_strhash(*str, length);
+	strhash_t hash = jry_strhash(str, length);
+	char	 *name = strndup(str, length);
 
-	jry_mem_push(name->hashs, name->size, hash);
-	jry_mem_push(name->strs, name->size, *str);
-	jry_mem_push(name->strsz, name->size, length);
-	jry_mem_push(name->types, name->size, *type);
+	jry_mem_push(names->hashs, names->size, hash);
+	jry_mem_push(names->strs, names->size, name);
+	jry_mem_push(names->strsz, names->size, length);
+	jry_mem_push(names->types, names->size, *type);
 
-	*str	    = NULL;
-
-	name->size += 1;
+	names->size += 1;
 }
 
 inline static void addbyte(struct jy_chunks *cnk, uint8_t code)
@@ -163,17 +162,17 @@ static size_t addk(struct jy_kpool *pool, jy_val_t val, enum jy_ktype type)
 
 inline static bool cmplexpr(struct jy_asts *asts, struct jy_tkns *tkns,
 			    struct jy_scan_ctx *ctx, struct jy_cerrs *errs,
-			    struct kstack *stack, size_t id)
+			    size_t id, struct kexpr *expr)
 {
 	enum jy_ast type = asts->types[id];
 	cmplfn_t    fn	 = rule(type);
 
-	return fn(asts, tkns, ctx, errs, stack, id);
+	return fn(asts, tkns, ctx, errs, id, expr);
 }
 
 static bool cmplliteral(struct jy_asts *asts, struct jy_tkns *tkns,
 			struct jy_scan_ctx *ctx, struct jy_cerrs *errs,
-			struct kstack *stack, size_t id)
+			size_t id, struct kexpr *expr)
 {
 	enum jy_ast type    = asts->types[id];
 
@@ -204,15 +203,10 @@ static bool cmplliteral(struct jy_asts *asts, struct jy_tkns *tkns,
 		goto PANIC;
 	}
 
-	size_t k_id;
+	if (!findk(ctx->pool, val, vtype, &expr->id))
+		expr->id = addk(ctx->pool, val, vtype);
 
-	if (!findk(&ctx->pool, val, vtype, &k_id))
-		k_id = addk(&ctx->pool, val, vtype);
-
-	jry_mem_push(stack->kpid, stack->size, k_id);
-	stack->size += 1;
-
-	addpush(&ctx->cnk, k_id);
+	addpush(ctx->cnk, expr->id);
 
 	return false;
 
@@ -220,9 +214,50 @@ PANIC:
 	return true;
 }
 
+static bool cmplcall(struct jy_asts *asts, struct jy_tkns *tkns,
+		     struct jy_scan_ctx *ctx, struct jy_cerrs *errs, size_t id,
+		     struct kexpr *expr)
+{
+	size_t *child	= asts->child[id];
+	size_t	childsz = asts->childsz[id];
+
+	size_t tkn	= asts->tkns[id];
+	char  *lexeme	= tkns->lexemes[tkn];
+	size_t lexsz	= tkns->lexsz[tkn];
+
+	size_t fnid;
+
+	if (!namexist(ctx->names, lexeme, lexsz, &fnid))
+		goto PANIC;
+
+	enum jy_ktype	  *type = ctx->names->types[fnid];
+	struct jy_funcdef *def	= (struct jy_funcdef *) type;
+
+	if (def->param_sz != childsz)
+		goto PANIC;
+
+	for (size_t i = 0; i < childsz; ++i) {
+		size_t chid	   = child[i];
+
+		struct kexpr pexpr = { 0 };
+
+		if (cmplexpr(asts, tkns, ctx, errs, chid, &pexpr))
+			goto PANIC;
+
+		enum jy_ktype expect = def->param_types[i];
+
+		if (pexpr.type != expect)
+			goto PANIC;
+	}
+
+	return false;
+PANIC:
+	return true;
+}
+
 static bool cmplbinary(struct jy_asts *asts, struct jy_tkns *tkns,
 		       struct jy_scan_ctx *ctx, struct jy_cerrs *errs,
-		       struct kstack *stack, size_t id)
+		       size_t id, struct kexpr *expr)
 {
 	size_t *child	= asts->child[id];
 	size_t	childsz = asts->childsz[id];
@@ -232,17 +267,12 @@ static bool cmplbinary(struct jy_asts *asts, struct jy_tkns *tkns,
 	enum jy_ktype ktypes[2] = { -1, -1 };
 
 	for (size_t i = 0; i < 2; ++i) {
-		if (cmplexpr(asts, tkns, ctx, errs, stack, child[i]))
+		struct kexpr pexpr = { 0 };
+
+		if (cmplexpr(asts, tkns, ctx, errs, child[i], &pexpr))
 			goto PANIC;
 
-		jry_assert(stack->size > 0);
-
-		size_t kpid = 0;
-
-		jry_mem_pop(stack->kpid, stack->size, &kpid);
-		stack->size -= 1;
-
-		ktypes[i]    = ctx->pool.types[kpid];
+		ktypes[i] = pexpr.type;
 
 		if (ktypes[i] == JY_K_UNKNOWN)
 			goto PANIC;
@@ -256,18 +286,21 @@ static bool cmplbinary(struct jy_asts *asts, struct jy_tkns *tkns,
 
 	switch (optype) {
 	case AST_EQUALITY:
-		code = JY_OP_CMP;
+		code	   = JY_OP_CMP;
+		expr->type = JY_K_BOOL;
 		break;
 
 	case AST_LESSER:
 		if (!isnum(ktypes[0]))
 			goto PANIC;
-		code = JY_OP_LT;
+		code	   = JY_OP_LT;
+		expr->type = JY_K_BOOL;
 		break;
 	case AST_GREATER:
 		if (!isnum(ktypes[0]))
 			goto PANIC;
-		code = JY_OP_GT;
+		code	   = JY_OP_GT;
+		expr->type = JY_K_BOOL;
 		break;
 
 	case AST_ADDITION:
@@ -287,7 +320,7 @@ static bool cmplbinary(struct jy_asts *asts, struct jy_tkns *tkns,
 		goto PANIC;
 	}
 
-	addbyte(&ctx->cnk, code);
+	addbyte(ctx->cnk, code);
 
 	return false;
 PANIC:
@@ -305,7 +338,7 @@ static cmplfn_t rules[] = {
 	// < declarations
 
 	// > sections
-	[AST_TARGET]	= NULL,
+	[AST_JUMP]	= NULL,
 	[AST_INPUT]	= NULL,
 	[AST_MATCH]	= NULL,
 	[AST_CONDITION] = NULL,
@@ -316,7 +349,7 @@ static cmplfn_t rules[] = {
 	[AST_ALIAS]	= NULL,
 	[AST_EVENT]	= NULL,
 	[AST_MEMBER]	= NULL,
-	[AST_CALL]	= NULL,
+	[AST_CALL]	= cmplcall,
 
 	[AST_REGMATCH]	= NULL,
 	[AST_EQUALITY]	= cmplbinary,
@@ -352,28 +385,22 @@ static bool cmplmatch(struct jy_asts *asts, struct jy_tkns *tkns,
 {
 	size_t *child	= asts->child[id];
 	size_t	childsz = asts->childsz[id];
-	bool	panic	= false;
 
 	for (size_t i = 0; i < childsz; ++i) {
-		size_t	      chid = child[i];
-		struct kstack stck = { NULL };
-
-		panic = cmplexpr(asts, tkns, ctx, errs, &stck, chid);
+		size_t	     chid = child[i];
+		struct kexpr expr = { 0 };
 
 		// Todo: handle panic
-		if (panic) {
-		}
+		if (cmplexpr(asts, tkns, ctx, errs, chid, &expr))
+			goto PANIC;
 
-		enum jy_opcode lastcode = ctx->cnk.codes[ctx->cnk.size - 1];
-
-		// Todo: handle panic
-		if (lastcode != JY_OP_CMP) {
-		}
-
-		jry_free(stck.kpid);
+		if (expr.type != JY_K_BOOL)
+			goto PANIC;
 	}
 
-	return panic;
+	return false;
+PANIC:
+	return true;
 }
 
 static bool cmplrule(struct jy_asts *asts, struct jy_tkns *tkns,
@@ -424,7 +451,6 @@ static bool cmplroot(struct jy_asts *asts, struct jy_tkns *tkns,
 	size_t chrules[childsz];
 	size_t chrules_sz = 0;
 
-	// fill decl name definitions
 	for (size_t i = 0; i < childsz; ++i) {
 		size_t chid	   = child[i];
 
@@ -463,6 +489,21 @@ PANIC:
 	return true;
 }
 
+void jry_define_func(struct jy_names *names, const char *name, size_t length,
+		     enum jy_ktype returntype, enum jy_ktype *paramtypes,
+		     size_t paramsz, void *cfunc)
+{
+	struct jy_funcdef *func = jry_alloc(sizeof(*func));
+
+	func->type		= JY_K_FUNC;
+	func->return_type	= returntype;
+	func->param_types	= paramtypes;
+	func->param_sz		= paramsz;
+	func->func		= cfunc;
+
+	addname(names, name, length, (enum jy_ktype **) &func->type);
+}
+
 void jry_compile(struct jy_asts *asts, struct jy_tkns *tkns,
 		 struct jy_scan_ctx *ctx, struct jy_cerrs *errs)
 {
@@ -476,17 +517,19 @@ void jry_compile(struct jy_asts *asts, struct jy_tkns *tkns,
 
 void jry_free_scan_ctx(struct jy_scan_ctx *ctx)
 {
-	jry_free(ctx->pool.vals);
-	jry_free(ctx->pool.types);
+	jry_free(ctx->pool->vals);
+	jry_free(ctx->pool->types);
 
-	jry_free(ctx->names.hashs);
+	jry_free(ctx->names->hashs);
 
-	for (size_t i = 0; i < ctx->names.size; ++i)
-		jry_free(ctx->names.strs[i]);
+	for (size_t i = 0; i < ctx->names->size; ++i) {
+		jry_free(ctx->names->strs[i]);
+		jry_free(ctx->names->types[i]);
+	}
 
-	jry_free(ctx->names.strs);
-	jry_free(ctx->names.strsz);
-	jry_free(ctx->names.types);
+	jry_free(ctx->names->strs);
+	jry_free(ctx->names->strsz);
+	jry_free(ctx->names->types);
 
-	jry_free(ctx->cnk.codes);
+	jry_free(ctx->cnk->codes);
 }

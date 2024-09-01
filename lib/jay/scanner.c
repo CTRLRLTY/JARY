@@ -214,7 +214,7 @@ SCAN:
 		if (STREQ(start + 1, "rue", 3))
 			*type = TKN_TRUE;
 		else if (STREQ(start + 1, "arget", 5))
-			*type = TKN_TARGET;
+			*type = TKN_JUMP;
 		else
 			*type = TKN_IDENTIFIER;
 

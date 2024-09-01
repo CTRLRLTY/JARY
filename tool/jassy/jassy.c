@@ -28,7 +28,7 @@ static char *ast2string(enum jy_ast type)
 		buf = strdup("include");
 		break;
 
-	case AST_TARGET:
+	case AST_JUMP:
 		buf = strdup("target");
 		break;
 	case AST_INPUT:
@@ -330,20 +330,26 @@ static void run_file(const char *path)
 
 	printf("\n");
 
-	struct jy_scan_ctx ctx = { NULL };
+	struct jy_kpool	 kpool = { NULL };
+	struct jy_names	 names = { NULL };
+	struct jy_chunks cnk   = { NULL };
+
+	struct jy_scan_ctx ctx = { .pool  = &kpool,
+				   .names = &names,
+				   .cnk	  = &cnk };
 
 	jry_compile(&asts, &tkns, &ctx, NULL);
 
 	printf("___CONSTANT POOL___\n\n");
-	if (ctx.pool.size) {
-		dumpkpool(&ctx.pool);
+	if (ctx.pool->size) {
+		dumpkpool(ctx.pool);
 		printf("\n");
 	}
 
 	printf("___BYTE CODE_______\n\n");
 
-	if (ctx.cnk.size) {
-		dumpcnks(&ctx.cnk);
+	if (ctx.cnk->size) {
+		dumpcnks(ctx.cnk);
 		printf("\n");
 	}
 

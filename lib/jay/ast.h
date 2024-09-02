@@ -18,7 +18,6 @@ enum jy_ast {
 
 	AST_ALIAS,
 	AST_EVENT,
-	AST_MEMBER,
 	AST_CALL,
 
 	AST_REGMATCH,

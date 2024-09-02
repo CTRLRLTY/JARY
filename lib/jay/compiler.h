@@ -1,10 +1,10 @@
 #ifndef JAYVM_COMPILER_H
 #define JAYVM_COMPILER_H
 
+#include "dload.h"
 #include "parser.h"
 
-#include "jary/fnv.h"
-#include "jary/value.h"
+#include <stdint.h>
 
 enum jy_opcode {
 	JY_OP_PUSH8,
@@ -14,6 +14,7 @@ enum jy_opcode {
 
 	JY_OP_JE,
 	JY_OP_JNE,
+	JY_OP_CALL,
 
 	JY_OP_CMP,
 	JY_OP_LT,
@@ -25,35 +26,6 @@ enum jy_opcode {
 	JY_OP_DIV,
 };
 
-enum jy_ktype {
-	JY_K_UNKNOWN = -1,
-	JY_K_RULE,
-	JY_K_INGRESS,
-
-	JY_K_FUNC,
-	JY_K_TARGET,
-
-	JY_K_LONG,
-	JY_K_STR,
-	JY_K_BOOL,
-};
-
-struct jy_funcdef {
-	enum jy_ktype  type;
-	enum jy_ktype  return_type;
-	enum jy_ktype *param_types;
-	size_t	       param_sz;
-	void	      *func;
-};
-
-struct jy_names {
-	strhash_t      *hashs;
-	char	      **strs;
-	size_t	       *strsz;
-	enum jy_ktype **types;
-	size_t		size;
-};
-
 struct jy_cerrs {
 	size_t size;
 };
@@ -61,7 +33,15 @@ struct jy_cerrs {
 struct jy_kpool {
 	jy_val_t      *vals;
 	enum jy_ktype *types;
+	void	      *obj;
+	size_t	       objsz;
 	size_t	       size;
+};
+
+struct jy_modules {
+	const char	      *dir;
+	struct jy_module_ctx **list;
+	size_t		       size;
 };
 
 struct jy_chunks {
@@ -70,14 +50,11 @@ struct jy_chunks {
 };
 
 struct jy_scan_ctx {
-	struct jy_kpool	 *pool;
-	struct jy_names	 *names;
-	struct jy_chunks *cnk;
+	struct jy_modules *modules;
+	struct jy_kpool	  *pool;
+	struct jy_defs	  *names;
+	struct jy_chunks  *cnk;
 };
-
-void jry_define_func(struct jy_names *names, const char *name, size_t length,
-		     enum jy_ktype returntype, enum jy_ktype *paramtypes,
-		     size_t paramsz, void *cfunc);
 
 void jry_compile(struct jy_asts *asts, struct jy_tkns *tkns,
 		 struct jy_scan_ctx *ctx, struct jy_cerrs *errs);

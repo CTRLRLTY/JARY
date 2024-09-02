@@ -17,35 +17,36 @@ enable_testing()
 include(GoogleTest)
 
 add_executable( scanner_test
-    scanner_test.cc
+    	scanner_test.cc
+	${LIBJAYVM_SRC_DIR}/scanner.c
+)
+
+add_executable( parser_test
+	parser_test.cc
+    	${LIBJAYVM_SRC_DIR}/parser.c
+    	${LIBJAYVM_SRC_DIR}/scanner.c
+)
+
+target_include_directories( parser_test
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${LIBJAYVM_SRC_DIR}
+)
+
+target_include_directories( scanner_test
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${LIBJAYVM_SRC_DIR}
 )
 
 target_link_libraries( scanner_test
     PRIVATE
         GTest::gtest_main
-        scan
-)
-
-target_include_directories( scanner_test
-    PRIVATE
-        ${LIBJAYVM_INCLUDE_DIR}
-        ${LIBJAYVM_SRC_DIR}
-)
-
-add_executable( parser_test
-    parser_test.cc
-)
-
-target_include_directories( parser_test
-    PRIVATE
-        ${LIBJAYVM_INCLUDE_DIR}
-        ${LIBJAYVM_SRC_DIR}
 )
 
 target_link_libraries( parser_test
     PRIVATE
         GTest::gtest_main
-        parser
 )
 
 gtest_discover_tests(scanner_test)

@@ -2,6 +2,7 @@
 
 #include "jary/error.h"
 #include "jary/memory.h"
+#include "jary/object.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,9 +45,6 @@ static char *ast2string(enum jy_ast type)
 		buf = strdup("fields");
 		break;
 
-	case AST_MEMBER:
-		buf = strdup("member");
-		break;
 	case AST_ALIAS:
 		buf = strdup("alias");
 		break;
@@ -126,7 +124,6 @@ static void printast(struct jy_asts *asts, char **lexemes, size_t length,
 	size_t	    tkn	    = asts->tkns[id];
 
 	char  *typestr	    = ast2string(type);
-	size_t typestrsz    = strlen(typestr);
 	size_t printed	    = 0;
 
 	if (type != AST_ROOT) {
@@ -203,7 +200,7 @@ static void dumpast(struct jy_asts *asts, char **lexemes, size_t length,
 		printast(asts, lexemes, length, midpoint, idsz, 0, 0);
 }
 
-inline static void dumperrs(struct jy_prserrs *errs, const char *path)
+static inline void dumperrs(struct jy_prserrs *errs, const char *path)
 {
 	for (size_t i = 0; i < errs->size; ++i) {
 		size_t line   = errs->lines[i];
@@ -220,17 +217,21 @@ inline static void dumperrs(struct jy_prserrs *errs, const char *path)
 	}
 }
 
-static void dumpkpool(struct jy_kpool *kpool)
+static void dumpkpool(struct jy_kpool *pool)
 {
-	for (size_t i = 0; i < kpool->size; ++i) {
-		jy_val_t      val  = kpool->vals[i];
-		enum jy_ktype type = kpool->types[i];
+	for (size_t i = 0; i < pool->size; ++i) {
+		jy_val_t      val  = pool->vals[i];
+		enum jy_ktype type = pool->types[i];
 
 		printf("[%ld] ", i);
 
 		switch (type) {
 		case JY_K_LONG:
-			printf("LONG %ld", jry_val_long(val));
+			printf("LONG %ld", jry_v2long(val));
+			break;
+
+		case JY_K_STR:
+			printf("STRING %s", jry_v2str(val)->str);
 			break;
 
 		default:
@@ -289,11 +290,10 @@ static size_t read_file(const char *path, char **dst)
 	return file_size + 1;
 }
 
-static void run_file(const char *path)
+static void run_file(const char *path, const char *dirpath)
 {
 	char		 *src	 = NULL;
 	size_t		  length = read_file(path, &src);
-	size_t		  depth	 = 0;
 	struct jy_asts	  asts	 = { .size = 0 };
 	struct jy_tkns	  tkns	 = { .size = 0 };
 	struct jy_prserrs errs	 = { .size = 0 };
@@ -330,15 +330,28 @@ static void run_file(const char *path)
 
 	printf("\n");
 
-	struct jy_kpool	 kpool = { NULL };
-	struct jy_names	 names = { NULL };
-	struct jy_chunks cnk   = { NULL };
+	struct jy_modules modules = { NULL };
+	struct jy_kpool	  kpool	  = { NULL };
+	struct jy_defs	  names	  = { NULL };
+	struct jy_chunks  cnk	  = { NULL };
 
-	struct jy_scan_ctx ctx = { .pool  = &kpool,
-				   .names = &names,
-				   .cnk	  = &cnk };
+	char dirname[]		  = "/modules/";
+	char buf[strlen(dirpath) + sizeof(dirname)];
+
+	strcpy(buf, dirpath);
+	strcat(buf, dirname);
+
+	modules.dir	       = buf;
+
+	struct jy_scan_ctx ctx = { .modules = &modules,
+				   .pool    = &kpool,
+				   .names   = &names,
+				   .cnk	    = &cnk };
 
 	jry_compile(&asts, &tkns, &ctx, NULL);
+
+	jry_free_asts(&asts);
+	jry_free_tkns(&tkns);
 
 	printf("___CONSTANT POOL___\n\n");
 	if (ctx.pool->size) {
@@ -353,16 +366,24 @@ static void run_file(const char *path)
 		printf("\n");
 	}
 
-	jry_free_asts(&asts);
-	jry_free_tkns(&tkns);
 	jry_free_prserrs(&errs);
 	jry_free_scan_ctx(&ctx);
 }
 
 int main(int argc, const char **argv)
 {
+	const char *binpath = argv[0];
+	const char *dirp    = strrchr(argv[0], '/');
+
+	int  dirsz	    = (dirp != NULL) ? dirp - binpath + 1 : 1;
+	char dirpath[dirsz];
+
+	memcpy(dirpath, binpath, dirsz);
+
+	dirpath[dirsz - 1] = '\0';
+
 	if (argc == 2)
-		run_file(argv[1]);
+		run_file(argv[1], dirpath);
 	else
 		fprintf(stderr, "require file path");
 

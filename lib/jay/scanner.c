@@ -6,8 +6,8 @@
 #include <stdbool.h>
 #include <string.h>
 
-size_t jry_scan(const char *src, size_t length, enum jy_tkn *type, size_t *line,
-		size_t *ofs, char **lexeme, size_t *lexsz)
+void jry_scan(const char *src, size_t length, enum jy_tkn *type, size_t *line,
+	      size_t *ofs, const char **lxstart, const char **lxend)
 {
 #define READ	  ((size_t) (current - src))
 #define ENDED()	  (READ >= length && current[0] == '\0')
@@ -15,12 +15,13 @@ size_t jry_scan(const char *src, size_t length, enum jy_tkn *type, size_t *line,
 #define CURRENT() (current[0])
 #define NEXT()	  ((*(current++)))
 
-	const char *current   = src;
-	const char *start     = src;
-	bool	    reset_ofs = false;
+	const char *start   = src;
+	const char *current = src;
 
-	*line		      = (*line > 0) ? *line : 1;
-	*ofs		      = (*ofs > 0) ? *ofs : 1;
+	bool reset_ofs	    = false;
+
+	*line		    = (*line > 0) ? *line : 1;
+	*ofs		    = (*ofs > 0) ? *ofs : 1;
 
 	if (ENDED()) {
 		*type = TKN_EOF;
@@ -36,7 +37,7 @@ SCAN:
 		const char *old = current;
 
 		while (!ENDED() && CURRENT() != '"')
-			NEXT();
+			(void) NEXT();
 
 		if (ENDED()) {
 			current = old;
@@ -44,7 +45,7 @@ SCAN:
 			goto END_UPDATE;
 		}
 
-		NEXT(); // consume closing "
+		(void) NEXT(); // consume closing "
 		*type = TKN_STRING;
 		goto END_UPDATE;
 	}
@@ -104,7 +105,7 @@ SCAN:
 		*line += 1;
 
 		while (!ENDED() && CURRENT() == '\n') {
-			NEXT();
+			(void) NEXT();
 			*line += 1;
 		}
 
@@ -122,7 +123,7 @@ SCAN:
 		do {
 			if (CURRENT() == '/' && PREV() != '\\') {
 				*type = TKN_REGEXP;
-				NEXT(); // consume '/'
+				(void) NEXT(); // consume '/'
 				goto END_UPDATE;
 			}
 		} while (!ENDED() && CURRENT() >= ' ' && NEXT() <= '~');
@@ -143,7 +144,7 @@ SCAN:
 	case '8':
 	case '9':
 		while (!ENDED() && isdigit(CURRENT()))
-			NEXT();
+			(void) NEXT();
 
 		*type = TKN_NUMBER;
 		goto END_UPDATE;
@@ -154,8 +155,8 @@ SCAN:
 		goto END_UPDATE;
 	}
 
-	while (!ENDED() && isalnum(CURRENT()) || CURRENT() == '_')
-		NEXT();
+	while (!ENDED() && (isalnum(CURRENT()) || CURRENT() == '_'))
+		(void) NEXT();
 
 #define STREQ(__base, __target, __len)                                         \
 	(memcmp((__base), (__target), (__len)) == 0)
@@ -250,11 +251,7 @@ END_UPDATE:
 	else
 		*ofs += READ;
 
-	*lexsz	= (size_t) (current - start) + 1;
-	*lexeme = jry_alloc(*lexsz);
-	memcpy(*lexeme, start, *lexsz);
-	(*lexeme)[*lexsz - 1] = '\0';
-
 END_FINISH:
-	return READ;
+	*lxstart = start;
+	*lxend	 = current;
 }

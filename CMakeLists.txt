@@ -1,61 +1,37 @@
 cmake_minimum_required(VERSION 3.22)
 
-# -- CONFIGURATION
 project(jary)
 
-# Enable AddressSanitizer for Debug builds
-if(CMAKE_BUILD_TYPE STREQUAL Debug AND SANITIZE)
-	if(CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$")
-        	message(STATUS "Using ASAN")
-        	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-    	endif()
+set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD_REQUIRED on)
+set(CMAKE_EXPORT_COMPILE_COMMANDS on)
+
+add_library(dload OBJECT ${CMAKE_SOURCE_DIR}/lib/jay/dload.c)
+
+if(CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$")
+	add_compile_options(-Wall -Wextra -Wpedantic)
+
+	if (CMAKE_BUILD_TYPE STREQUAL Debug)
+		add_compile_options(-gdwarf -g3)
+	endif()
+
+	if(SANITIZE)
+		message(STATUS "Using ASAN")
+		add_link_options(-fsanitize=address -fno-omit-frame-pointer)
+	endif()
+
+	if(SCRUTINY)
+		message(STATUS "Using Analyzer")
+		add_compile_options(-fanalyzer -Wno-analyzer-malloc-leak)
+	endif()
+
+	add_compile_options($<$<COMPILE_LANGUAGE:CXX>:"-Wno-write-strings -fpermissive">)
+
+	target_link_options(dload INTERFACE "-rdynamic")
 endif()
 
-# -- DEFINITIONS
-set(LIB_DIR ${CMAKE_SOURCE_DIR}/lib)
+target_include_directories(dload PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
-file(GLOB LIBJAYVM_SRC_DIR ${LIB_DIR}/jay)
-file(GLOB LIBJAYVM_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
-
-# -- TARGETS
-add_library( scan 
-    	${LIBJAYVM_SRC_DIR}/scanner.c
-)
-
-add_library( parser
-    	${LIBJAYVM_SRC_DIR}/parser.c
-    	${LIBJAYVM_SRC_DIR}/scanner.c
-)
-
-add_library( compiler
-	${LIBJAYVM_SRC_DIR}/compiler.c
-	${LIBJAYVM_SRC_DIR}/parser.c
-    	${LIBJAYVM_SRC_DIR}/scanner.c
-	${LIBJAYVM_SRC_DIR}/value.c
-	${LIBJAYVM_SRC_DIR}/fnv.c
-)
-
-target_include_directories( scan
-	PRIVATE
-		${LIBJAYVM_INCLUDE_DIR}
-		${LIBJAYVM_SRC_DIR}
-)
-
-target_include_directories( parser
-	PUBLIC
-		${LIBJAYVM_INCLUDE_DIR}/jary/ast.h
-		${LIBJAYVM_INCLUDE_DIR}/jary/token.h
-	PRIVATE
-		${LIBJAYVM_INCLUDE_DIR}
-		${LIBJAYVM_SRC_DIR}
-)
-
-target_include_directories( compiler
-	PRIVATE
-		${LIBJAYVM_INCLUDE_DIR}
-		${LIBJAYVM_SRC_DIR}
-)
-
-
+add_subdirectory(${CMAKE_SOURCE_DIR}/lib/jay/modules ${CMAKE_BINARY_DIR}/modules)
 # add_subdirectory(test)
 add_subdirectory(tool)

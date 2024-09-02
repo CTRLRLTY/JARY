@@ -1,8 +1,8 @@
-
 #include "parser.h"
 
 #include "scanner.h"
 
+#include "jary/common.h"
 #include "jary/error.h"
 #include "jary/memory.h"
 
@@ -67,7 +67,7 @@ static bool _expression(struct parser *p, struct jy_asts *asts,
 			struct jy_tkns *tkns, struct jy_prserrs *errs,
 			size_t *topast);
 
-inline static void adderr(struct jy_prserrs *errs, size_t line, size_t ofs,
+static inline void adderr(struct jy_prserrs *errs, size_t line, size_t ofs,
 			  const char *lexeme, size_t lexsz, const char *msg,
 			  size_t msgsz)
 {
@@ -79,7 +79,7 @@ inline static void adderr(struct jy_prserrs *errs, size_t line, size_t ofs,
 	errs->size += 1;
 }
 
-inline static void errtkn(struct jy_prserrs *errs, struct jy_tkns *tkns,
+static inline void errtkn(struct jy_prserrs *errs, struct jy_tkns *tkns,
 			  size_t tknid, const char *msg, size_t msgsz)
 {
 	jry_assert(tkns->size > tknid);
@@ -92,7 +92,7 @@ inline static void errtkn(struct jy_prserrs *errs, struct jy_tkns *tkns,
 	adderr(errs, line, ofs, lex, len, msg, msgsz);
 }
 
-inline static size_t addast(struct jy_asts *asts, enum jy_ast type, size_t tkn,
+static inline size_t addast(struct jy_asts *asts, enum jy_ast type, size_t tkn,
 			    size_t *child, size_t childsz)
 {
 	jry_mem_push(asts->types, asts->size, type);
@@ -103,7 +103,7 @@ inline static size_t addast(struct jy_asts *asts, enum jy_ast type, size_t tkn,
 	return asts->size++;
 }
 
-inline static void popast(struct jy_asts *asts)
+static inline void popast(struct jy_asts *asts)
 {
 	jry_assert(asts->size > 0);
 
@@ -117,7 +117,7 @@ inline static void popast(struct jy_asts *asts)
 	asts->size -= 1;
 }
 
-inline static size_t addchild(struct jy_asts *asts, size_t astid,
+static inline size_t addchild(struct jy_asts *asts, size_t astid,
 			      size_t childid)
 {
 	jry_assert(asts->size > astid);
@@ -138,7 +138,7 @@ inline static size_t addchild(struct jy_asts *asts, size_t astid,
 	return (*childsz)++;
 }
 
-inline static size_t addtkn(struct jy_tkns *tkns, enum jy_tkn type, size_t line,
+static inline size_t addtkn(struct jy_tkns *tkns, enum jy_tkn type, size_t line,
 			    size_t ofs, char *lexeme, size_t lexsz)
 {
 	jry_mem_push(tkns->types, tkns->size, type);
@@ -151,7 +151,7 @@ inline static size_t addtkn(struct jy_tkns *tkns, enum jy_tkn type, size_t line,
 }
 
 // return last non newline or eof tkn
-inline static size_t find_last_tkn(struct jy_tkns *tkns)
+static inline size_t find_last_tkn(struct jy_tkns *tkns)
 {
 	jry_assert(tkns->size > 0);
 
@@ -166,47 +166,62 @@ inline static size_t find_last_tkn(struct jy_tkns *tkns)
 	return tkn;
 }
 
-inline static bool ended(const enum jy_tkn *types, size_t length)
+static inline bool ended(const enum jy_tkn *types, size_t length)
 {
 	return types[length - 1] == TKN_EOF;
 }
 
 // advance scanner and fill tkn
-inline static void advance(struct jy_tkns *tkns, const char **src,
+static inline void advance(struct jy_tkns *tkns, const char **src,
 			   size_t *srcsz)
 {
 	enum jy_tkn type;
 
 	// getting previous line
-	size_t line  = tkns->lines[tkns->size - 1];
+	size_t line	  = tkns->lines[tkns->size - 1];
 	// getting previous ofs
-	size_t ofs   = tkns->ofs[tkns->size - 1];
-	size_t lexsz = 0;
-	char  *lex   = NULL;
+	size_t ofs	  = tkns->ofs[tkns->size - 1];
 
-	size_t read  = jry_scan(*src, *srcsz, &type, &line, &ofs, &lex, &lexsz);
+	const char *start = *src;
+	const char *end	  = *src;
 
-	*src   += read;
-	*srcsz	= (*srcsz > read) ? *srcsz - read : 0;
+	jry_scan(*src, *srcsz, &type, &line, &ofs, &start, &end);
+
+	size_t read  = end - *src;
+	*src	     = end;
+	*srcsz	     = (*srcsz > read) ? *srcsz - read : 0;
+
+	size_t lexsz = (end - start) + 1;
+	char  *lex   = jry_alloc(lexsz);
+
+	// you are screwed.
+	if (lex == NULL) {
+		fprintf(stderr, "WTF?\n");
+		exit(EXIT_FAILURE);
+	}
+
+	memcpy(lex, start, lexsz - 1);
+
+	lex[lexsz - 1] = '\0';
 
 	addtkn(tkns, type, line, ofs, lex, lexsz);
 }
 
-inline static void next(struct jy_tkns *tkns, const char **src, size_t *srcsz,
+static inline void next(struct jy_tkns *tkns, const char **src, size_t *srcsz,
 			size_t *tkn)
 {
 	advance(tkns, src, srcsz);
 	*tkn = tkns->size - 1;
 }
 
-inline static void skipnewline(struct jy_tkns *tkns, const char **src,
+static inline void skipnewline(struct jy_tkns *tkns, const char **src,
 			       size_t *srcsz, size_t *tkn)
 {
 	while (tkns->types[*tkn] == TKN_NEWLINE)
 		next(tkns, src, srcsz, tkn);
 }
 
-inline static bool synclist(struct jy_tkns *tkns, const char **src,
+static inline bool synclist(struct jy_tkns *tkns, const char **src,
 			    size_t *srcsz, size_t *tkn)
 {
 	enum jy_tkn t = tkns->types[*tkn];
@@ -220,10 +235,10 @@ inline static bool synclist(struct jy_tkns *tkns, const char **src,
 			goto SYNCED;
 		case TKN_EOF:
 			goto PANIC;
+		default:
+			next(tkns, src, srcsz, tkn);
+			t = tkns->types[*tkn];
 		}
-
-		next(tkns, src, srcsz, tkn);
-		t = tkns->types[*tkn];
 	} while (1);
 
 SYNCED:
@@ -232,7 +247,7 @@ PANIC:
 	return true;
 }
 
-inline static bool syncsection(struct jy_tkns *tkns, const char **src,
+static inline bool syncsection(struct jy_tkns *tkns, const char **src,
 			       size_t *srcsz, size_t *tkn)
 {
 	enum jy_tkn t = tkns->types[*tkn];
@@ -246,6 +261,8 @@ inline static bool syncsection(struct jy_tkns *tkns, const char **src,
 
 		case TKN_EOF:
 			goto PANIC;
+		default:
+			break;
 		}
 
 		next(tkns, src, srcsz, tkn);
@@ -269,10 +286,10 @@ static bool syncdecl(struct jy_tkns *tkns, const char **src, size_t *srcsz,
 			goto SYNCED;
 		case TKN_EOF:
 			goto PANIC;
+		default:
+			next(tkns, src, srcsz, tkn);
+			t = tkns->types[*tkn];
 		}
-
-		next(tkns, src, srcsz, tkn);
-		t = tkns->types[*tkn];
 	} while (1);
 
 SYNCED:
@@ -281,8 +298,9 @@ PANIC:
 	return true;
 }
 
-static bool _err(struct parser *p, struct jy_asts *asts, struct jy_tkns *tkns,
-		 struct jy_prserrs *errs, size_t *__)
+static bool _err(struct parser *p, struct jy_asts *UNUSED(asts),
+		 struct jy_tkns *tkns, struct jy_prserrs *errs,
+		 size_t *UNUSED(root))
 {
 	char msg[] = "error: unrecognized token";
 	errtkn(errs, tkns, p->tkn, msg, sizeof(msg));
@@ -290,8 +308,9 @@ static bool _err(struct parser *p, struct jy_asts *asts, struct jy_tkns *tkns,
 	return true;
 }
 
-static bool _err_str(struct parser *p, struct jy_asts *asts,
-		     struct jy_tkns *tkns, struct jy_prserrs *errs, size_t *__)
+static bool _err_str(struct parser *p, struct jy_asts *UNUSED(asts),
+		     struct jy_tkns *tkns, struct jy_prserrs *errs,
+		     size_t *UNUSED(root))
 {
 	char msg[] = "error: unterminated string";
 	errtkn(errs, tkns, p->tkn, msg, sizeof(msg));
@@ -336,7 +355,7 @@ PANIC:
 }
 
 static bool _name(struct parser *p, struct jy_asts *asts, struct jy_tkns *tkns,
-		  struct jy_prserrs *errs, size_t *root)
+		  struct jy_prserrs *UNUSED(errs), size_t *root)
 {
 	*root = addast(asts, AST_NAME, p->tkn, NULL, 0);
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
@@ -413,47 +432,6 @@ PANIC:
 	return true;
 }
 
-static bool _dot(struct parser *p, struct jy_asts *asts, struct jy_tkns *tkns,
-		 struct jy_prserrs *errs, size_t *root)
-{
-	enum jy_ast prevtype = asts->types[*root];
-
-	switch (prevtype) {
-	case AST_NAME:
-	case AST_EVENT:
-		break;
-	default: {
-		char msg[] = "error: inappropriate accesor usage";
-		errtkn(errs, tkns, p->tkn, msg, sizeof(msg));
-		goto PANIC;
-	}
-	}
-
-	// consume .
-	size_t tkndot = p->tkn;
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	enum jy_tkn type = tkns->types[p->tkn];
-
-	if (type != TKN_IDENTIFIER) {
-		char msg[] = "error: expected identifier";
-		errtkn(errs, tkns, tkndot, msg, sizeof(msg));
-		goto PANIC;
-	}
-
-	size_t member = addast(asts, AST_MEMBER, p->tkn, NULL, 0);
-
-	addchild(asts, *root, member);
-
-	// consume identifier
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	return ended(tkns->types, tkns->size);
-
-PANIC:
-	return true;
-}
-
 static bool _call(struct parser *p, struct jy_asts *asts, struct jy_tkns *tkns,
 		  struct jy_prserrs *errs, size_t *root)
 {
@@ -498,6 +476,62 @@ static bool _call(struct parser *p, struct jy_asts *asts, struct jy_tkns *tkns,
 
 	// consume ')'
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
+	return ended(tkns->types, tkns->size);
+
+PANIC:
+	return true;
+}
+
+static bool _dot(struct parser *p, struct jy_asts *asts, struct jy_tkns *tkns,
+		 struct jy_prserrs *errs, size_t *root)
+{
+	enum jy_ast prevtype = asts->types[*root];
+
+	switch (prevtype) {
+	case AST_NAME:
+	case AST_EVENT:
+		break;
+	default: {
+		char msg[] = "error: inappropriate accesor usage";
+		errtkn(errs, tkns, p->tkn, msg, sizeof(msg));
+		goto PANIC;
+	}
+	}
+
+	// consume .
+	size_t tkndot = p->tkn;
+	next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+	enum jy_tkn type = tkns->types[p->tkn];
+
+	if (type != TKN_IDENTIFIER) {
+		char msg[] = "error: expected identifier";
+		errtkn(errs, tkns, tkndot, msg, sizeof(msg));
+		goto PANIC;
+	}
+
+	size_t member = addast(asts, AST_NAME, p->tkn, NULL, 0);
+
+	addchild(asts, *root, member);
+
+	// consume identifier
+	next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+	type = tkns->types[p->tkn];
+
+	switch (type) {
+	case TKN_DOT:
+		if (_dot(p, asts, tkns, errs, &member))
+			goto PANIC;
+		break;
+	case TKN_LEFT_PAREN:
+		if (_call(p, asts, tkns, errs, &member))
+			goto PANIC;
+		break;
+	default:
+		break;
+	}
+
 	return ended(tkns->types, tkns->size);
 
 PANIC:
@@ -556,13 +590,9 @@ PANIC:
 static bool _binary(struct parser *p, struct jy_asts *asts,
 		    struct jy_tkns *tkns, struct jy_prserrs *errs, size_t *root)
 {
-	enum jy_ast leftype;
-
 	size_t left	    = *root;
 	size_t right	    = 0;
 	size_t optkn	    = p->tkn;
-
-	leftype		    = asts->types[left];
 
 	enum jy_tkn  optype = tkns->types[p->tkn];
 	struct rule *oprule = rule(optype);
@@ -645,7 +675,7 @@ PANIC:
 	return true;
 }
 
-inline static bool _expression(struct parser *p, struct jy_asts *asts,
+static inline bool _expression(struct parser *p, struct jy_asts *asts,
 			       struct jy_tkns *tkns, struct jy_prserrs *errs,
 			       size_t *topast)
 {
@@ -721,7 +751,6 @@ static bool _section(struct parser *p, struct jy_asts *asts,
 	skipnewline(tkns, &p->src, &p->srcsz, &p->tkn);
 
 	enum jy_tkn listype = tkns->types[p->tkn];
-	enum jy_ast sectype = asts->types[sectast];
 
 	do {
 		switch (listype) {
@@ -731,6 +760,8 @@ static bool _section(struct parser *p, struct jy_asts *asts,
 			goto CLOSING;
 		case TKN_EOF:
 			goto PANIC;
+		default:
+			break;
 		}
 
 		size_t root;
@@ -798,6 +829,8 @@ static bool _block(struct parser *p, struct jy_asts *asts, struct jy_tkns *tkns,
 			goto CLOSING;
 		case TKN_EOF:
 			goto PANIC;
+		default:
+			break;
 		}
 
 		size_t sectast = addast(asts, AST_NONE, p->tkn, NULL, 0);
@@ -836,7 +869,7 @@ PANIC:
 	return true;
 }
 
-inline static bool _identifier(struct parser *p, struct jy_asts *asts,
+static inline bool _identifier(struct parser *p, struct jy_asts *asts,
 			       struct jy_tkns *tkns, struct jy_prserrs *errs,
 			       size_t ast)
 {
@@ -881,11 +914,11 @@ static bool _declaration(struct parser *p, struct jy_asts *asts,
 
 		if (_identifier(p, asts, tkns, errs, declast))
 			goto PANIC;
-		break;
 
 		if (_block(p, asts, tkns, errs, declast))
 			goto PANIC;
 
+		break;
 	case TKN_RULE:
 		asts->types[declast] = AST_RULE;
 
@@ -922,9 +955,8 @@ static bool _declaration(struct parser *p, struct jy_asts *asts,
 		goto PANIC;
 	}
 	}
-PARSED:
-	return false;
 
+	return false;
 PANIC:
 	// remove all node up to declast (inclusive)
 	while (declast < asts->size)

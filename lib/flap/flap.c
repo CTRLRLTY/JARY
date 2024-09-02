@@ -23,7 +23,7 @@ static struct parsed {
 	size_t	     size;
 } opts;
 
-inline static void arg2type(const char *arg, enum atype *type)
+static inline void arg2type(const char *arg, enum atype *type)
 {
 	char c = arg[0];
 

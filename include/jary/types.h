@@ -1,0 +1,20 @@
+#ifndef JAYVM_TYPES_H
+#define JAYVM_TYPES_H
+
+enum jy_ktype {
+	JY_K_UNKNOWN = 0,
+	JY_K_RULE,
+	JY_K_INGRESS,
+
+	JY_K_MODULE,
+
+	JY_K_FUNC,
+	JY_K_TARGET,
+
+	JY_K_EVENT,
+	JY_K_LONG,
+	JY_K_STR,
+	JY_K_BOOL,
+};
+
+#endif // JAYVM_TYPES_H

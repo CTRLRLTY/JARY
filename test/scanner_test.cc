@@ -6,7 +6,6 @@
 
 extern "C" {
 #include "scanner.h"
-#include "fnv.h"
 #include "memory.h"
 }
 

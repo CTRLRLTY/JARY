@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 
+#define ERROR_NOMEM		   10
+
 #define jry_alloc(__size)	   malloc((__size))
 #define jry_realloc(__ptr, __size) realloc((__ptr), (__size))
 #define jry_free(__ptr)		   free((__ptr))

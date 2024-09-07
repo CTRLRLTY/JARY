@@ -5,12 +5,6 @@
 
 #define jry_assert(__expr) assert((__expr));
 
-enum {
-	ERROR_SUCCESS = 0,
-	ERROR_NOMEM,
-
-	ERROR_OPEN_MODULE,
-	ERROR_LOAD_MODULE,
-};
+#define ERROR_SUCCESS	   0
 
 #endif // JAYVM_ERROR_H

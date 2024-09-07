@@ -9,7 +9,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 add_library(dload OBJECT ${CMAKE_SOURCE_DIR}/lib/jay/dload.c)
 
 if(CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$")
-	add_compile_options(-Wall -Wextra -Wpedantic)
+	add_compile_options(-Wall -Wextra)
+	add_compile_options(-pedantic-errors)
 
 	if (CMAKE_BUILD_TYPE STREQUAL Debug)
 		add_compile_options(-gdwarf -g3)

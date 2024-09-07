@@ -4,6 +4,9 @@
 #include "jary/common.h"
 #include "jary/defs.h"
 
+#define ERROR_OPEN_MODULE 21
+#define ERROR_LOAD_MODULE 22
+
 struct jy_module_ctx;
 
 USE_RESULT

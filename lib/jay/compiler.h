@@ -49,10 +49,16 @@ struct jy_chunks {
 	size_t	 size;
 };
 
+struct jy_events {
+	struct jy_defs *defs;
+	size_t		size;
+};
+
 struct jy_scan_ctx {
 	struct jy_modules *modules;
 	struct jy_kpool	  *pool;
 	struct jy_defs	  *names;
+	struct jy_events  *events;
 	struct jy_chunks  *cnk;
 };
 

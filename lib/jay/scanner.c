@@ -175,23 +175,30 @@ SCAN:
 			*type = TKN_IDENTIFIER;
 
 		goto END_UPDATE;
-	case 'c': // condition
+	case 'c':
 		if (STREQ(start + 1, "ondition", 8))
 			*type = TKN_CONDITION;
 		else
 			*type = TKN_IDENTIFIER;
 
 		goto END_UPDATE;
-	case 'f': // false
+	case 'f':
 		if (STREQ(start + 1, "alse", 4))
 			*type = TKN_FALSE;
-		else if (STREQ(start + 1, "ields", 5))
-			*type = TKN_FIELDS;
+		else if (STREQ(start + 1, "ield", 4))
+			*type = TKN_FIELD;
 		else
 			*type = TKN_IDENTIFIER;
 
 		goto END_UPDATE;
-	case 'o': // or
+	case 'l':
+		if (STREQ(start + 1, "ong", 3))
+			*type = TKN_LONG_TYPE;
+		else
+			*type = TKN_IDENTIFIER;
+
+		goto END_UPDATE;
+	case 'o':
 		if (start[1] == 'r')
 			*type = TKN_OR;
 		else
@@ -227,16 +234,23 @@ SCAN:
 			*type = TKN_IDENTIFIER;
 
 		goto END_UPDATE;
-	case 'm': // match
+	case 'm':
 		if (STREQ(start + 1, "atch", 4))
 			*type = TKN_MATCH;
 		else
 			*type = TKN_IDENTIFIER;
 
 		goto END_UPDATE;
-	case 'n': // not
+	case 'n':
 		if (STREQ(start + 1, "ot", 2))
 			*type = TKN_NOT;
+		else
+			*type = TKN_IDENTIFIER;
+
+		goto END_UPDATE;
+	case 's':
+		if (STREQ(start + 1, "tring", 5))
+			*type = TKN_STRING_TYPE;
 		else
 			*type = TKN_IDENTIFIER;
 

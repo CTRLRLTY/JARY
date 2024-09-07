@@ -452,6 +452,11 @@ static cmplfn_t rules[] = {
 	[AST_FIELDS]	= NULL,
 	// < sections
 
+	[AST_SET_TYPE]	= NULL,
+	[AST_LONG_TYPE] = NULL,
+	[AST_STR_TYPE]	= NULL,
+	[AST_FIELD]	= NULL,
+
 	// > expression
 	[AST_ALIAS]	= NULL,
 	[AST_EVENT]	= NULL,
@@ -509,6 +514,38 @@ PANIC:
 	return true;
 }
 
+static bool cmplfield(struct jy_asts *asts, struct jy_tkns *tkns,
+		      struct jy_scan_ctx *ctx, struct jy_cerrs *errs, size_t id,
+		      struct jy_defs *def)
+{
+	size_t *child	= asts->child[id];
+	size_t	childsz = asts->childsz[id];
+
+	for (size_t i = 0; i < childsz; ++i) {
+		size_t op_id   = child[i];
+		size_t name_id = asts->child[op_id][0];
+		size_t type_id = asts->child[op_id][1];
+
+		char  *name    = tkns->lexemes[asts->tkns[name_id]];
+		size_t length  = tkns->lexsz[asts->tkns[name_id]];
+
+		// Todo: redeclaration error
+		if (jry_find_def(def, name, length, NULL))
+			goto PANIC;
+
+		enum jy_ast type = asts->types[type_id];
+
+		int e = jry_add_def(def, name, length, (jy_val_t) NULL, type);
+
+		if (e != ERROR_SUCCESS)
+			goto PANIC;
+	}
+
+	return false;
+PANIC:
+	return true;
+}
+
 static bool cmplrule(struct jy_asts *asts, struct jy_tkns *tkns,
 		     struct jy_scan_ctx *ctx, struct jy_cerrs *errs, size_t id)
 {
@@ -537,10 +574,39 @@ PANIC:
 	return true;
 }
 
-static bool cmplingress(struct jy_asts *asts, struct jy_tkns *tkns,
-			struct jy_scan_ctx *ctx, struct jy_cerrs *errs,
-			size_t id)
+static inline bool cmplingress(struct jy_asts *asts, struct jy_tkns *tkns,
+			       struct jy_scan_ctx *ctx, struct jy_cerrs *errs,
+			       size_t id)
 {
+	size_t *child	= asts->child[id];
+	size_t	childsz = asts->childsz[id];
+
+	for (size_t i = 0; i < childsz; ++i) {
+		size_t	    chid = child[i];
+		enum jy_ast type = asts->types[chid];
+
+		bool panic	 = true;
+
+		switch (type) {
+		case AST_FIELDS: {
+			struct jy_defs def = { NULL };
+
+			panic = cmplfield(asts, tkns, ctx, errs, chid, &def);
+			jry_mem_push(ctx->events->defs, ctx->events->size, def);
+			ctx->events->size += 1;
+		}
+		default:
+			// Todo: handle mismatch section
+			goto PANIC;
+		}
+
+		if (panic)
+			goto PANIC;
+	}
+
+	return false;
+
+PANIC:
 	return true;
 }
 
@@ -646,7 +712,8 @@ void jry_compile(struct jy_asts *asts, struct jy_tkns *tkns,
 	size_t	    root = 0;
 	enum jy_ast type = asts->types[root];
 
-	jry_assert(type == AST_ROOT);
+	if (type != AST_ROOT)
+		return;
 
 	cmplroot(asts, tkns, ctx, errs, root);
 }
@@ -662,6 +729,11 @@ void jry_free_scan_ctx(struct jy_scan_ctx *ctx)
 	jry_free(ctx->pool->vals);
 	jry_free(ctx->pool->types);
 	jry_free(ctx->pool->obj);
+
+	for (size_t i = 0; i < ctx->events->size; ++i)
+		jry_free_def(&ctx->events->defs[i]);
+
+	jry_free(ctx->events->defs);
 
 	jry_free_def(ctx->names);
 }

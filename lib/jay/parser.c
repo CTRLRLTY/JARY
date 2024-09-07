@@ -18,7 +18,7 @@ TKN_INPUT:                                                                     \
 	case TKN_MATCH:                                                        \
 	case TKN_JUMP:                                                         \
 	case TKN_CONDITION:                                                    \
-	case TKN_FIELDS
+	case TKN_FIELD
 
 #define CASE_TKN_DECL                                                          \
 TKN_RULE:                                                                      \
@@ -172,8 +172,8 @@ static inline bool ended(const enum jy_tkn *types, size_t length)
 }
 
 // advance scanner and fill tkn
-static inline void advance(struct jy_tkns *tkns, const char **src,
-			   size_t *srcsz)
+static inline void next(struct jy_tkns *tkns, const char **src, size_t *srcsz,
+			size_t *tkn)
 {
 	enum jy_tkn type;
 
@@ -205,12 +205,7 @@ static inline void advance(struct jy_tkns *tkns, const char **src,
 	lex[lexsz - 1] = '\0';
 
 	addtkn(tkns, type, line, ofs, lex, lexsz);
-}
 
-static inline void next(struct jy_tkns *tkns, const char **src, size_t *srcsz,
-			size_t *tkn)
-{
-	advance(tkns, src, srcsz);
 	*tkn = tkns->size - 1;
 }
 
@@ -677,11 +672,11 @@ PANIC:
 
 static inline bool _expression(struct parser *p, struct jy_asts *asts,
 			       struct jy_tkns *tkns, struct jy_prserrs *errs,
-			       size_t *topast)
+			       size_t *root)
 {
 	size_t lastast = asts->size - 1;
 
-	if (_precedence(p, asts, tkns, errs, topast, PREC_ASSIGNMENT)) {
+	if (_precedence(p, asts, tkns, errs, root, PREC_ASSIGNMENT)) {
 		// clean until last valid (non inclusive)
 		while (lastast + 1 < asts->size)
 			popast(asts);
@@ -691,6 +686,70 @@ static inline bool _expression(struct parser *p, struct jy_asts *asts,
 
 	return false;
 PANIC:
+	return true;
+}
+
+static bool _types(struct parser *p, struct jy_asts *asts, struct jy_tkns *tkns,
+		   struct jy_prserrs *errs, size_t *root)
+{
+	size_t	    lastast = asts->size - 1;
+	size_t	    nametkn = p->tkn;
+	enum jy_tkn type    = tkns->types[nametkn];
+
+	if (type != TKN_IDENTIFIER) {
+		char   msg[] = "error: invalid declaration";
+		size_t tkn   = find_last_tkn(tkns);
+		errtkn(errs, tkns, tkn, msg, sizeof(msg));
+		goto PANIC;
+	}
+
+	size_t left = addast(asts, AST_FIELD, nametkn, NULL, 0);
+
+	// consume name
+	next(tkns, &p->src, &p->srcsz, &p->tkn);
+	type	     = tkns->types[p->tkn];
+	size_t eqtkn = p->tkn;
+
+	if (type != TKN_EQUAL) {
+		char msg[] = "error: expects = after";
+		errtkn(errs, tkns, nametkn, msg, sizeof(msg));
+		goto PANIC;
+	}
+
+	*root = addast(asts, AST_SET_TYPE, eqtkn, NULL, 0);
+
+	// consume =
+	next(tkns, &p->src, &p->srcsz, &p->tkn);
+	type = tkns->types[p->tkn];
+
+	size_t right;
+	switch (type) {
+	case TKN_LONG_TYPE:
+		right = addast(asts, AST_LONG_TYPE, p->tkn, NULL, 0);
+		break;
+	case TKN_STRING_TYPE:
+		right = addast(asts, AST_STR_TYPE, p->tkn, NULL, 0);
+		break;
+	default: {
+		char msg[] = "error: expects a type after";
+		errtkn(errs, tkns, eqtkn, msg, sizeof(msg));
+		goto PANIC;
+	}
+	}
+
+	addchild(asts, *root, left);
+	addchild(asts, *root, right);
+
+	// consume type
+	next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+	return false;
+
+PANIC:
+	// clean until last valid (non inclusive)
+	while (lastast + 1 < asts->size)
+		popast(asts);
+
 	return true;
 }
 
@@ -705,12 +764,16 @@ static bool _section(struct parser *p, struct jy_asts *asts,
 	// consume section
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
+	bool (*listfn)(struct parser *, struct jy_asts *, struct jy_tkns *,
+		       struct jy_prserrs *, size_t *);
+
 	switch (sectkntype) {
 	case TKN_JUMP:
 		if (decltype != AST_RULE)
 			goto INVALID_SECTION;
 
 		asts->types[sectast] = AST_JUMP;
+		listfn		     = _expression;
 		break;
 	case TKN_INPUT:
 		if (decltype != AST_INGRESS)
@@ -723,18 +786,21 @@ static bool _section(struct parser *p, struct jy_asts *asts,
 			goto INVALID_SECTION;
 
 		asts->types[sectast] = AST_MATCH;
+		listfn		     = _expression;
 		break;
 	case TKN_CONDITION:
 		if (decltype != AST_RULE)
 			goto INVALID_SECTION;
 
 		asts->types[sectast] = AST_CONDITION;
+		listfn		     = _expression;
 		break;
-	case TKN_FIELDS:
+	case TKN_FIELD:
 		if (decltype != AST_INGRESS)
 			goto INVALID_SECTION;
 
 		asts->types[sectast] = AST_FIELDS;
+		listfn		     = _types;
 		break;
 	default:
 		goto INVALID_SECTION;
@@ -766,16 +832,15 @@ static bool _section(struct parser *p, struct jy_asts *asts,
 
 		size_t root;
 
-		if (_expression(p, asts, tkns, errs, &root)) {
+		bool needsync = listfn(p, asts, tkns, errs, &root);
+
+		if (needsync) {
 			if (synclist(tkns, &p->src, &p->srcsz, &p->tkn))
 				goto PANIC;
-
-			goto NEXT_LIST;
+		} else {
+			addchild(asts, sectast, root);
 		}
 
-		addchild(asts, sectast, root);
-
-NEXT_LIST:
 		if (tkns->types[p->tkn] != TKN_NEWLINE) {
 			char   msg[]   = "error: expected '\\n' before";
 			size_t lasttkn = find_last_tkn(tkns);
@@ -1009,7 +1074,10 @@ static struct rule rules[] = {
 	[TKN_INPUT]	  = { NULL, NULL, PREC_NONE },
 	[TKN_MATCH]	  = { NULL, NULL, PREC_NONE },
 	[TKN_CONDITION]	  = { NULL, NULL, PREC_NONE },
-	[TKN_FIELDS]	  = { NULL, NULL, PREC_NONE },
+	[TKN_FIELD]	  = { NULL, NULL, PREC_NONE },
+
+	[TKN_LONG_TYPE]	  = { NULL, NULL, PREC_NONE },
+	[TKN_STRING_TYPE] = { NULL, NULL, PREC_NONE },
 
 	[TKN_TILDE]	  = { NULL, _tilde, PREC_LAST },
 

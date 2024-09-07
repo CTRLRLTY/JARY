@@ -26,7 +26,20 @@ static char *ast2string(enum jy_ast type)
 		buf = strdup("include");
 		break;
 	case AST_INGRESS:
-		buf = strdup("include");
+		buf = strdup("ingress");
+		break;
+
+	case AST_SET_TYPE:
+		buf = strdup("type");
+		break;
+	case AST_LONG_TYPE:
+		buf = strdup("long");
+		break;
+	case AST_STR_TYPE:
+		buf = strdup("string");
+		break;
+	case AST_FIELD:
+		buf = strdup("field");
 		break;
 
 	case AST_JUMP:
@@ -334,6 +347,7 @@ static void run_file(const char *path, const char *dirpath)
 	struct jy_kpool	  kpool	  = { NULL };
 	struct jy_defs	  names	  = { NULL };
 	struct jy_chunks  cnk	  = { NULL };
+	struct jy_events  events  = { NULL };
 
 	char dirname[]		  = "/modules/";
 	char buf[strlen(dirpath) + sizeof(dirname)];
@@ -346,6 +360,7 @@ static void run_file(const char *path, const char *dirpath)
 	struct jy_scan_ctx ctx = { .modules = &modules,
 				   .pool    = &kpool,
 				   .names   = &names,
+				   .events  = &events,
 				   .cnk	    = &cnk };
 
 	jry_compile(&asts, &tkns, &ctx, NULL);

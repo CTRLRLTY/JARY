@@ -1116,19 +1116,40 @@ static struct rule *rule(enum jy_tkn type)
 	return &rules[type];
 }
 
-void jry_parse(const char *src, size_t length, struct jy_asts *asts,
-	       struct jy_tkns *tkns, struct jy_prserrs *errs)
+static inline void free_asts(struct jy_asts *asts)
+{
+	jry_free(asts->types);
+	jry_free(asts->tkns);
+
+	for (size_t i = 0; i < asts->size; ++i)
+		jry_free(asts->child[i]);
+
+	jry_free(asts->child);
+	jry_free(asts->childsz);
+}
+
+static inline void free_tkns(struct jy_tkns *tkns)
+{
+	jry_free(tkns->types);
+	jry_free(tkns->lines);
+	jry_free(tkns->ofs);
+
+	for (size_t i = 0; i < tkns->size; ++i)
+		jry_free(tkns->lexemes[i]);
+
+	jry_free(tkns->lexemes);
+	jry_free(tkns->lexsz);
+}
+
+void jry_parse(const char *src, size_t length, struct jy_parsed *pd,
+	       struct jy_prserrs *errs)
 {
 	struct parser p = {
 		.src   = src,
 		.srcsz = length,
 	};
 
-	errs->size = 0;
-	tkns->size = 0;
-	asts->size = 0;
-
-	_entry(&p, asts, tkns, errs);
+	_entry(&p, pd->asts, pd->tkns, errs);
 }
 
 void jry_free_prserrs(struct jy_prserrs *errs)
@@ -1146,27 +1167,8 @@ void jry_free_prserrs(struct jy_prserrs *errs)
 	jry_free(errs->msgs);
 }
 
-void jry_free_asts(struct jy_asts *asts)
+void jry_free_parsed(struct jy_parsed *pd)
 {
-	jry_free(asts->types);
-	jry_free(asts->tkns);
-
-	for (size_t i = 0; i < asts->size; ++i)
-		jry_free(asts->child[i]);
-
-	jry_free(asts->child);
-	jry_free(asts->childsz);
-}
-
-void jry_free_tkns(struct jy_tkns *tkns)
-{
-	jry_free(tkns->types);
-	jry_free(tkns->lines);
-	jry_free(tkns->ofs);
-
-	for (size_t i = 0; i < tkns->size; ++i)
-		jry_free(tkns->lexemes[i]);
-
-	jry_free(tkns->lexemes);
-	jry_free(tkns->lexsz);
+	free_asts(pd->asts);
+	free_tkns(pd->tkns);
 }

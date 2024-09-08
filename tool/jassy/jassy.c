@@ -305,13 +305,16 @@ static size_t read_file(const char *path, char **dst)
 
 static void run_file(const char *path, const char *dirpath)
 {
-	char		 *src	 = NULL;
-	size_t		  length = read_file(path, &src);
-	struct jy_asts	  asts	 = { .size = 0 };
-	struct jy_tkns	  tkns	 = { .size = 0 };
-	struct jy_prserrs errs	 = { .size = 0 };
+	char  *src		= NULL;
+	size_t length		= read_file(path, &src);
 
-	jry_parse(src, length, &asts, &tkns, &errs);
+	struct jy_asts	  asts	= { NULL };
+	struct jy_tkns	  tkns	= { NULL };
+	struct jy_prserrs errs	= { NULL };
+
+	struct jy_parsed parsed = { .asts = &asts, .tkns = &tkns };
+
+	jry_parse(src, length, &parsed, &errs);
 	jry_free(src);
 
 	printf("===================================="
@@ -365,8 +368,7 @@ static void run_file(const char *path, const char *dirpath)
 
 	jry_compile(&asts, &tkns, &ctx, NULL);
 
-	jry_free_asts(&asts);
-	jry_free_tkns(&tkns);
+	jry_free_parsed(&parsed);
 
 	printf("___CONSTANT POOL___\n\n");
 	if (ctx.pool->size) {

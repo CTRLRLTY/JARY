@@ -45,7 +45,9 @@ struct jy_parsed {
 	struct jy_asts *asts;
 };
 
-void jry_parse(const char *src, size_t length, struct jy_parsed *pd,
+void jry_parse(const char	 *src,
+	       size_t		  length,
+	       struct jy_parsed	 *pd,
 	       struct jy_prserrs *errs);
 
 void jry_free_parsed(struct jy_parsed *pd);

@@ -6,8 +6,13 @@
 #include <stdbool.h>
 #include <string.h>
 
-void jry_scan(const char *src, size_t length, enum jy_tkn *type, size_t *line,
-	      size_t *ofs, const char **lxstart, const char **lxend)
+void jry_scan(const char  *src,
+	      size_t	   length,
+	      enum jy_tkn *type,
+	      size_t	  *line,
+	      size_t	  *ofs,
+	      const char **lxstart,
+	      const char **lxend)
 {
 #define READ	  ((size_t) (current - src))
 #define ENDED()	  (READ >= length && current[0] == '\0')

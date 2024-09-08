@@ -128,8 +128,13 @@ static char *ast2string(enum jy_ast type)
 	return buf;
 }
 
-static void printast(struct jy_asts *asts, char **lexemes, size_t length,
-		     size_t midpoint, size_t numsz, size_t id, size_t depth)
+static void printast(struct jy_asts *asts,
+		     char	   **lexemes,
+		     size_t	     length,
+		     size_t	     midpoint,
+		     size_t	     numsz,
+		     size_t	     id,
+		     size_t	     depth)
 {
 	enum jy_ast type    = asts->types[id];
 	size_t	   *child   = asts->child[id];
@@ -195,8 +200,10 @@ static size_t findmaxdepth(struct jy_asts *asts, size_t id, size_t depth)
 	return maxdepth;
 }
 
-static void dumpast(struct jy_asts *asts, char **lexemes, size_t length,
-		    size_t maxdepth)
+static void dumpast(struct jy_asts *asts,
+		    char	  **lexemes,
+		    size_t	    length,
+		    size_t	    maxdepth)
 {
 	size_t midpoint = 2 * maxdepth + 15;
 	int    col1sz	= midpoint - 4;

@@ -18,8 +18,11 @@ struct kexpr {
 };
 
 // expression compile subroutine signature
-typedef bool (*cmplfn_t)(struct jy_asts *, struct jy_tkns *,
-			 struct jy_scan_ctx *, struct jy_cerrs *, size_t,
+typedef bool (*cmplfn_t)(struct jy_asts *,
+			 struct jy_tkns *,
+			 struct jy_scan_ctx *,
+			 struct jy_cerrs *,
+			 size_t,
 			 struct kexpr *);
 
 static inline cmplfn_t rule(enum jy_ast type);
@@ -92,8 +95,10 @@ static inline bool find_longk(struct jy_kpool *pool, long num, size_t *id)
 	return false;
 }
 
-static inline bool find_strk(struct jy_kpool *pool, const char *str,
-			     size_t length, size_t *id)
+static inline bool find_strk(struct jy_kpool *pool,
+			     const char	     *str,
+			     size_t	      length,
+			     size_t	     *id)
 {
 	for (size_t i = 0; i < pool->size; ++i) {
 		enum jy_ktype t = pool->types[i];
@@ -121,8 +126,9 @@ static inline bool find_strk(struct jy_kpool *pool, const char *str,
 	return false;
 }
 
-static inline bool find_funck(struct jy_kpool *pool, jy_funcptr_t fn,
-			      size_t *id)
+static inline bool find_funck(struct jy_kpool *pool,
+			      jy_funcptr_t     fn,
+			      size_t	      *id)
 {
 	for (size_t i = 0; i < pool->size; ++i) {
 		enum jy_ktype t = pool->types[i];
@@ -144,8 +150,9 @@ static inline bool find_funck(struct jy_kpool *pool, jy_funcptr_t fn,
 	return false;
 }
 
-USE_RESULT
-static inline int add_longk(struct jy_kpool *pool, long num, size_t *id)
+USE_RESULT static inline int add_longk(struct jy_kpool *pool,
+				       long		num,
+				       size_t	       *id)
 {
 	jy_val_t val = jry_long2v(num);
 
@@ -160,9 +167,10 @@ static inline int add_longk(struct jy_kpool *pool, long num, size_t *id)
 	return ERROR_SUCCESS;
 }
 
-USE_RESULT
-static inline int add_strk(struct jy_kpool *pool, const char *str,
-			   size_t length, size_t *id)
+USE_RESULT static inline int add_strk(struct jy_kpool *pool,
+				      const char      *str,
+				      size_t	       length,
+				      size_t	      *id)
 {
 	uint32_t moffs1	 = sizeof(struct jy_obj_str);
 	uint32_t moffs2	 = moffs1 + sizeof(length);
@@ -194,9 +202,9 @@ static inline int add_strk(struct jy_kpool *pool, const char *str,
 	return ERROR_SUCCESS;
 }
 
-USE_RESULT
-static inline int add_funck(struct jy_kpool *pool, struct jy_obj_func *func,
-			    size_t *id)
+USE_RESULT static inline int add_funck(struct jy_kpool	  *pool,
+				       struct jy_obj_func *func,
+				       size_t		  *id)
 {
 	jry_mem_push(pool->vals, pool->size, jry_func2v(func));
 
@@ -213,9 +221,12 @@ static inline int add_funck(struct jy_kpool *pool, struct jy_obj_func *func,
 	return ERROR_SUCCESS;
 }
 
-static inline bool cmplexpr(struct jy_asts *asts, struct jy_tkns *tkns,
-			    struct jy_scan_ctx *ctx, struct jy_cerrs *errs,
-			    size_t id, struct kexpr *expr)
+static inline bool cmplexpr(struct jy_asts     *asts,
+			    struct jy_tkns     *tkns,
+			    struct jy_scan_ctx *ctx,
+			    struct jy_cerrs    *errs,
+			    size_t		id,
+			    struct kexpr       *expr)
 {
 	enum jy_ast type = asts->types[id];
 	cmplfn_t    fn	 = rule(type);
@@ -223,9 +234,12 @@ static inline bool cmplexpr(struct jy_asts *asts, struct jy_tkns *tkns,
 	return fn(asts, tkns, ctx, errs, id, expr);
 }
 
-static bool cmplliteral(struct jy_asts *asts, struct jy_tkns *tkns,
-			struct jy_scan_ctx *ctx, struct jy_cerrs *UNUSED(errs),
-			size_t id, struct kexpr *expr)
+static bool cmplliteral(struct jy_asts	   *asts,
+			struct jy_tkns	   *tkns,
+			struct jy_scan_ctx *ctx,
+			struct jy_cerrs	   *UNUSED(errs),
+			size_t		    id,
+			struct kexpr	   *expr)
 {
 	enum jy_ast type = asts->types[id];
 
@@ -274,9 +288,12 @@ PANIC:
 	return true;
 }
 
-static bool cmplname(struct jy_asts *asts, struct jy_tkns *tkns,
-		     struct jy_scan_ctx *ctx, struct jy_cerrs *errs, size_t id,
-		     struct kexpr *expr)
+static bool cmplname(struct jy_asts	*asts,
+		     struct jy_tkns	*tkns,
+		     struct jy_scan_ctx *ctx,
+		     struct jy_cerrs	*errs,
+		     size_t		 id,
+		     struct kexpr	*expr)
 {
 	size_t tkn    = asts->tkns[id];
 	char  *lexeme = tkns->lexemes[tkn];
@@ -305,9 +322,12 @@ PANIC:
 	return true;
 }
 
-static bool cmplcall(struct jy_asts *asts, struct jy_tkns *tkns,
-		     struct jy_scan_ctx *ctx, struct jy_cerrs *errs, size_t id,
-		     struct kexpr *expr)
+static bool cmplcall(struct jy_asts	*asts,
+		     struct jy_tkns	*tkns,
+		     struct jy_scan_ctx *ctx,
+		     struct jy_cerrs	*errs,
+		     size_t		 id,
+		     struct kexpr	*expr)
 {
 	size_t tkn    = asts->tkns[id];
 	char  *lexeme = tkns->lexemes[tkn];
@@ -358,9 +378,12 @@ PANIC:
 	return true;
 }
 
-static bool cmplbinary(struct jy_asts *asts, struct jy_tkns *tkns,
-		       struct jy_scan_ctx *ctx, struct jy_cerrs *errs,
-		       size_t id, struct kexpr *expr)
+static bool cmplbinary(struct jy_asts	  *asts,
+		       struct jy_tkns	  *tkns,
+		       struct jy_scan_ctx *ctx,
+		       struct jy_cerrs	  *errs,
+		       size_t		   id,
+		       struct kexpr	  *expr)
 {
 	size_t *child	= asts->child[id];
 	size_t	childsz = asts->childsz[id];
@@ -491,8 +514,11 @@ static inline cmplfn_t rule(enum jy_ast type)
 	return rules[type];
 }
 
-static bool cmplmatch(struct jy_asts *asts, struct jy_tkns *tkns,
-		      struct jy_scan_ctx *ctx, struct jy_cerrs *errs, size_t id)
+static bool cmplmatch(struct jy_asts	 *asts,
+		      struct jy_tkns	 *tkns,
+		      struct jy_scan_ctx *ctx,
+		      struct jy_cerrs	 *errs,
+		      size_t		  id)
 {
 	size_t *child	= asts->child[id];
 	size_t	childsz = asts->childsz[id];
@@ -514,12 +540,16 @@ PANIC:
 	return true;
 }
 
-static bool cmplfield(struct jy_asts *asts, struct jy_tkns *tkns,
-		      struct jy_scan_ctx *ctx, struct jy_cerrs *errs, size_t id,
-		      struct jy_defs *def)
+static bool cmplfield(struct jy_asts	 *asts,
+		      struct jy_tkns	 *tkns,
+		      struct jy_scan_ctx *ctx,
+		      struct jy_cerrs	 *errs,
+		      size_t		  id)
 {
-	size_t *child	= asts->child[id];
-	size_t	childsz = asts->childsz[id];
+	size_t *child	   = asts->child[id];
+	size_t	childsz	   = asts->childsz[id];
+
+	struct jy_defs def = { NULL };
 
 	for (size_t i = 0; i < childsz; ++i) {
 		size_t op_id   = child[i];
@@ -530,33 +560,44 @@ static bool cmplfield(struct jy_asts *asts, struct jy_tkns *tkns,
 		size_t length  = tkns->lexsz[asts->tkns[name_id]];
 
 		// Todo: redeclaration error
-		if (jry_find_def(def, name, length, NULL))
+		if (jry_find_def(&def, name, length, NULL))
 			goto PANIC;
 
 		enum jy_ast type = asts->types[type_id];
 
-		int e = jry_add_def(def, name, length, (jy_val_t) NULL, type);
+		int e = jry_add_def(&def, name, length, (jy_val_t) NULL, type);
 
 		if (e != ERROR_SUCCESS)
 			goto PANIC;
 	}
+
+	size_t newsz	  = sizeof(def) * ctx->events->size;
+	ctx->events->defs = jry_realloc(ctx->events->defs, newsz);
+
+	if (ctx->events->defs == NULL)
+		goto PANIC;
+
+	ctx->events->defs[ctx->events->size]  = def;
+	ctx->events->size		     += 1;
 
 	return false;
 PANIC:
 	return true;
 }
 
-static bool cmplrule(struct jy_asts *asts, struct jy_tkns *tkns,
-		     struct jy_scan_ctx *ctx, struct jy_cerrs *errs, size_t id)
+static bool cmplrule(struct jy_asts	*asts,
+		     struct jy_tkns	*tkns,
+		     struct jy_scan_ctx *ctx,
+		     struct jy_cerrs	*errs,
+		     size_t		 id)
 {
 	size_t *child	= asts->child[id];
 	size_t	childsz = asts->childsz[id];
 
 	for (size_t i = 0; i < childsz; ++i) {
-		size_t	    chid = child[i];
-		enum jy_ast type = asts->types[chid];
-
-		bool panic	 = true;
+		size_t	    chid  = child[i];
+		enum jy_ast type  = asts->types[chid];
+		bool	    panic = true;
 
 		switch (type) {
 		case AST_MATCH:
@@ -574,9 +615,11 @@ PANIC:
 	return true;
 }
 
-static inline bool cmplingress(struct jy_asts *asts, struct jy_tkns *tkns,
-			       struct jy_scan_ctx *ctx, struct jy_cerrs *errs,
-			       size_t id)
+static inline bool cmplingress(struct jy_asts	  *asts,
+			       struct jy_tkns	  *tkns,
+			       struct jy_scan_ctx *ctx,
+			       struct jy_cerrs	  *errs,
+			       size_t		   id)
 {
 	size_t *child	= asts->child[id];
 	size_t	childsz = asts->childsz[id];
@@ -588,13 +631,9 @@ static inline bool cmplingress(struct jy_asts *asts, struct jy_tkns *tkns,
 		bool panic	 = true;
 
 		switch (type) {
-		case AST_FIELDS: {
-			struct jy_defs def = { NULL };
-
-			panic = cmplfield(asts, tkns, ctx, errs, chid, &def);
-			jry_mem_push(ctx->events->defs, ctx->events->size, def);
-			ctx->events->size += 1;
-		}
+		case AST_FIELDS:
+			panic = cmplfield(asts, tkns, ctx, errs, chid);
+			break;
 		default:
 			// Todo: handle mismatch section
 			goto PANIC;
@@ -610,17 +649,17 @@ PANIC:
 	return true;
 }
 
-static bool cmplimport(struct jy_asts *asts, struct jy_tkns *tkns,
-		       struct jy_scan_ctx *ctx, struct jy_cerrs *UNUSED(errs),
-		       size_t id)
+static bool cmplimport(struct jy_asts	  *asts,
+		       struct jy_tkns	  *tkns,
+		       struct jy_scan_ctx *ctx,
+		       struct jy_cerrs	  *UNUSED(errs),
+		       size_t		   id)
 {
-	size_t tkn    = asts->tkns[id];
-	char  *lexeme = tkns->lexemes[tkn];
-	size_t lexsz  = tkns->lexsz[tkn];
-
-	int dirlen    = strlen(ctx->modules->dir);
-
-	char prefix[] = "lib";
+	size_t tkn	= asts->tkns[id];
+	char  *lexeme	= tkns->lexemes[tkn];
+	size_t lexsz	= tkns->lexsz[tkn];
+	int    dirlen	= strlen(ctx->modules->dir);
+	char   prefix[] = "lib";
 
 	char path[dirlen + sizeof(prefix) - 1 + lexsz];
 
@@ -628,10 +667,9 @@ static bool cmplimport(struct jy_asts *asts, struct jy_tkns *tkns,
 	strcat(path, prefix);
 	strncat(path, lexeme, lexsz);
 
-	struct jy_defs	     *def  = NULL;
-	struct jy_module_ctx *mctx = NULL;
-
-	int status		   = jry_module_load(path, &def, &mctx);
+	struct jy_defs	     *def    = NULL;
+	struct jy_module_ctx *mctx   = NULL;
+	int		      status = jry_module_load(path, &def, &mctx);
 
 	// Todo: handle unable to load module
 	if (status != ERROR_SUCCESS)
@@ -651,20 +689,22 @@ PANIC:
 	return true;
 }
 
-static bool cmplroot(struct jy_asts *asts, struct jy_tkns *tkns,
-		     struct jy_scan_ctx *ctx, struct jy_cerrs *errs, size_t id)
+static bool cmplroot(struct jy_asts	*asts,
+		     struct jy_tkns	*tkns,
+		     struct jy_scan_ctx *ctx,
+		     struct jy_cerrs	*errs,
+		     size_t		 id)
 {
 	size_t *child	= asts->child[id];
 	size_t	childsz = asts->childsz[id];
 
 	size_t chingress[childsz];
-	size_t chingress_sz = 0;
-
-	size_t chimport[childsz];
-	size_t chimport_sz = 0;
-
 	size_t chrules[childsz];
-	size_t chrules_sz = 0;
+	size_t chimport[childsz];
+
+	size_t chimport_sz  = 0;
+	size_t chingress_sz = 0;
+	size_t chrules_sz   = 0;
 
 	for (size_t i = 0; i < childsz; ++i) {
 		size_t	    chid = child[i];
@@ -706,8 +746,10 @@ PANIC:
 	return true;
 }
 
-void jry_compile(struct jy_asts *asts, struct jy_tkns *tkns,
-		 struct jy_scan_ctx *ctx, struct jy_cerrs *errs)
+void jry_compile(struct jy_asts	    *asts,
+		 struct jy_tkns	    *tkns,
+		 struct jy_scan_ctx *ctx,
+		 struct jy_cerrs    *errs)
 {
 	size_t	    root = 0;
 	enum jy_ast type = asts->types[root];

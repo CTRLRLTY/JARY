@@ -62,8 +62,10 @@ struct jy_scan_ctx {
 	struct jy_chunks  *cnk;
 };
 
-void jry_compile(struct jy_asts *asts, struct jy_tkns *tkns,
-		 struct jy_scan_ctx *ctx, struct jy_cerrs *errs);
+void jry_compile(struct jy_asts	    *asts,
+		 struct jy_tkns	    *tkns,
+		 struct jy_scan_ctx *ctx,
+		 struct jy_cerrs    *errs);
 
 void jry_free_scan_ctx(struct jy_scan_ctx *ctx);
 

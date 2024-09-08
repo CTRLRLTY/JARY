@@ -18,12 +18,16 @@ struct jy_defs {
 	unsigned int   size;
 };
 
-bool jry_find_def(struct jy_defs *tbl, const char *key, size_t length,
-		  size_t *id);
+bool jry_find_def(struct jy_defs *tbl,
+		  const char	 *key,
+		  size_t	  length,
+		  size_t	 *id);
 
-USE_RESULT
-int jry_add_def(struct jy_defs *tbl, const char *key, size_t length,
-		jy_val_t value, enum jy_ktype type);
+USE_RESULT int jry_add_def(struct jy_defs *tbl,
+			   const char	  *key,
+			   size_t	   length,
+			   jy_val_t	   value,
+			   enum jy_ktype   type);
 
 void jry_free_def(struct jy_defs *tbl);
 

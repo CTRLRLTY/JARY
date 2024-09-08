@@ -17,7 +17,8 @@ struct jy_module_ctx {
 	struct jy_defs *defs;
 };
 
-int jry_module_load(const char *path, struct jy_defs **defs,
+int jry_module_load(const char		  *path,
+		    struct jy_defs	 **defs,
 		    struct jy_module_ctx **ctx)
 {
 	loadfn_t load;
@@ -86,8 +87,10 @@ FINISH:
 	return ret;
 }
 
-int define_function(struct jy_module_ctx *ctx, const char *key, size_t keysz,
-		    struct jy_obj_func *func)
+int define_function(struct jy_module_ctx *ctx,
+		    const char		 *key,
+		    size_t		  keysz,
+		    struct jy_obj_func	 *func)
 {
 	int status =
 		jry_add_def(ctx->defs, key, keysz, jry_func2v(func), JY_K_FUNC);

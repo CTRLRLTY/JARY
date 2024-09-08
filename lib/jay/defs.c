@@ -30,8 +30,9 @@ static inline bool find_entry(struct jy_defs *tbl, uint64_t hash, size_t *id)
 	return type != JY_K_UNKNOWN;
 }
 
-USE_RESULT
-static int regenerate(struct jy_defs *tbl, uint64_t seed, size_t capacity)
+USE_RESULT static int regenerate(struct jy_defs *tbl,
+				 uint64_t	 seed,
+				 size_t		 capacity)
 {
 	size_t moff1 = sizeof(*(tbl->keys)) * capacity;
 	size_t moff2 = moff1 + sizeof(*(tbl->keysz)) * capacity;
@@ -83,16 +84,17 @@ static int regenerate(struct jy_defs *tbl, uint64_t seed, size_t capacity)
 	return ERROR_SUCCESS;
 }
 
-bool jry_find_def(struct jy_defs *tbl, const char *key, size_t length,
-		  size_t *id)
+bool jry_find_def(struct jy_defs *tbl,
+		  const char	 *key,
+		  size_t	  length,
+		  size_t	 *id)
 {
 	if (tbl->size == 0)
 		return false;
 
 	size_t	 entryid;
-	uint64_t hash = keyhash(tbl->seed, key, length);
-
-	bool found    = find_entry(tbl, hash, &entryid);
+	uint64_t hash  = keyhash(tbl->seed, key, length);
+	bool	 found = find_entry(tbl, hash, &entryid);
 
 	if (!found)
 		return false;
@@ -112,8 +114,11 @@ bool jry_find_def(struct jy_defs *tbl, const char *key, size_t length,
 	return memcmp(key, ekey, length) == 0;
 }
 
-int jry_add_def(struct jy_defs *tbl, const char *key, size_t length,
-		jy_val_t value, enum jy_ktype type)
+int jry_add_def(struct jy_defs *tbl,
+		const char     *key,
+		size_t		length,
+		jy_val_t	value,
+		enum jy_ktype	type)
 {
 	int status = ERROR_SUCCESS;
 

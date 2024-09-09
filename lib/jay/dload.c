@@ -92,9 +92,8 @@ int define_function(struct jy_module_ctx *ctx,
 		    size_t		  keysz,
 		    struct jy_obj_func	 *func)
 {
-	int status =
-		jry_add_def(ctx->defs, key, keysz, jry_func2v(func), JY_K_FUNC);
+	jy_val_t v = jry_func2v(func);
 
-	return status;
+	return jry_add_def(ctx->defs, key, keysz, v, JY_K_FUNC);
 }
 #endif // __unix__

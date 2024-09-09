@@ -12,9 +12,10 @@ enum jy_opcode {
 	JY_OP_PUSH32,
 	JY_OP_PUSH64,
 
-	JY_OP_JE,
-	JY_OP_JNE,
+	JY_OP_JMPT,
+	JY_OP_JMPF,
 	JY_OP_CALL,
+	JY_OP_EVENT,
 
 	JY_OP_CMP,
 	JY_OP_LT,
@@ -24,6 +25,8 @@ enum jy_opcode {
 	JY_OP_SUB,
 	JY_OP_MUL,
 	JY_OP_DIV,
+
+	JY_OP_END
 };
 
 struct jy_cerrs {

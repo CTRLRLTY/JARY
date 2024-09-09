@@ -16,50 +16,46 @@ static char *ast2string(enum jy_ast type)
 	case AST_ROOT:
 		buf = strdup("root");
 		break;
-	case AST_RULE:
+	case AST_RULE_DECL:
 		buf = strdup("rule");
 		break;
-	case AST_IMPORT:
+	case AST_IMPORT_STMT:
 		buf = strdup("import");
 		break;
-	case AST_INCLUDE:
+	case AST_INCLUDE_STMT:
 		buf = strdup("include");
 		break;
-	case AST_INGRESS:
+	case AST_INGRESS_DECL:
 		buf = strdup("ingress");
 		break;
 
-	case AST_SET_TYPE:
-		buf = strdup("type");
+	case AST_NAME_DECL:
+		buf = strdup("declare");
 		break;
 	case AST_LONG_TYPE:
-		buf = strdup("long");
+		buf = strdup("type");
 		break;
 	case AST_STR_TYPE:
-		buf = strdup("string");
+		buf = strdup("type");
 		break;
-	case AST_FIELD:
+	case AST_FIELD_NAME:
 		buf = strdup("field");
 		break;
 
-	case AST_JUMP:
+	case AST_JUMP_SECT:
 		buf = strdup("target");
 		break;
-	case AST_INPUT:
+	case AST_INPUT_SECT:
 		buf = strdup("input");
 		break;
-	case AST_MATCH:
+	case AST_MATCH_SECT:
 		buf = strdup("match");
 		break;
-	case AST_CONDITION:
+	case AST_CONDITION_SECT:
 		buf = strdup("condition");
 		break;
-	case AST_FIELDS:
+	case AST_FIELD_SECT:
 		buf = strdup("fields");
-		break;
-
-	case AST_ALIAS:
-		buf = strdup("alias");
 		break;
 
 	case AST_EQUALITY:
@@ -88,21 +84,9 @@ static char *ast2string(enum jy_ast type)
 	case AST_REGMATCH:
 		buf = strdup("regmatch");
 		break;
-	case AST_CALL:
-		buf = strdup("call");
-		break;
 
 	case AST_NOT:
 		buf = strdup("not");
-		break;
-	case AST_EVENT:
-		buf = strdup("event");
-		break;
-	case AST_NAME:
-		buf = strdup("name");
-		break;
-	case AST_PATH:
-		buf = strdup("path");
 		break;
 
 	case AST_REGEXP:
@@ -121,8 +105,54 @@ static char *ast2string(enum jy_ast type)
 		buf = strdup("true");
 		break;
 
+	case AST_ALIAS:
+		buf = strdup("alias");
+		break;
+	case AST_EVENT:
+		buf = strdup("event");
+		break;
+	case AST_FIELD:
+		buf = strdup("field");
+		break;
+	case AST_CALL:
+		buf = strdup("call");
+		break;
+
+	case AST_NAME:
+		buf = strdup("name");
+		break;
+	case AST_PATH:
+		buf = strdup("path");
+		break;
+
 	default:
 		buf = strdup("unknown");
+	}
+
+	return buf;
+}
+
+static char *k2string(enum jy_ktype type)
+{
+	char *buf = NULL;
+
+	switch (type) {
+	case JY_K_LONG:
+		buf = strdup("LONG");
+		break;
+	case JY_K_STR:
+		buf = strdup("STRING");
+		break;
+	case JY_K_FUNC:
+		buf = strdup("FUNCTION");
+		break;
+	case JY_K_TARGET:
+		buf = strdup("TARGET");
+		break;
+
+	default:
+		buf = strdup("UNKNOWN");
+		break;
 	}
 
 	return buf;
@@ -240,23 +270,31 @@ static inline void dumperrs(struct jy_prserrs *errs, const char *path)
 static void dumpkpool(struct jy_kpool *pool)
 {
 	for (size_t i = 0; i < pool->size; ++i) {
-		jy_val_t      val  = pool->vals[i];
-		enum jy_ktype type = pool->types[i];
+		jy_val_t      val     = pool->vals[i];
+		enum jy_ktype type    = pool->types[i];
+		char	     *typestr = k2string(type);
 
-		printf("[%ld] ", i);
+		printf("%5ld | ", i);
 
 		switch (type) {
 		case JY_K_LONG:
-			printf("LONG %ld", jry_v2long(val));
+			printf("%s %ld", typestr, jry_v2long(val));
 			break;
-
 		case JY_K_STR:
-			printf("STRING %s", jry_v2str(val)->str);
+			printf("%s %s", typestr, jry_v2str(val)->str);
 			break;
-
-		default:
+		case JY_K_FUNC: {
+			char *s = k2string(jry_v2func(val)->return_type);
+			printf("%s %s", typestr, s);
+			free(s);
 			break;
 		}
+		default:
+			printf("%s", typestr);
+			break;
+		}
+
+		free(typestr);
 
 		printf("\n");
 	}
@@ -265,14 +303,36 @@ static void dumpkpool(struct jy_kpool *pool)
 static void dumpcnks(struct jy_chunks *cnk)
 {
 	for (size_t i = 0; i < cnk->size; ++i) {
+		printf("%5ld | ", i);
+
 		enum jy_opcode code = cnk->codes[i];
 
 		switch (code) {
 		case JY_OP_PUSH8:
 			printf("OP_PUSH8 %d", cnk->codes[++i]);
 			break;
+		case JY_OP_JMPF: {
+			union {
+				short	*num;
+				uint8_t *code;
+			} ofs;
+
+			ofs.code  = (void *) &cnk->codes[i + 1];
+			i	 += 2;
+			printf("OP_JMPF %d", *ofs.num);
+			break;
+		}
+		case JY_OP_EVENT:
+			printf("OP_EVENT");
+			break;
 		case JY_OP_CMP:
 			printf("OP_CMP");
+			break;
+		case JY_OP_CALL:
+			printf("OP_CALL");
+			break;
+		case JY_OP_END:
+			printf("OP_END");
 			break;
 		default:
 			printf("OP_UNKNOWN");

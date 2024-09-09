@@ -1,5 +1,5 @@
 set( MODULE_SOURCES 
-	std.c
+	mark.c
 )
 
 foreach(SOURCE_PATH IN LISTS MODULE_SOURCES)

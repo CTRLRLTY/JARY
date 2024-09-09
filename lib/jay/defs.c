@@ -158,6 +158,9 @@ FINISH:
 
 void jry_free_def(struct jy_defs *tbl)
 {
+	if (tbl == NULL)
+		return;
+
 	for (unsigned int i = 0; i < tbl->capacity; ++i)
 		jry_free(tbl->keys[i]);
 

@@ -537,10 +537,14 @@ static bool _dot(struct parser	   *p,
 		 size_t		   *root)
 {
 	enum jy_ast prevtype = asts->types[*root];
+	enum jy_ast member_type;
 
 	switch (prevtype) {
 	case AST_NAME:
+		member_type = AST_NAME;
+		break;
 	case AST_EVENT:
+		member_type = AST_FIELD;
 		break;
 	default: {
 		char msg[] = "error: inappropriate accesor usage";
@@ -561,7 +565,7 @@ static bool _dot(struct parser	   *p,
 		goto PANIC;
 	}
 
-	size_t member = addast(asts, AST_NAME, p->tkn, NULL, 0);
+	size_t member = addast(asts, member_type, p->tkn, NULL, 0);
 
 	addchild(asts, *root, member);
 
@@ -773,7 +777,7 @@ static bool _types(struct parser     *p,
 		goto PANIC;
 	}
 
-	size_t left = addast(asts, AST_FIELD, nametkn, NULL, 0);
+	size_t left = addast(asts, AST_FIELD_NAME, nametkn, NULL, 0);
 
 	// consume name
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
@@ -786,7 +790,7 @@ static bool _types(struct parser     *p,
 		goto PANIC;
 	}
 
-	*root = addast(asts, AST_SET_TYPE, eqtkn, NULL, 0);
+	*root = addast(asts, AST_NAME_DECL, eqtkn, NULL, 0);
 
 	// consume =
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
@@ -841,37 +845,37 @@ static bool _section(struct parser     *p,
 
 	switch (sectkntype) {
 	case TKN_JUMP:
-		if (decltype != AST_RULE)
+		if (decltype != AST_RULE_DECL)
 			goto INVALID_SECTION;
 
-		asts->types[sectast] = AST_JUMP;
+		asts->types[sectast] = AST_JUMP_SECT;
 		listfn		     = _expression;
 		break;
 	case TKN_INPUT:
-		if (decltype != AST_INGRESS)
+		if (decltype != AST_INGRESS_DECL)
 			goto INVALID_SECTION;
 
-		asts->types[sectast] = AST_INPUT;
+		asts->types[sectast] = AST_INPUT_SECT;
 		break;
 	case TKN_MATCH:
-		if (decltype != AST_RULE)
+		if (decltype != AST_RULE_DECL)
 			goto INVALID_SECTION;
 
-		asts->types[sectast] = AST_MATCH;
+		asts->types[sectast] = AST_MATCH_SECT;
 		listfn		     = _expression;
 		break;
 	case TKN_CONDITION:
-		if (decltype != AST_RULE)
+		if (decltype != AST_RULE_DECL)
 			goto INVALID_SECTION;
 
-		asts->types[sectast] = AST_CONDITION;
+		asts->types[sectast] = AST_CONDITION_SECT;
 		listfn		     = _expression;
 		break;
 	case TKN_FIELD:
-		if (decltype != AST_INGRESS)
+		if (decltype != AST_INGRESS_DECL)
 			goto INVALID_SECTION;
 
-		asts->types[sectast] = AST_FIELDS;
+		asts->types[sectast] = AST_FIELD_SECT;
 		listfn		     = _types;
 		break;
 	default:
@@ -1034,10 +1038,10 @@ PANIC:
 	return true;
 }
 
-static bool _declaration(struct parser	   *p,
-			 struct jy_asts	   *asts,
-			 struct jy_tkns	   *tkns,
-			 struct jy_prserrs *errs)
+static bool _declstmt(struct parser	*p,
+		      struct jy_asts	*asts,
+		      struct jy_tkns	*tkns,
+		      struct jy_prserrs *errs)
 {
 	size_t declast	     = asts->size - 1;
 	size_t decltkn	     = p->tkn;
@@ -1048,13 +1052,13 @@ static bool _declaration(struct parser	   *p,
 
 	switch (decltype) {
 	case TKN_IMPORT:
-		asts->types[declast] = AST_IMPORT;
+		asts->types[declast] = AST_IMPORT_STMT;
 		if (_identifier(p, asts, tkns, errs, declast))
 			goto PANIC;
 
 		break;
 	case TKN_INGRESS:
-		asts->types[declast] = AST_INGRESS;
+		asts->types[declast] = AST_INGRESS_DECL;
 
 		if (_identifier(p, asts, tkns, errs, declast))
 			goto PANIC;
@@ -1064,7 +1068,7 @@ static bool _declaration(struct parser	   *p,
 
 		break;
 	case TKN_RULE:
-		asts->types[declast] = AST_RULE;
+		asts->types[declast] = AST_RULE_DECL;
 
 		if (_identifier(p, asts, tkns, errs, declast))
 			goto PANIC;
@@ -1074,7 +1078,7 @@ static bool _declaration(struct parser	   *p,
 
 		break;
 	case TKN_INCLUDE: {
-		asts->types[declast] = AST_INCLUDE;
+		asts->types[declast] = AST_INCLUDE_STMT;
 		size_t pattkn	     = p->tkn;
 
 		if (tkns->types[pattkn] != TKN_STRING) {
@@ -1122,7 +1126,7 @@ static void _entry(struct parser     *p,
 	while (!ended(tkns->types, tkns->size)) {
 		size_t declast = addast(asts, AST_NONE, p->tkn, NULL, 0);
 
-		if (_declaration(p, asts, tkns, errs)) {
+		if (_declstmt(p, asts, tkns, errs)) {
 			syncdecl(tkns, &p->src, &p->srcsz, &p->tkn);
 			continue;
 		}

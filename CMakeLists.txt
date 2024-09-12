@@ -9,6 +9,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 add_library(dload OBJECT ${CMAKE_SOURCE_DIR}/lib/jay/dload.c)
 
 if(CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$")
+	target_link_options(dload INTERFACE "-rdynamic")
+
 	add_compile_options(-Wall -Wextra)
 	add_compile_options(-pedantic-errors)
 
@@ -27,8 +29,6 @@ if(CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$")
 	endif()
 
 	add_compile_options($<$<COMPILE_LANGUAGE:CXX>:"-Wno-write-strings -fpermissive">)
-
-	target_link_options(dload INTERFACE "-rdynamic")
 endif()
 
 target_include_directories(dload PRIVATE ${CMAKE_SOURCE_DIR}/include)

@@ -50,3 +50,4 @@ enum jy_ast {
 };
 
 #endif // JAYVM_AST_H
+

@@ -72,12 +72,12 @@ USE_RESULT static int regenerate(struct jy_defs *tbl,
 		int status     = jry_add_def(&newtbl, key, keysz, val, type);
 
 		if (status != ERROR_SUCCESS) {
-			jry_free_def(&newtbl);
+			jry_free_def(newtbl);
 			return status;
 		}
 	}
 
-	jry_free_def(tbl);
+	jry_free_def(*tbl);
 
 	*tbl = newtbl;
 
@@ -156,13 +156,10 @@ FINISH:
 	return status;
 }
 
-void jry_free_def(struct jy_defs *tbl)
+void jry_free_def(struct jy_defs tbl)
 {
-	if (tbl == NULL)
-		return;
+	for (unsigned int i = 0; i < tbl.capacity; ++i)
+		jry_free(tbl.keys[i]);
 
-	for (unsigned int i = 0; i < tbl->capacity; ++i)
-		jry_free(tbl->keys[i]);
-
-	jry_free(tbl->keys);
+	jry_free(tbl.keys);
 }

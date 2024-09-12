@@ -135,7 +135,7 @@ IndentRequiresClause: true
 IndentWidth:     8
 IndentWrappedFunctionNames: false
 InsertBraces:    false
-InsertNewlineAtEOF: false
+InsertNewlineAtEOF: true
 InsertTrailingCommas: None
 # IntegerLiteralSeparator:
 #   Binary:          4

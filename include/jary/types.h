@@ -18,3 +18,4 @@ enum jy_ktype {
 };
 
 #endif // JAYVM_TYPES_H
+

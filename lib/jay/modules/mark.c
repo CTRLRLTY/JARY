@@ -13,14 +13,15 @@ static struct jy_obj_func markfn       = { .return_type = JY_K_TARGET,
 					   .param_sz	= 1,
 					   .func	= (jy_funcptr_t) mark };
 
-int module_load(struct jy_module_ctx *ctx)
+int module_load(int module)
 {
-	define_function(ctx, "mark", 5, &markfn);
+	define_function(module, "mark", 5, &markfn);
 
 	return 0;
 }
 
-int module_unload(struct jy_module_ctx *UNUSED(ctx))
+int module_unload(int UNUSED(module))
 {
 	return 0;
 }
+

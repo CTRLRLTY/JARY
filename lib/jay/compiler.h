@@ -29,10 +29,6 @@ enum jy_opcode {
 	JY_OP_END
 };
 
-struct jy_cerrs {
-	size_t size;
-};
-
 struct jy_kpool {
 	jy_val_t      *vals;
 	enum jy_ktype *types;
@@ -42,9 +38,9 @@ struct jy_kpool {
 };
 
 struct jy_modules {
-	const char	      *dir;
-	struct jy_module_ctx **list;
-	size_t		       size;
+	const char *dir;
+	int	   *list;
+	size_t	    size;
 };
 
 struct jy_chunks {
@@ -68,8 +64,8 @@ struct jy_scan_ctx {
 void jry_compile(struct jy_asts	    *asts,
 		 struct jy_tkns	    *tkns,
 		 struct jy_scan_ctx *ctx,
-		 struct jy_cerrs    *errs);
+		 struct jy_errs	    *errs);
 
-void jry_free_scan_ctx(struct jy_scan_ctx *ctx);
+void jry_free_scan_ctx(struct jy_scan_ctx ctx);
 
 #endif // JAYVM_COMPILER_H

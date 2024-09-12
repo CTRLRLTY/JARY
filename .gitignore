@@ -3,3 +3,4 @@ build/
 BNF
 *.ebnf
 *.jary
+.cache/

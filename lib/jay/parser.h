@@ -6,16 +6,10 @@
 
 #include <stddef.h>
 
-struct jy_prserrs {
-	size_t *lines;
-	// line offset array
-	size_t *ofs;
-	// lexeme length array
-	size_t *lengths;
-	char  **lexemes;
-	char  **msgs;
-	// total errors
-	size_t	size;
+struct jy_errs {
+	const char  **msgs;
+	unsigned int *ids;
+	size_t	      size;
 };
 
 struct jy_asts {
@@ -40,17 +34,13 @@ struct jy_tkns {
 	size_t	     size;
 };
 
-struct jy_parsed {
-	struct jy_tkns *tkns;
-	struct jy_asts *asts;
-};
+void jry_parse(const char     *src,
+	       size_t	       length,
+	       struct jy_asts *ast,
+	       struct jy_tkns *tkns,
+	       struct jy_errs *errs);
 
-void jry_parse(const char	 *src,
-	       size_t		  length,
-	       struct jy_parsed	 *pd,
-	       struct jy_prserrs *errs);
-
-void jry_free_parsed(struct jy_parsed *pd);
-void jry_free_prserrs(struct jy_prserrs *errs);
-
+void jry_free_asts(struct jy_asts asts);
+void jry_free_tkns(struct jy_tkns tkns);
+void jry_free_errs(struct jy_errs errs);
 #endif // JAYVM_PARSER_H

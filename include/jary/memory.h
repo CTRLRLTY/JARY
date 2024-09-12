@@ -14,13 +14,17 @@
 // grow memory from sz
 #define jry_mem_grow(__sz, __ptr)                                              \
 	jry_realloc((__ptr), sizeof(*(__ptr)) * ((__sz) << 1))
+
 // push data to array
 #define jry_mem_push(__ptr, __sz, __data)                                      \
 	do {                                                                   \
 		if (jry_mem_full((__sz) + 1))                                  \
 			(__ptr) = jry_mem_grow(((__sz) + 1), (__ptr));         \
-		(__ptr)[(__sz)] = (__data);                                    \
+                                                                               \
+		if ((__ptr) != NULL)                                           \
+			(__ptr)[(__sz)] = (__data);                            \
 	} while (0)
+
 // pop data from array
 #define jry_mem_pop(__ptr, __sz, __data)                                       \
 	do {                                                                   \
@@ -28,3 +32,4 @@
 	} while (0)
 
 #endif // JAYVM_MEM_H
+

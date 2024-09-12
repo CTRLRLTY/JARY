@@ -25,3 +25,4 @@ struct jy_obj_func {
 struct jy_obj_event;
 
 #endif // JAYVM_OBJECT_H
+

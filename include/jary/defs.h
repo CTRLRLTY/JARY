@@ -29,6 +29,6 @@ USE_RESULT int jry_add_def(struct jy_defs *tbl,
 			   jy_val_t	   value,
 			   enum jy_ktype   type);
 
-void jry_free_def(struct jy_defs *tbl);
+void jry_free_def(struct jy_defs tbl);
 
 #endif // JAYVM_DEFS_H

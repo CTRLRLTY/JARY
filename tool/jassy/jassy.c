@@ -1,6 +1,5 @@
 #include "compiler.h"
 
-#include "jary/error.h"
 #include "jary/memory.h"
 #include "jary/object.h"
 
@@ -250,15 +249,18 @@ static void dumpast(struct jy_asts *asts,
 		printast(asts, lexemes, length, midpoint, idsz, 0, 0);
 }
 
-static inline void dumperrs(struct jy_prserrs *errs, const char *path)
+static inline void dumperrs(struct jy_errs *errs,
+			    struct jy_tkns *tkns,
+			    const char	   *path)
 {
 	for (size_t i = 0; i < errs->size; ++i) {
-		size_t line   = errs->lines[i];
-		size_t ofs    = errs->ofs[i];
-		char  *lexeme = errs->lexemes[i];
-		char  *msg    = errs->msgs[i];
+		size_t	    tkn	   = errs->ids[i];
+		size_t	    line   = tkns->lines[tkn];
+		size_t	    ofs	   = tkns->ofs[tkn];
+		char	   *lexeme = tkns->lexemes[tkn];
+		const char *msg	   = errs->msgs[i];
 
-		printf("%s:%ld:%ld %s\n", path, line, ofs, msg);
+		printf("%s:%ld:%ld error: %s\n", path, line, ofs, msg);
 
 		if (lexeme) {
 			printf("%5ld |\t", line);
@@ -372,16 +374,14 @@ static size_t read_file(const char *path, char **dst)
 
 static void run_file(const char *path, const char *dirpath)
 {
-	char  *src		= NULL;
-	size_t length		= read_file(path, &src);
+	char  *src	    = NULL;
+	size_t length	    = read_file(path, &src);
 
-	struct jy_asts	  asts	= { NULL };
-	struct jy_tkns	  tkns	= { NULL };
-	struct jy_prserrs errs	= { NULL };
+	struct jy_asts asts = { NULL };
+	struct jy_tkns tkns = { NULL };
+	struct jy_errs errs = { NULL };
 
-	struct jy_parsed parsed = { .asts = &asts, .tkns = &tkns };
-
-	jry_parse(src, length, &parsed, &errs);
+	jry_parse(src, length, &asts, &tkns, &errs);
 	jry_free(src);
 
 	printf("===================================="
@@ -408,7 +408,7 @@ static void run_file(const char *path, const char *dirpath)
 	if (errs.size) {
 		printf("ERRORS FOUND  : %ld\n", errs.size);
 
-		dumperrs(&errs, path);
+		dumperrs(&errs, &tkns, path);
 	}
 
 	printf("\n");
@@ -433,9 +433,10 @@ static void run_file(const char *path, const char *dirpath)
 				   .events  = &events,
 				   .cnk	    = &cnk };
 
-	jry_compile(&asts, &tkns, &ctx, NULL);
+	if (errs.size != 0)
+		goto END;
 
-	jry_free_parsed(&parsed);
+	jry_compile(&asts, &tkns, &ctx, &errs);
 
 	printf("___CONSTANT POOL___\n\n");
 	if (ctx.pool->size) {
@@ -450,8 +451,11 @@ static void run_file(const char *path, const char *dirpath)
 		printf("\n");
 	}
 
-	jry_free_prserrs(&errs);
-	jry_free_scan_ctx(&ctx);
+END:
+	jry_free_asts(asts);
+	jry_free_tkns(tkns);
+	jry_free_errs(errs);
+	jry_free_scan_ctx(ctx);
 }
 
 int main(int argc, const char **argv)

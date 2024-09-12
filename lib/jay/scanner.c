@@ -1,7 +1,5 @@
 #include "scanner.h"
 
-#include "jary/memory.h"
-
 #include <ctype.h>
 #include <stdbool.h>
 #include <string.h>
@@ -274,3 +272,4 @@ END_FINISH:
 	*lxstart = start;
 	*lxend	 = current;
 }
+

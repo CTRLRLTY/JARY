@@ -14,6 +14,7 @@ enum jy_tkn {
 	TKN_COMMA,
 	TKN_COLON,
 	TKN_NEWLINE,
+	TKN_SPACES,
 
 	TKN_RULE,
 	TKN_IMPORT,
@@ -64,3 +65,4 @@ enum jy_tkn {
 };
 
 #endif // JAYVM_TOKEN_H
+

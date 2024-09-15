@@ -31,7 +31,6 @@ void jry_scan(const char  *src,
 		goto END_FINISH;
 	}
 
-SCAN:
 	start  = current;
 	char c = NEXT();
 
@@ -102,7 +101,21 @@ SCAN:
 	case ' ':
 	case '\r':
 	case '\t':
-		goto SCAN;
+		*type = TKN_SPACES;
+
+		while (!ENDED()) {
+			switch (CURRENT()) {
+			case ' ':
+			case '\r':
+			case '\t':
+				(void) NEXT();
+				continue;
+			default:
+				goto END_UPDATE;
+			}
+		}
+
+		goto END_UPDATE;
 
 	case '\n':
 		*line += 1;
@@ -272,4 +285,3 @@ END_FINISH:
 	*lxstart = start;
 	*lxend	 = current;
 }
-

@@ -157,26 +157,26 @@ static char *k2string(enum jy_ktype type)
 	return buf;
 }
 
-static void printast(struct jy_asts *asts,
-		     char	   **lexemes,
-		     size_t	     length,
-		     size_t	     midpoint,
-		     size_t	     numsz,
-		     size_t	     id,
-		     size_t	     depth)
+static void print_ast(struct jy_asts *asts,
+		      char	    **lexemes,
+		      size_t	      length,
+		      size_t	      midpoint,
+		      size_t	      numsz,
+		      size_t	      id,
+		      size_t	      depth)
 {
 	enum jy_ast type    = asts->types[id];
 	size_t	   *child   = asts->child[id];
 	size_t	    childsz = asts->childsz[id];
 	size_t	    tkn	    = asts->tkns[id];
-
-	char  *typestr	    = ast2string(type);
-	size_t printed	    = 0;
+	char	   *typestr = ast2string(type);
+	size_t	    printed = 0;
 
 	if (type != AST_ROOT) {
 		printed	    += printf("|");
 		size_t lnsz  = depth * 2 + 1;
-		char   depthline[lnsz];
+
+		char depthline[lnsz];
 		memset(depthline, '_', lnsz);
 		depthline[lnsz - 1]  = '\0';
 		printed		    += printf("%s ", depthline);
@@ -211,8 +211,8 @@ static void printast(struct jy_asts *asts,
 	jry_free(typestr);
 
 	for (size_t i = 0; i < childsz; ++i)
-		printast(asts, lexemes, length, midpoint, numsz, child[i],
-			 depth + 1);
+		print_ast(asts, lexemes, length, midpoint, numsz, child[i],
+			  depth + 1);
 }
 
 static size_t findmaxdepth(struct jy_asts *asts, size_t id, size_t depth)
@@ -229,15 +229,14 @@ static size_t findmaxdepth(struct jy_asts *asts, size_t id, size_t depth)
 	return maxdepth;
 }
 
-static void dumpast(struct jy_asts *asts,
-		    char	  **lexemes,
-		    size_t	    length,
-		    size_t	    maxdepth)
+static void print_asts(struct jy_asts *asts,
+		       char	     **lexemes,
+		       size_t	       length,
+		       size_t	       maxdepth)
 {
 	size_t midpoint = 2 * maxdepth + 15;
 	int    col1sz	= midpoint - 4;
-
-	int idsz	= snprintf(NULL, 0, "%ld", asts->size);
+	int    idsz	= snprintf(NULL, 0, "%ld", asts->size);
 
 	printf("Tree ");
 	printf("%*c ", col1sz, ' ');
@@ -246,30 +245,118 @@ static void dumpast(struct jy_asts *asts,
 	printf("Token\n");
 
 	if (asts->size)
-		printast(asts, lexemes, length, midpoint, idsz, 0, 0);
+		print_ast(asts, lexemes, length, midpoint, idsz, 0, 0);
 }
 
-static inline void dumperrs(struct jy_errs *errs,
-			    struct jy_tkns *tkns,
-			    const char	   *path)
+static inline void print_tkn_line(struct jy_tkns *tkns, uint32_t line)
+{
+	for (uint32_t i = 0; i < tkns->size; ++i) {
+		uint32_t l = tkns->lines[i];
+
+		if (l != line)
+			continue;
+
+		enum jy_tkn type = tkns->types[i];
+
+		if (type == TKN_NEWLINE)
+			continue;
+
+		const char *lexeme = tkns->lexemes[i];
+		printf("%s", lexeme);
+	}
+}
+
+static inline void print_tkn_errs(struct jy_errs *errs,
+				  struct jy_tkns *tkns,
+				  const char	 *path)
 {
 	for (size_t i = 0; i < errs->size; ++i) {
 		size_t	    tkn	   = errs->ids[i];
 		size_t	    line   = tkns->lines[tkn];
-		size_t	    ofs	   = tkns->ofs[tkn];
-		char	   *lexeme = tkns->lexemes[tkn];
+		uint32_t    ofs	   = tkns->ofs[tkn];
+		uint32_t    lexsz  = tkns->lexsz[tkn];
+		const char *lexeme = tkns->lexemes[tkn];
 		const char *msg	   = errs->msgs[i];
 
-		printf("%s:%ld:%ld error: %s\n", path, line, ofs, msg);
+		printf("%s:%ld:%d error: %s ", path, line, ofs, msg);
+		printf("'%s'\n", lexeme);
 
-		if (lexeme) {
-			printf("%5ld |\t", line);
-			printf("%s\n", lexeme);
-		}
+		printf("%5ld | ", line);
+
+		print_tkn_line(tkns, line);
+		printf("\n");
+
+		printf("%5c | %*c", ' ', ofs - lexsz + 1, '^');
 	}
 }
 
-static void dumpkpool(struct jy_kpool *pool)
+static inline void print_ast_err(struct jy_asts *asts,
+				 struct jy_tkns *tkns,
+				 size_t		 prev_line,
+				 size_t		 ast)
+{
+	size_t	*child	 = asts->child[ast];
+	size_t	 childsz = asts->childsz[ast];
+	size_t	 tkn	 = asts->tkns[ast];
+	uint32_t line	 = tkns->lines[tkn];
+
+	if (line > prev_line) {
+		printf("\n%5u | ", line);
+		print_tkn_line(tkns, line);
+	}
+
+	for (size_t i = 0; i < childsz; ++i) {
+		uint32_t cast = child[i];
+		print_ast_err(asts, tkns, line, cast);
+	}
+}
+
+static inline void find_last_tkn(struct jy_asts *asts,
+				 size_t		*lines,
+				 uint32_t	 prev_line,
+				 size_t		 ast,
+				 size_t		*lasttkn)
+{
+	size_t	*child	 = asts->child[ast];
+	uint32_t childsz = asts->childsz[ast];
+	size_t	 tkn	 = asts->tkns[ast];
+	uint32_t line	 = lines[tkn];
+
+	if (line > prev_line)
+		*lasttkn = tkn;
+
+	for (uint32_t i = 0; i < childsz; ++i)
+		find_last_tkn(asts, lines, line, child[i], lasttkn);
+}
+
+static inline void print_ast_errs(struct jy_errs *errs,
+				  struct jy_asts *asts,
+				  struct jy_tkns *tkns,
+				  const char	 *path)
+{
+	for (size_t i = 0; i < errs->size; ++i) {
+		size_t	    ast = errs->ids[i];
+		const char *msg = errs->msgs[i];
+
+		size_t tkn;
+		find_last_tkn(asts, tkns->lines, 0, ast, &tkn);
+
+		uint32_t    line   = tkns->lines[tkn];
+		uint32_t    ofs	   = tkns->ofs[tkn];
+		const char *lexeme = tkns->lexemes[tkn];
+		uint32_t    lexsz  = tkns->lexsz[tkn];
+
+		printf("%s:%d:%d error: %s ", path, line, ofs, msg);
+		printf("'%s'", lexeme);
+
+		print_ast_err(asts, tkns, 0, ast);
+		printf("\n");
+		printf("%5c | %*c", ' ', ofs - lexsz + 1, '^');
+		printf("\n");
+	}
+}
+
+static void print_kpool(struct jy_kpool *pool)
 {
 	for (size_t i = 0; i < pool->size; ++i) {
 		jy_val_t      val     = pool->vals[i];
@@ -302,7 +389,7 @@ static void dumpkpool(struct jy_kpool *pool)
 	}
 }
 
-static void dumpcnks(struct jy_chunks *cnk)
+static void print_chunks(struct jy_chunks *cnk)
 {
 	for (size_t i = 0; i < cnk->size; ++i) {
 		printf("%5ld | ", i);
@@ -398,20 +485,15 @@ static void run_file(const char *path, const char *dirpath)
 	printf("\n");
 
 	size_t maxdepth = findmaxdepth(&asts, 0, 0);
-	dumpast(&asts, tkns.lexemes, tkns.size, maxdepth);
+	print_asts(&asts, tkns.lexemes, tkns.size, maxdepth);
 
 	printf("\n");
 	printf("File Path     : %s\n", path);
 	printf("Maximum Depth : %ld\n", maxdepth);
-	printf("Total nodes   : %ld\n", asts.size);
+	printf("Total Nodes   : %ld\n", asts.size);
+	printf("Token Errors  : %u\n", errs.size);
 
-	if (errs.size) {
-		printf("ERRORS FOUND  : %ld\n", errs.size);
-
-		dumperrs(&errs, &tkns, path);
-	}
-
-	printf("\n");
+	print_tkn_errs(&errs, &tkns, path);
 
 	struct jy_modules modules = { NULL };
 	struct jy_kpool	  kpool	  = { NULL };
@@ -426,32 +508,47 @@ static void run_file(const char *path, const char *dirpath)
 	strcat(buf, dirname);
 
 	modules.dir	       = buf;
-
 	struct jy_scan_ctx ctx = { .modules = &modules,
 				   .pool    = &kpool,
 				   .names   = &names,
 				   .events  = &events,
 				   .cnk	    = &cnk };
 
-	if (errs.size != 0)
+	if (errs.size)
 		goto END;
 
 	jry_compile(&asts, &tkns, &ctx, &errs);
 
+	printf("Total Modules : %u\n", modules.size);
+	printf("Constant Pool : %u\n", kpool.size);
+	printf("Total Names   : %u\n", names.size);
+	printf("Total Events  : %u\n", events.size);
+	printf("Total Chunk   : %u\n", cnk.size);
+	printf("AST Errors    : %u\n", errs.size);
+
+	if (errs.size) {
+		print_ast_errs(&errs, &asts, &tkns, path);
+		goto END;
+	}
+
+	printf("\n");
+
 	printf("___CONSTANT POOL___\n\n");
 	if (ctx.pool->size) {
-		dumpkpool(ctx.pool);
+		print_kpool(ctx.pool);
 		printf("\n");
 	}
 
 	printf("___BYTE CODE_______\n\n");
 
 	if (ctx.cnk->size) {
-		dumpcnks(ctx.cnk);
+		print_chunks(ctx.cnk);
 		printf("\n");
 	}
 
 END:
+
+	printf("\n");
 	jry_free_asts(asts);
 	jry_free_tkns(tkns);
 	jry_free_errs(errs);

@@ -47,15 +47,15 @@ static char msg_expect_eqsign[]	       = "expects = after";
 static char msg_expect_type[]	       = "expect a type after";
 static char msg_expect_semicolon[]     = "expected ':' after";
 static char msg_expect_newline[]       = "expected '\\n' before";
-static char msg_expect_brace[]	       = "expected '{' after";
+static char msg_expect_open_brace[]    = "expected '{' after";
+static char msg_expect_close_brace[]   = "expected '}' after";
 static char msg_expect_string[]	       = "expected string after";
 
 struct parser {
 	const char *src;
 	size_t	    srcsz;
-
 	// current tkn id
-	size_t tkn;
+	size_t	    tkn;
 };
 
 enum prec {
@@ -259,6 +259,9 @@ static inline void next(struct jy_tkns *tkns,
 
 	*tkn	    = tkns->size;
 	tkns->size += 1;
+
+	if (type == TKN_SPACES)
+		next(tkns, src, srcsz, tkn);
 
 	return;
 
@@ -1012,7 +1015,7 @@ static bool _block(struct parser  *p,
 
 	if (tkn != TKN_LEFT_BRACE) {
 		size_t tkn = asts->tkns[declast];
-		push_err(errs, msg_expect_brace, tkn);
+		push_err(errs, msg_expect_open_brace, tkn);
 		goto PANIC;
 	}
 
@@ -1056,7 +1059,7 @@ NEXT_SECTION:
 CLOSING:
 	if (tkns->types[p->tkn] != TKN_RIGHT_BRACE) {
 		size_t tkn = find_last_tkn(tkns);
-		push_err(errs, msg_expect_brace, tkn);
+		push_err(errs, msg_expect_close_brace, tkn);
 		goto PANIC;
 	}
 
@@ -1232,6 +1235,7 @@ static struct rule rules[] = {
 	[TKN_COMMA]	  = { NULL, NULL, PREC_NONE },
 	[TKN_COLON]	  = { NULL, NULL, PREC_NONE },
 	[TKN_NEWLINE]	  = { NULL, NULL, PREC_NONE },
+	[TKN_SPACES]	  = { NULL, NULL, PREC_NONE },
 
 	[TKN_RULE]	  = { NULL, NULL, PREC_NONE },
 	[TKN_IMPORT]	  = { NULL, NULL, PREC_NONE },

@@ -33,24 +33,24 @@ struct jy_kpool {
 	jy_val_t      *vals;
 	enum jy_ktype *types;
 	void	      *obj;
-	size_t	       objsz;
-	size_t	       size;
+	unsigned int   objsz;
+	unsigned int   size;
 };
 
 struct jy_modules {
-	const char *dir;
-	int	   *list;
-	size_t	    size;
+	const char  *dir;
+	int	    *list;
+	unsigned int size;
 };
 
 struct jy_chunks {
-	uint8_t *codes;
-	size_t	 size;
+	uint8_t	    *codes;
+	unsigned int size;
 };
 
 struct jy_events {
 	struct jy_defs *defs;
-	size_t		size;
+	unsigned int	size;
 };
 
 struct jy_scan_ctx {

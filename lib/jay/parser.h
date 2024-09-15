@@ -9,7 +9,7 @@
 struct jy_errs {
 	const char  **msgs;
 	unsigned int *ids;
-	size_t	      size;
+	unsigned int  size;
 };
 
 struct jy_asts {

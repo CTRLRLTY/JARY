@@ -15,3 +15,4 @@ void jry_scan(const char  *src,
 	      const char **lxend);
 
 #endif // JAYVM_SCAN_H
+

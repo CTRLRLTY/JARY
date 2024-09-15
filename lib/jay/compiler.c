@@ -382,7 +382,7 @@ static bool cmplname(struct jy_asts	*asts,
 	size_t nid;
 
 	if (!jry_find_def(scope, lexeme, lexsz, &nid)) {
-		push_err(errs, msg_redefinition, id);
+		push_err(errs, msg_no_definition, id);
 		goto PANIC;
 	}
 

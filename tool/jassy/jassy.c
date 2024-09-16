@@ -151,6 +151,9 @@ static char *k2string(enum jy_ktype type)
 	case JY_K_TARGET:
 		buf = strdup("TARGET");
 		break;
+	case JY_K_MODULE:
+		buf = strdup("MODULE");
+		break;
 
 	default:
 		buf = strdup("UNKNOWN");
@@ -158,6 +161,20 @@ static char *k2string(enum jy_ktype type)
 	}
 
 	return buf;
+}
+
+static size_t findmaxdepth(struct jy_asts *asts, size_t id, size_t depth)
+{
+	size_t *child	 = asts->child[id];
+	size_t	childsz	 = asts->childsz[id];
+	size_t	maxdepth = depth;
+
+	for (size_t i = 0; i < childsz; ++i) {
+		size_t tmp = findmaxdepth(asts, child[i], depth + 1);
+		maxdepth   = (tmp > maxdepth) ? tmp : maxdepth;
+	}
+
+	return maxdepth;
 }
 
 static void print_ast(struct jy_asts *asts,
@@ -218,20 +235,6 @@ static void print_ast(struct jy_asts *asts,
 			  depth + 1);
 }
 
-static size_t findmaxdepth(struct jy_asts *asts, size_t id, size_t depth)
-{
-	size_t *child	 = asts->child[id];
-	size_t	childsz	 = asts->childsz[id];
-	size_t	maxdepth = depth;
-
-	for (size_t i = 0; i < childsz; ++i) {
-		size_t tmp = findmaxdepth(asts, child[i], depth + 1);
-		maxdepth   = (tmp > maxdepth) ? tmp : maxdepth;
-	}
-
-	return maxdepth;
-}
-
 static void print_asts(struct jy_asts *asts,
 		       char	     **lexemes,
 		       size_t	       length,
@@ -290,6 +293,36 @@ static inline void print_tkn_errs(struct jy_errs *errs,
 		printf("\n");
 
 		printf("%5c | %*c", ' ', ofs - lexsz + 1, '^');
+	}
+}
+
+static inline void print_names(struct jy_defs *names, int indent)
+{
+	for (uint32_t i = 0; i < names->capacity; ++i) {
+		const char   *key  = names->keys[i];
+		jy_val_t      v	   = names->vals[i];
+		enum jy_ktype type = names->types[i];
+
+		if (type == JY_K_UNKNOWN)
+			continue;
+
+		char *typestr = k2string(type);
+
+		if (indent)
+			printf("%*c", indent, ' ');
+
+		printf("%5u | %s %s\n", i, key, typestr);
+
+		switch (type) {
+		case JY_K_MODULE:
+		case JY_K_EVENT:
+			print_names(jry_v2def(v), indent + 7);
+			break;
+		default:
+			break;
+		}
+
+		free(typestr);
 	}
 }
 
@@ -540,6 +573,10 @@ static void run_file(const char *path, const char *dirpath)
 		goto END;
 	}
 
+	printf("\n");
+
+	printf("___GLOBAL NAMES____\n\n");
+	print_names(&names, 0);
 	printf("\n");
 
 	printf("___CONSTANT POOL___\n\n");

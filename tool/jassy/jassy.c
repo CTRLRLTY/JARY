@@ -7,160 +7,146 @@
 #include <stdlib.h>
 #include <string.h>
 
-static char *ast2string(enum jy_ast type)
+static const char *ast2string(enum jy_ast type)
 {
-	char *buf = NULL;
-
 	switch (type) {
 	case AST_ROOT:
-		buf = strdup("root");
-		break;
+		return "root";
 	case AST_RULE_DECL:
-		buf = strdup("rule");
-		break;
+		return "rule";
 	case AST_IMPORT_STMT:
-		buf = strdup("import");
-		break;
+		return "import";
 	case AST_INCLUDE_STMT:
-		buf = strdup("include");
-		break;
+		return "include";
 	case AST_INGRESS_DECL:
-		buf = strdup("ingress");
-		break;
-
+		return "ingress";
 	case AST_NAME_DECL:
-		buf = strdup("declare");
-		break;
+		return "declare";
 	case AST_LONG_TYPE:
-		buf = strdup("type");
-		break;
+		return "long";
 	case AST_STR_TYPE:
-		buf = strdup("type");
-		break;
+		return "string";
 	case AST_FIELD_NAME:
-		buf = strdup("field");
-		break;
-
+		return "field";
 	case AST_JUMP_SECT:
-		buf = strdup("target");
-		break;
+		return "target";
 	case AST_INPUT_SECT:
-		buf = strdup("input");
-		break;
+		return "input";
 	case AST_MATCH_SECT:
-		buf = strdup("match");
-		break;
+		return "match";
 	case AST_CONDITION_SECT:
-		buf = strdup("condition");
-		break;
+		return "condition";
 	case AST_FIELD_SECT:
-		buf = strdup("fields");
-		break;
-
+		return "fields";
 	case AST_EQUALITY:
-		buf = strdup("equal");
-		break;
+		return "equal";
 	case AST_LESSER:
-		buf = strdup("lesss");
-		break;
+		return "less";
 	case AST_GREATER:
-		buf = strdup("greater");
-		break;
-
+		return "greater";
 	case AST_ADDITION:
-		buf = strdup("add");
-		break;
+		return "add";
 	case AST_SUBTRACT:
-		buf = strdup("sub");
-		break;
+		return "sub";
 	case AST_MULTIPLY:
-		buf = strdup("mul");
-		break;
+		return "mul";
 	case AST_DIVIDE:
-		buf = strdup("div");
-		break;
-
+		return "div";
 	case AST_REGMATCH:
-		buf = strdup("regmatch");
-		break;
-
+		return "regmatch";
 	case AST_NOT:
-		buf = strdup("not");
-		break;
-
+		return "not";
 	case AST_REGEXP:
-		buf = strdup("regex");
-		break;
+		return "regex";
 	case AST_STRING:
-		buf = strdup("string");
-		break;
+		return "string";
 	case AST_LONG:
-		buf = strdup("long");
-		break;
+		return "long";
 	case AST_FALSE:
-		buf = strdup("false");
-		break;
+		return "false";
 	case AST_TRUE:
-		buf = strdup("true");
-		break;
-
+		return "true";
 	case AST_ALIAS:
-		buf = strdup("alias");
-		break;
-	case AST_EVENT:
-		buf = strdup("event");
-		break;
+		return "alias";
 	case AST_FIELD:
-		buf = strdup("field");
-		break;
+		return "field";
 	case AST_CALL:
-		buf = strdup("call");
-		break;
-
+		return "call";
+	case AST_EVENT:
+		return "event";
 	case AST_NAME:
-		buf = strdup("name");
-		break;
+		return "name";
 	case AST_PATH:
-		buf = strdup("path");
-		break;
-
+		return "path";
 	default:
-		buf = strdup("unknown");
+		return "unknown";
 	}
-
-	return buf;
 }
 
-static char *k2string(enum jy_ktype type)
+static const char *k2string(enum jy_ktype type)
 {
-	char *buf = NULL;
-
 	switch (type) {
-	case JY_K_LONG:
-		buf = strdup("LONG");
-		break;
-	case JY_K_STR:
-		buf = strdup("STRING");
-		break;
-	case JY_K_FUNC:
-		buf = strdup("FUNCTION");
-		break;
-	case JY_K_EVENT:
-		buf = strdup("EVENT");
-		break;
 	case JY_K_TARGET:
-		buf = strdup("TARGET");
-		break;
+		return "[target]";
 	case JY_K_MODULE:
-		buf = strdup("MODULE");
-		break;
-
+		return "[module]";
+	case JY_K_LONG:
+		return "[long]";
+	case JY_K_STR:
+		return "[str]";
+	case JY_K_FUNC:
+		return "[func]";
+	case JY_K_EVENT:
+		return "[event]";
+	case JY_K_BOOL:
+		return "[bool]";
+	case JY_K_INGRESS:
+		return "[ingress]";
+	case JY_K_RULE:
+		return "[rule]";
+	case JY_K_UNKNOWN:
+		return "[unknown]";
 	default:
-		buf = strdup("UNKNOWN");
-		break;
+		return "[unknown]";
 	}
+}
 
-	return buf;
+static const char *codestring(enum jy_opcode code)
+{
+	switch (code) {
+	case JY_OP_PUSH8:
+		return "OP_PUSH8";
+	case JY_OP_PUSH16:
+		return "OP_PUSH16";
+	case JY_OP_PUSH32:
+		return "OP_PUSH32";
+	case JY_OP_PUSH64:
+		return "OP_PUSH64";
+	case JY_OP_ADD:
+		return "OP_ADD";
+	case JY_OP_SUB:
+		return "OP_SUB";
+	case JY_OP_MUL:
+		return "OP_MUL";
+	case JY_OP_DIV:
+		return "OP_DIV";
+	case JY_OP_GT:
+		return "OP_GT";
+	case JY_OP_LT:
+		return "OP_LT";
+	case JY_OP_CMP:
+		return "OP_CMP";
+	case JY_OP_JMPF:
+		return "OP_JMPF";
+	case JY_OP_JMPT:
+		return "OP_JMPT";
+	case JY_OP_CALL:
+		return "OP_CALL";
+	case JY_OP_END:
+		return "OP_END";
+	default:
+		return "OP_UNKNOWN";
+	}
 }
 
 static size_t findmaxdepth(struct jy_asts *asts, size_t id, size_t depth)
@@ -189,7 +175,7 @@ static void print_ast(struct jy_asts *asts,
 	size_t	   *child   = asts->child[id];
 	size_t	    childsz = asts->childsz[id];
 	size_t	    tkn	    = asts->tkns[id];
-	char	   *typestr = ast2string(type);
+	const char *typestr = ast2string(type);
 	size_t	    printed = 0;
 
 	if (type != AST_ROOT) {
@@ -227,8 +213,6 @@ static void print_ast(struct jy_asts *asts,
 		printf("%s", lexemes[tkn]);
 
 	printf("\n");
-
-	jry_free(typestr);
 
 	for (size_t i = 0; i < childsz; ++i)
 		print_ast(asts, lexemes, length, midpoint, numsz, child[i],
@@ -306,12 +290,12 @@ static inline void print_names(struct jy_defs *names, int indent)
 		if (type == JY_K_UNKNOWN)
 			continue;
 
-		char *typestr = k2string(type);
+		const char *typestr = k2string(type);
 
 		if (indent)
 			printf("%*c", indent, ' ');
 
-		printf("%5u | %s %s\n", i, key, typestr);
+		printf("%5u | %s %s\n", i, typestr, key);
 
 		switch (type) {
 		case JY_K_MODULE:
@@ -321,8 +305,6 @@ static inline void print_names(struct jy_defs *names, int indent)
 		default:
 			break;
 		}
-
-		free(typestr);
 	}
 }
 
@@ -397,34 +379,32 @@ static void print_kpool(enum jy_ktype *types, jy_val_t *vals, uint32_t valsz)
 	for (size_t i = 0; i < valsz; ++i) {
 		jy_val_t      val     = vals[i];
 		enum jy_ktype type    = types[i];
-		char	     *typestr = k2string(type);
+		const char   *typestr = k2string(type);
 
 		printf("%5ld | ", i);
 
+		printf("%s ", typestr);
+
 		switch (type) {
 		case JY_K_LONG:
-			printf("%s %ld", typestr, jry_v2long(val));
+			printf("%ld", jry_v2long(val));
 			break;
 		case JY_K_STR:
-			printf("%s %s", typestr, jry_v2str(val)->str);
+			printf("%s", jry_v2str(val)->str);
 			break;
 		case JY_K_EVENT: {
 			struct jy_obj_event ev = jry_v2event(val);
-			printf("%s %u %u", typestr, ev.event, ev.name);
+			printf("%u %u", ev.event, ev.name);
 			break;
 		}
 		case JY_K_FUNC: {
-			char *s = k2string(jry_v2func(val)->return_type);
-			printf("%s %s", typestr, s);
-			free(s);
+			const char *s = k2string(jry_v2func(val)->return_type);
+			printf("%s", s);
 			break;
 		}
 		default:
-			printf("%s", typestr);
 			break;
 		}
-
-		free(typestr);
 
 		printf("\n");
 	}
@@ -436,10 +416,13 @@ static void print_chunks(uint8_t *codes, size_t codesz)
 		printf("%5ld | ", i);
 
 		enum jy_opcode code = codes[i];
+		const char    *op   = codestring(code);
+
+		printf("%s", op);
 
 		switch (code) {
 		case JY_OP_PUSH8:
-			printf("OP_PUSH8 %d", codes[++i]);
+			printf(" %d", codes[++i]);
 			break;
 		case JY_OP_JMPF: {
 			union {
@@ -449,12 +432,9 @@ static void print_chunks(uint8_t *codes, size_t codesz)
 
 			ofs.code  = &codes[i + 1];
 			i	 += 2;
-			printf("OP_JMPF %d", *ofs.num);
+			printf(" %d", *ofs.num);
 			break;
 		}
-		case JY_OP_CMP:
-			printf("OP_CMP");
-			break;
 		case JY_OP_CALL: {
 			union {
 				short	*num;
@@ -465,14 +445,11 @@ static void print_chunks(uint8_t *codes, size_t codesz)
 			ofs.code	 = &codes[i + 1];
 			i		+= 2;
 
-			printf("OP_CALL %u %u", paramsz, *ofs.num);
+			printf(" %u %u", paramsz, *ofs.num);
 			break;
 		}
-		case JY_OP_END:
-			printf("OP_END");
-			break;
 		default:
-			printf("OP_UNKNOWN");
+			break;
 		}
 
 		printf("\n");

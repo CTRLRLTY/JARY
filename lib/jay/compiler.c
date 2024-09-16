@@ -53,10 +53,7 @@ static bool isnum(enum jy_ktype type)
 	}
 }
 
-static bool find_ast_type(struct jy_asts *asts,
-			  enum jy_ast	  type,
-			  size_t	  from,
-			  size_t	 *end)
+static bool find_ast_type(struct jy_asts *asts, enum jy_ast type, size_t from)
 {
 	enum jy_ast current_type = asts->types[from];
 
@@ -69,13 +66,10 @@ static bool find_ast_type(struct jy_asts *asts,
 	for (uint32_t i = 0; i < childsz; ++i) {
 		size_t chid = child[i];
 
-		if (find_ast_type(asts, type, chid, end)) {
-			*end = chid;
+		if (find_ast_type(asts, type, chid))
 			return true;
-		}
 	}
 
-	*end = from;
 	return false;
 }
 
@@ -235,19 +229,19 @@ static bool cmplliteral(struct jy_asts	   *asts,
 	}
 
 DONE:
+	write_push(&ctx->codes, &ctx->codesz, expr->id);
 	return false;
 
 PANIC:
 	return true;
 }
 
-static bool cmplfield(struct jy_asts	 *asts,
-		      struct jy_tkns	 *tkns,
-		      struct jy_scan_ctx *__unused(ctx),
-		      struct jy_errs	 *errs,
-		      struct jy_defs	 *scope,
-		      size_t		  id,
-		      struct kexpr	 *expr)
+static bool cmplfield(struct jy_asts *asts,
+		      struct jy_tkns *tkns,
+		      struct jy_errs *errs,
+		      struct jy_defs *scope,
+		      size_t	      id,
+		      struct kexpr   *expr)
 {
 	size_t tkn    = asts->tkns[id];
 	char  *lexeme = tkns->lexemes[tkn];
@@ -330,7 +324,7 @@ static bool cmplevent(struct jy_asts	 *asts,
 	size_t	     chid    = child[0];
 	struct kexpr operand = { 0 };
 
-	if (cmplexpr(asts, tkns, ctx, errs, def, chid, &operand))
+	if (cmplfield(asts, tkns, errs, def, chid, &operand))
 		goto PANIC;
 
 	uint32_t event = 0;
@@ -359,7 +353,7 @@ static bool cmplevent(struct jy_asts	 *asts,
 
 		kid = i;
 
-		goto DONE;
+		goto EMIT;
 	}
 
 	struct jy_obj_event ev	= { .event = event, .name = operand.id };
@@ -374,9 +368,10 @@ static bool cmplevent(struct jy_asts	 *asts,
 	kid	    = ctx->valsz;
 	ctx->valsz += 1;
 
-DONE:
+EMIT:
 	expr->id   = kid;
 	expr->type = JY_K_EVENT;
+	write_push(&ctx->codes, &ctx->codesz, kid);
 
 	return false;
 PANIC:
@@ -432,8 +427,6 @@ static bool cmplcall(struct jy_asts	*asts,
 			push_err(errs, msg_argument_mismatch, id);
 			goto PANIC;
 		}
-
-		write_push(&ctx->codes, &ctx->codesz, pexpr.id);
 	}
 
 	uint32_t call_id;
@@ -559,8 +552,6 @@ static bool cmplbinary(struct jy_asts	  *asts,
 		goto PANIC;
 	}
 
-	write_push(&ctx->codes, &ctx->codesz, operand[0].id);
-	write_push(&ctx->codes, &ctx->codesz, operand[1].id);
 	write_byte(&ctx->codes, &ctx->codesz, code);
 
 	return false;
@@ -570,7 +561,6 @@ PANIC:
 
 static cmplfn_t rules[TOTAL_AST_TYPES] = {
 	[AST_EVENT]    = cmplevent,
-	[AST_FIELD]    = cmplfield,
 	[AST_CALL]     = cmplcall,
 
 	// > binaries
@@ -625,10 +615,52 @@ static inline bool cmplmatchsect(struct jy_asts	    *asts,
 			continue;
 		}
 
-		size_t event_id;
-
-		if (!find_ast_type(asts, AST_EVENT, chid, &event_id))
+		if (!find_ast_type(asts, AST_EVENT, chid)) {
+			push_err(errs, msg_inv_match_expr, id);
 			continue;
+		}
+
+		write_byte(&ctx->codes, &ctx->codesz, JY_OP_JMPF);
+
+		jry_mem_push(*patchofs, *patchsz, ctx->codesz);
+
+		if (patchofs == NULL)
+			goto PANIC;
+
+		*patchsz += 1;
+
+		// Reserved 2 bytes for short jump
+		write_byte(&ctx->codes, &ctx->codesz, 0);
+		write_byte(&ctx->codes, &ctx->codesz, 0);
+	}
+
+	return false;
+PANIC:
+	return true;
+}
+
+static inline bool cmplcondsect(struct jy_asts	   *asts,
+				struct jy_tkns	   *tkns,
+				struct jy_scan_ctx *ctx,
+				struct jy_errs	   *errs,
+				size_t		    id,
+				size_t		  **patchofs,
+				size_t		   *patchsz)
+{
+	size_t *child	= asts->child[id];
+	size_t	childsz = asts->childsz[id];
+
+	for (size_t i = 0; i < childsz; ++i) {
+		size_t	     chid = child[i];
+		struct kexpr expr = { 0 };
+
+		if (cmplexpr(asts, tkns, ctx, errs, ctx->names, chid, &expr))
+			continue;
+
+		if (expr.type != JY_K_BOOL) {
+			push_err(errs, msg_inv_match_expr, id);
+			continue;
+		}
 
 		write_byte(&ctx->codes, &ctx->codesz, JY_OP_JMPF);
 
@@ -779,6 +811,11 @@ static inline bool cmplruledecl(struct jy_asts	   *asts,
 	for (size_t i = 0; i < matchsz; ++i) {
 		size_t id = matchs[i];
 		cmplmatchsect(asts, tkns, ctx, errs, id, &patchofs, &patchsz);
+	}
+
+	for (size_t i = 0; i < condsz; ++i) {
+		size_t id = conds[i];
+		cmplcondsect(asts, tkns, ctx, errs, id, &patchofs, &patchsz);
 	}
 
 	for (size_t i = 0; i < targetsz; ++i) {

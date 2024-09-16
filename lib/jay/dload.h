@@ -2,7 +2,6 @@
 #define JAYVM_DLOAD_H
 
 #include "jary/common.h"
-#include "jary/defs.h"
 
 // negative result = error
 // positive return = handle to module

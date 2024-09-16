@@ -3,7 +3,6 @@
 
 #include "jary/common.h"
 #include "jary/types.h"
-#include "jary/value.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -30,5 +29,15 @@ USE_RESULT int jry_add_def(struct jy_defs *tbl,
 			   enum jy_ktype   type);
 
 void jry_free_def(struct jy_defs tbl);
+
+static inline jy_val_t jry_def2v(struct jy_defs *def)
+{
+	return (jy_val_t) def;
+}
+
+static inline struct jy_defs *jry_v2def(jy_val_t val)
+{
+	return (struct jy_defs *) val;
+}
 
 #endif // JAYVM_DEFS_H

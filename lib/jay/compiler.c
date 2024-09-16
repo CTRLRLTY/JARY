@@ -1,5 +1,7 @@
 #include "compiler.h"
 
+#include "dload.h"
+
 #include "jary/error.h"
 #include "jary/memory.h"
 #include "jary/object.h"
@@ -18,8 +20,12 @@ static char msg_inv_rule_sect[]	      = "invalid rule section";
 static char msg_inv_match_expr[]      = "invalid match expression";
 static char msg_inv_target_expr[]     = "invalid target expression";
 static char msg_inv_operation[]	      = "invalid operation";
+static char msg_operation_mismatch[]  = "invalid operation type mismatch";
+static char msg_argument_mismatch[]   = "bad argument type mismatch";
 static char msg_type_mismatch[]	      = "type mismatch";
-static char msg_redefinition[]	      = "redefinition";
+static char msg_redefinition[]	      = "redefinition of";
+static char msg_event_capped[] =
+	"too many ingress declaration, you can only have 256. ";
 
 struct kexpr {
 	size_t	      id;
@@ -199,6 +205,31 @@ static inline bool find_funck(struct jy_kpool *pool,
 	return false;
 }
 
+static inline bool find_eventk(struct jy_kpool *pool,
+			       uint32_t		event,
+			       uint32_t		name,
+			       size_t	       *id)
+{
+	for (size_t i = 0; i < pool->size; ++i) {
+		enum jy_ktype t = pool->types[i];
+
+		if (t != JY_K_EVENT)
+			continue;
+
+		struct jy_obj_event ev = jry_v2event(pool->vals[i]);
+
+		if (ev.event != event || ev.name != name)
+			continue;
+
+		if (id != NULL)
+			*id = i;
+
+		return true;
+	}
+
+	return false;
+}
+
 USE_RESULT static inline int add_longk(struct jy_kpool *pool,
 				       long		num,
 				       size_t	       *id)
@@ -269,6 +300,25 @@ USE_RESULT static inline int add_funck(struct jy_kpool	  *pool,
 	return ERROR_SUCCESS;
 }
 
+USE_RESULT static inline int add_eventk(struct jy_kpool *pool,
+					uint32_t	 event,
+					uint32_t	 name,
+					size_t		*id)
+{
+	struct jy_obj_event ev	= { .event = event, .name = name };
+	jy_val_t	    val = jry_event2v(ev);
+
+	jry_mem_push(pool->vals, pool->size, val);
+	jry_mem_push(pool->types, pool->size, JY_K_EVENT);
+
+	if (pool->vals == NULL || pool->types == NULL)
+		return ERROR_NOMEM;
+
+	*id = pool->size++;
+
+	return ERROR_SUCCESS;
+}
+
 static inline bool cmplexpr(struct jy_asts     *asts,
 			    struct jy_tkns     *tkns,
 			    struct jy_scan_ctx *ctx,
@@ -331,8 +381,6 @@ static bool cmplliteral(struct jy_asts	   *asts,
 		goto PANIC;
 	}
 
-	write_push(ctx->cnk, expr->id);
-
 	return false;
 
 PANIC:
@@ -341,7 +389,7 @@ PANIC:
 
 static bool cmplfield(struct jy_asts	 *asts,
 		      struct jy_tkns	 *tkns,
-		      struct jy_scan_ctx *ctx,
+		      struct jy_scan_ctx *UNUSED(ctx),
 		      struct jy_errs	 *errs,
 		      struct jy_defs	 *scope,
 		      size_t		  id,
@@ -358,9 +406,8 @@ static bool cmplfield(struct jy_asts	 *asts,
 		goto PANIC;
 	}
 
-	write_push(ctx->cnk, nid);
-	enum jy_ktype type = scope->types[nid];
-	expr->type	   = type;
+	expr->id   = nid;
+	expr->type = scope->types[nid];
 
 	return false;
 PANIC:
@@ -410,10 +457,49 @@ static bool cmplevent(struct jy_asts	 *asts,
 		      size_t		  id,
 		      struct kexpr	 *expr)
 {
-	if (cmplname(asts, tkns, ctx, errs, ctx->names, id, expr))
+	size_t tkn    = asts->tkns[id];
+	char  *lexeme = tkns->lexemes[tkn];
+	size_t lexsz  = tkns->lexsz[tkn];
+
+	size_t nid;
+
+	if (!jry_find_def(ctx->names, lexeme, lexsz, &nid)) {
+		push_err(errs, msg_no_definition, id);
+		goto PANIC;
+	}
+
+	struct jy_defs *def   = jry_v2def(ctx->names->vals[nid]);
+	size_t	       *child = asts->child[id];
+
+	jry_assert(asts->childsz[id] == 1);
+
+	size_t	     chid    = child[0];
+	struct kexpr operand = { 0 };
+
+	if (cmplexpr(asts, tkns, ctx, errs, def, chid, &operand))
 		goto PANIC;
 
-	write_byte(ctx->cnk, JY_OP_EVENT);
+	uint32_t event = 0;
+
+	for (uint32_t i = 0; i < ctx->events->size; ++i) {
+		struct jy_defs *temp = &ctx->events->defs[i];
+
+		if (temp == def) {
+			event = i;
+			break;
+		}
+	}
+
+	size_t kid;
+
+	if (!find_eventk(ctx->pool, event, operand.id, &kid))
+		if (add_eventk(ctx->pool, event, operand.id, &kid) != 0)
+			goto PANIC;
+
+	write_push(ctx->cnk, kid);
+
+	expr->id   = nid;
+	expr->type = JY_K_EVENT;
 
 	return false;
 PANIC:
@@ -466,7 +552,7 @@ static bool cmplcall(struct jy_asts	*asts,
 			goto PANIC;
 
 		if (expect != pexpr.type) {
-			push_err(errs, msg_type_mismatch, id);
+			push_err(errs, msg_argument_mismatch, id);
 			goto PANIC;
 		}
 	}
@@ -497,26 +583,23 @@ static bool cmplbinary(struct jy_asts	  *asts,
 {
 	jry_assert(asts->childsz[id] == 2);
 
-	size_t *child		= asts->child[id];
-
-	enum jy_ktype ktypes[2] = { -1, -1 };
+	size_t	    *child	= asts->child[id];
+	struct kexpr operand[2] = { 0 };
 
 	for (size_t i = 0; i < 2; ++i) {
-		struct kexpr pexpr = { 0 };
+		struct kexpr *expr = &operand[i];
 
-		if (cmplexpr(asts, tkns, ctx, errs, scope, child[i], &pexpr))
+		if (cmplexpr(asts, tkns, ctx, errs, scope, child[i], expr))
 			goto PANIC;
 
-		ktypes[i] = pexpr.type;
-
-		if (ktypes[i] == JY_K_UNKNOWN) {
+		if (expr->type == JY_K_UNKNOWN) {
 			push_err(errs, msg_inv_operation, id);
 			goto PANIC;
 		}
 	}
 
-	if (ktypes[0] != ktypes[1]) {
-		push_err(errs, msg_inv_operation, id);
+	if (operand[0].type != operand[1].type) {
+		push_err(errs, msg_operation_mismatch, id);
 		goto PANIC;
 	}
 
@@ -529,7 +612,7 @@ static bool cmplbinary(struct jy_asts	  *asts,
 		expr->type = JY_K_BOOL;
 		break;
 	case AST_LESSER:
-		if (!isnum(ktypes[0])) {
+		if (!isnum(operand[0].type)) {
 			push_err(errs, msg_inv_operation, id);
 			goto PANIC;
 		}
@@ -537,7 +620,7 @@ static bool cmplbinary(struct jy_asts	  *asts,
 		expr->type = JY_K_BOOL;
 		break;
 	case AST_GREATER:
-		if (!isnum(ktypes[0])) {
+		if (!isnum(operand[0].type)) {
 			push_err(errs, msg_inv_operation, id);
 			goto PANIC;
 		}
@@ -546,25 +629,27 @@ static bool cmplbinary(struct jy_asts	  *asts,
 		break;
 	case AST_ADDITION:
 		code	   = JY_OP_ADD;
-		expr->type = ktypes[0];
+		expr->type = operand[0].type;
 		break;
 	case AST_SUBTRACT:
 		code	   = JY_OP_SUB;
-		expr->type = ktypes[0];
+		expr->type = operand[0].type;
 		break;
 	case AST_MULTIPLY:
 		code	   = JY_OP_MUL;
-		expr->type = ktypes[0];
+		expr->type = operand[0].type;
 		break;
 	case AST_DIVIDE:
 		code	   = JY_OP_DIV;
-		expr->type = ktypes[0];
+		expr->type = operand[0].type;
 		break;
 	default:
 		push_err(errs, msg_inv_operation, id);
 		goto PANIC;
 	}
 
+	write_push(ctx->cnk, operand[0].id);
+	write_push(ctx->cnk, operand[1].id);
 	write_byte(ctx->cnk, code);
 
 	return false;
@@ -706,18 +791,14 @@ PANIC:
 	return true;
 }
 
-static inline bool cmplfieldsect(struct jy_asts	    *asts,
-				 struct jy_tkns	    *tkns,
-				 struct jy_scan_ctx *ctx,
-				 struct jy_errs	    *errs,
-				 size_t		     id,
-				 const char	    *key,
-				 size_t		     keysz)
+static inline bool cmplfieldsect(struct jy_asts *asts,
+				 struct jy_tkns *tkns,
+				 struct jy_errs *errs,
+				 size_t		 id,
+				 struct jy_defs *def)
 {
-	size_t *child	   = asts->child[id];
-	size_t	childsz	   = asts->childsz[id];
-
-	struct jy_defs def = { NULL };
+	size_t *child	= asts->child[id];
+	size_t	childsz = asts->childsz[id];
 
 	for (size_t i = 0; i < childsz; ++i) {
 		size_t op_id   = child[i];
@@ -726,8 +807,7 @@ static inline bool cmplfieldsect(struct jy_asts	    *asts,
 		char  *name    = tkns->lexemes[asts->tkns[name_id]];
 		size_t length  = tkns->lexsz[asts->tkns[name_id]];
 
-		// Todo: redeclaration error
-		if (jry_find_def(&def, name, length, NULL)) {
+		if (jry_find_def(def, name, length, NULL)) {
 			push_err(errs, msg_redefinition, id);
 			continue;
 		}
@@ -747,30 +827,14 @@ static inline bool cmplfieldsect(struct jy_asts	    *asts,
 			goto PANIC;
 		}
 
-		int e = jry_add_def(&def, name, length, (jy_val_t) NULL, ktype);
+		int e = jry_add_def(def, name, length, (jy_val_t) NULL, ktype);
 
 		if (e != ERROR_SUCCESS)
 			goto PANIC;
 	}
 
-	size_t oldsz	  = ctx->events->size;
-	size_t allocsz	  = sizeof(def) * (oldsz + 1);
-	ctx->events->defs = jry_realloc(ctx->events->defs, allocsz);
-
-	if (ctx->events->defs == NULL)
-		goto PANIC;
-
-	ctx->events->defs[oldsz] = def;
-	jy_val_t val		 = jry_def2v(&ctx->events->defs[oldsz]);
-
-	if (jry_add_def(ctx->names, key, keysz, val, JY_K_EVENT) != 0)
-		goto PANIC;
-
-	ctx->events->size += 1;
-
 	return false;
 PANIC:
-	jry_free_def(def);
 	return true;
 }
 
@@ -871,9 +935,15 @@ static inline bool cmplingressdecl(struct jy_asts     *asts,
 	size_t fields[childsz];
 	size_t fieldsz = 0;
 
-	// Todo: redeclaration error
-	if (jry_find_def(ctx->names, lex, lexsz, NULL))
+	if (jry_find_def(ctx->names, lex, lexsz, NULL)) {
+		push_err(errs, msg_redefinition, id);
 		goto PANIC;
+	}
+
+	if (ctx->events->size & 0x10000) {
+		push_err(errs, msg_event_capped, id);
+		goto PANIC;
+	}
 
 	for (size_t i = 0; i < childsz; ++i) {
 		size_t	    chid = child[i];
@@ -888,8 +958,25 @@ static inline bool cmplingressdecl(struct jy_asts     *asts,
 		}
 	}
 
+	struct jy_defs def = { .keys = NULL };
+
 	for (size_t i = 0; i < fieldsz; ++i)
-		cmplfieldsect(asts, tkns, ctx, errs, fields[i], lex, lexsz);
+		cmplfieldsect(asts, tkns, errs, fields[i], &def);
+
+	size_t oldsz	  = ctx->events->size;
+	size_t allocsz	  = sizeof(def) * (oldsz + 1);
+	ctx->events->defs = jry_realloc(ctx->events->defs, allocsz);
+
+	if (ctx->events->defs == NULL)
+		goto PANIC;
+
+	ctx->events->defs[oldsz] = def;
+	jy_val_t val		 = jry_def2v(&ctx->events->defs[oldsz]);
+
+	if (jry_add_def(ctx->names, lex, lexsz, val, JY_K_EVENT) != 0)
+		goto PANIC;
+
+	ctx->events->size += 1;
 
 	return false;
 

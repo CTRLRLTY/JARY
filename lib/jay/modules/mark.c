@@ -1,12 +1,12 @@
 #include "jary/common.h"
 #include "jary/modules.h"
 
-static jy_val_t mark(jy_val_t *vals, int count)
+static jy_val_t mark(int module, jy_val_t *vals, int count)
 {
 	return 0;
 }
 
-static enum jy_ktype	  markfn_param = JY_K_STR;
+static enum jy_ktype	  markfn_param = JY_K_EVENT;
 static struct jy_obj_func markfn       = { .return_type = JY_K_TARGET,
 					   .internal	= true,
 					   .param_types = &markfn_param,
@@ -24,4 +24,3 @@ int module_unload(int UNUSED(module))
 {
 	return 0;
 }
-

@@ -4,3 +4,4 @@ BNF
 *.ebnf
 *.jary
 .cache/
+*.gdb

@@ -145,6 +145,9 @@ static char *k2string(enum jy_ktype type)
 	case JY_K_FUNC:
 		buf = strdup("FUNCTION");
 		break;
+	case JY_K_EVENT:
+		buf = strdup("EVENT");
+		break;
 	case JY_K_TARGET:
 		buf = strdup("TARGET");
 		break;
@@ -372,6 +375,11 @@ static void print_kpool(struct jy_kpool *pool)
 		case JY_K_STR:
 			printf("%s %s", typestr, jry_v2str(val)->str);
 			break;
+		case JY_K_EVENT: {
+			struct jy_obj_event ev = jry_v2event(val);
+			printf("%s %u %u", typestr, ev.event, ev.name);
+			break;
+		}
 		case JY_K_FUNC: {
 			char *s = k2string(jry_v2func(val)->return_type);
 			printf("%s %s", typestr, s);
@@ -411,9 +419,6 @@ static void print_chunks(struct jy_chunks *cnk)
 			printf("OP_JMPF %d", *ofs.num);
 			break;
 		}
-		case JY_OP_EVENT:
-			printf("OP_EVENT");
-			break;
 		case JY_OP_CMP:
 			printf("OP_CMP");
 			break;
@@ -464,9 +469,9 @@ static void run_file(const char *path, const char *dirpath)
 	char  *src	    = NULL;
 	size_t length	    = read_file(path, &src);
 
-	struct jy_asts asts = { NULL };
-	struct jy_tkns tkns = { NULL };
-	struct jy_errs errs = { NULL };
+	struct jy_asts asts = { .types = NULL };
+	struct jy_tkns tkns = { .types = NULL };
+	struct jy_errs errs = { .msgs = NULL };
 
 	jry_parse(src, length, &asts, &tkns, &errs);
 	jry_free(src);
@@ -495,11 +500,11 @@ static void run_file(const char *path, const char *dirpath)
 
 	print_tkn_errs(&errs, &tkns, path);
 
-	struct jy_modules modules = { NULL };
-	struct jy_kpool	  kpool	  = { NULL };
-	struct jy_defs	  names	  = { NULL };
-	struct jy_chunks  cnk	  = { NULL };
-	struct jy_events  events  = { NULL };
+	struct jy_modules modules = { .dir = NULL };
+	struct jy_kpool	  kpool	  = { .vals = NULL };
+	struct jy_defs	  names	  = { .keys = NULL };
+	struct jy_chunks  cnk	  = { .codes = NULL };
+	struct jy_events  events  = { .defs = NULL };
 
 	char dirname[]		  = "/modules/";
 	char buf[strlen(dirpath) + sizeof(dirname)];

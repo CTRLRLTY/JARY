@@ -1,5 +1,8 @@
 #include "dload.h"
 
+#include "jary/defs.h"
+#include "jary/object.h"
+
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>

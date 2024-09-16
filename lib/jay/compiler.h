@@ -4,7 +4,7 @@
 #include "parser.h"
 
 #include "jary/defs.h"
-#include "jary/types.h"
+#include "jary/object.h"
 
 #include <stdint.h>
 
@@ -30,36 +30,30 @@ enum jy_opcode {
 	JY_OP_END
 };
 
-struct jy_kpool {
-	jy_val_t      *vals;
-	enum jy_ktype *types;
-	void	      *obj;
-	unsigned int   objsz;
-	unsigned int   size;
-};
-
-struct jy_modules {
-	const char  *dir;
-	int	    *list;
-	unsigned int size;
-};
-
-struct jy_chunks {
-	uint8_t	    *codes;
-	unsigned int size;
-};
-
-struct jy_events {
-	struct jy_defs *defs;
-	unsigned int	size;
-};
-
 struct jy_scan_ctx {
-	struct jy_modules *modules;
-	struct jy_kpool	  *pool;
-	struct jy_defs	  *names;
-	struct jy_events  *events;
-	struct jy_chunks  *cnk;
+	// module dirpath
+	const char     *mdir;
+	// list of modules
+	int	       *modules;
+	// global names
+	struct jy_defs *names;
+	// event array
+	struct jy_defs *events;
+	// code chunk array
+	uint8_t	       *codes;
+	// call table
+	jy_funcptr_t  **call;
+	// constant table
+	jy_val_t       *vals;
+	enum jy_ktype  *types;
+	// object linear memory buffer
+	void	       *obj;
+	uint32_t	modulesz;
+	uint32_t	objsz;
+	uint32_t	valsz;
+	uint32_t	eventsz;
+	uint32_t	codesz;
+	uint32_t	callsz;
 };
 
 void jry_compile(struct jy_asts	    *asts,

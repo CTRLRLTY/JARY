@@ -22,11 +22,11 @@ bool jry_find_def(struct jy_defs *tbl,
 		  size_t	  length,
 		  size_t	 *id);
 
-USE_RESULT int jry_add_def(struct jy_defs *tbl,
-			   const char	  *key,
-			   size_t	   length,
-			   jy_val_t	   value,
-			   enum jy_ktype   type);
+__use_result int jry_add_def(struct jy_defs *tbl,
+			     const char	    *key,
+			     size_t	     length,
+			     jy_val_t	     value,
+			     enum jy_ktype   type);
 
 void jry_free_def(struct jy_defs tbl);
 

@@ -20,7 +20,7 @@ int module_load(int module)
 	return 0;
 }
 
-int module_unload(int UNUSED(module))
+int module_unload(int __unused(module))
 {
 	return 0;
 }

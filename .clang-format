@@ -59,6 +59,7 @@ AlwaysBreakBeforeMultilineStrings: false
 AlwaysBreakTemplateDeclarations: MultiLine
 AttributeMacros:
   - __capability
+  - __use_result
 BinPackArguments: true
 BinPackParameters: false
 BitFieldColonSpacing: Both

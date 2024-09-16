@@ -359,11 +359,11 @@ static inline void print_ast_errs(struct jy_errs *errs,
 	}
 }
 
-static void print_kpool(struct jy_kpool *pool)
+static void print_kpool(enum jy_ktype *types, jy_val_t *vals, uint32_t valsz)
 {
-	for (size_t i = 0; i < pool->size; ++i) {
-		jy_val_t      val     = pool->vals[i];
-		enum jy_ktype type    = pool->types[i];
+	for (size_t i = 0; i < valsz; ++i) {
+		jy_val_t      val     = vals[i];
+		enum jy_ktype type    = types[i];
 		char	     *typestr = k2string(type);
 
 		printf("%5ld | ", i);
@@ -397,16 +397,16 @@ static void print_kpool(struct jy_kpool *pool)
 	}
 }
 
-static void print_chunks(struct jy_chunks *cnk)
+static void print_chunks(uint8_t *codes, size_t codesz)
 {
-	for (size_t i = 0; i < cnk->size; ++i) {
+	for (size_t i = 0; i < codesz; ++i) {
 		printf("%5ld | ", i);
 
-		enum jy_opcode code = cnk->codes[i];
+		enum jy_opcode code = codes[i];
 
 		switch (code) {
 		case JY_OP_PUSH8:
-			printf("OP_PUSH8 %d", cnk->codes[++i]);
+			printf("OP_PUSH8 %d", codes[++i]);
 			break;
 		case JY_OP_JMPF: {
 			union {
@@ -414,7 +414,7 @@ static void print_chunks(struct jy_chunks *cnk)
 				uint8_t *code;
 			} ofs;
 
-			ofs.code  = (void *) &cnk->codes[i + 1];
+			ofs.code  = (void *) &codes[i + 1];
 			i	 += 2;
 			printf("OP_JMPF %d", *ofs.num);
 			break;
@@ -500,35 +500,29 @@ static void run_file(const char *path, const char *dirpath)
 
 	print_tkn_errs(&errs, &tkns, path);
 
-	struct jy_modules modules = { .dir = NULL };
-	struct jy_kpool	  kpool	  = { .vals = NULL };
-	struct jy_defs	  names	  = { .keys = NULL };
-	struct jy_chunks  cnk	  = { .codes = NULL };
-	struct jy_events  events  = { .defs = NULL };
+	struct jy_defs names = { .keys = NULL };
 
-	char dirname[]		  = "/modules/";
+	char dirname[]	     = "/modules/";
 	char buf[strlen(dirpath) + sizeof(dirname)];
 
 	strcpy(buf, dirpath);
 	strcat(buf, dirname);
 
-	modules.dir	       = buf;
-	struct jy_scan_ctx ctx = { .modules = &modules,
-				   .pool    = &kpool,
-				   .names   = &names,
-				   .events  = &events,
-				   .cnk	    = &cnk };
+	struct jy_scan_ctx ctx = {
+		.names = &names,
+		.mdir  = buf,
+	};
 
 	if (errs.size)
 		goto END;
 
 	jry_compile(&asts, &tkns, &ctx, &errs);
 
-	printf("Total Modules : %u\n", modules.size);
-	printf("Constant Pool : %u\n", kpool.size);
+	printf("Total Modules : %u\n", ctx.modulesz);
+	printf("Constant Pool : %u\n", ctx.valsz);
 	printf("Total Names   : %u\n", names.size);
-	printf("Total Events  : %u\n", events.size);
-	printf("Total Chunk   : %u\n", cnk.size);
+	printf("Total Events  : %u\n", ctx.eventsz);
+	printf("Total Chunk   : %u\n", ctx.codesz);
 	printf("AST Errors    : %u\n", errs.size);
 
 	if (errs.size) {
@@ -539,15 +533,15 @@ static void run_file(const char *path, const char *dirpath)
 	printf("\n");
 
 	printf("___CONSTANT POOL___\n\n");
-	if (ctx.pool->size) {
-		print_kpool(ctx.pool);
+	if (ctx.valsz) {
+		print_kpool(ctx.types, ctx.vals, ctx.valsz);
 		printf("\n");
 	}
 
 	printf("___BYTE CODE_______\n\n");
 
-	if (ctx.cnk->size) {
-		print_chunks(ctx.cnk);
+	if (ctx.codesz) {
+		print_chunks(ctx.codes, ctx.codesz);
 		printf("\n");
 	}
 

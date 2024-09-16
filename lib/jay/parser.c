@@ -112,10 +112,10 @@ static int push_err(struct jy_errs *errs, const char *msg, uint32_t id)
 	return ERROR_SUCCESS;
 }
 
-USE_RESULT static inline int push_ast(struct jy_asts *asts,
-				      enum jy_ast     type,
-				      size_t	      tkn,
-				      size_t	     *id)
+__use_result static inline int push_ast(struct jy_asts *asts,
+					enum jy_ast	type,
+					size_t		tkn,
+					size_t	       *id)
 {
 	jry_mem_push(asts->types, asts->size, type);
 	jry_mem_push(asts->tkns, asts->size, tkn);
@@ -147,9 +147,9 @@ static inline void pop_ast(struct jy_asts *asts)
 	asts->size -= 1;
 }
 
-USE_RESULT static inline int push_child(struct jy_asts *asts,
-					size_t		astid,
-					size_t		childid)
+__use_result static inline int push_child(struct jy_asts *asts,
+					  size_t	  astid,
+					  size_t	  childid)
 {
 	jry_assert(asts->size > astid);
 	jry_assert(asts->size > childid);
@@ -177,13 +177,13 @@ USE_RESULT static inline int push_child(struct jy_asts *asts,
 	return ERROR_SUCCESS;
 }
 
-USE_RESULT static inline int push_tkn(struct jy_tkns *tkns,
-				      enum jy_tkn     type,
-				      size_t	      line,
-				      size_t	      ofs,
-				      char	     *lexeme,
-				      size_t	      lexsz,
-				      size_t	     *id)
+__use_result static inline int push_tkn(struct jy_tkns *tkns,
+					enum jy_tkn	type,
+					size_t		line,
+					size_t		ofs,
+					char	       *lexeme,
+					size_t		lexsz,
+					size_t	       *id)
 {
 	jry_mem_push(tkns->types, tkns->size, type);
 	jry_mem_push(tkns->lines, tkns->size, line);
@@ -363,10 +363,10 @@ PANIC:
 }
 
 static bool _err(struct parser	*p,
-		 struct jy_asts *UNUSED(asts),
-		 struct jy_tkns *UNUSED(tkns),
+		 struct jy_asts *__unused(asts),
+		 struct jy_tkns *__unused(tkns),
 		 struct jy_errs *errs,
-		 size_t		*UNUSED(root))
+		 size_t		*__unused(root))
 {
 	push_err(errs, msg_inv_token, p->tkn);
 
@@ -374,10 +374,10 @@ static bool _err(struct parser	*p,
 }
 
 static bool _err_str(struct parser  *p,
-		     struct jy_asts *UNUSED(asts),
-		     struct jy_tkns *UNUSED(tkns),
+		     struct jy_asts *__unused(asts),
+		     struct jy_tkns *__unused(tkns),
 		     struct jy_errs *errs,
-		     size_t	    *UNUSED(root))
+		     size_t	    *__unused(root))
 {
 	push_err(errs, msg_inv_string, p->tkn);
 
@@ -428,7 +428,7 @@ PANIC:
 static bool _name(struct parser	 *p,
 		  struct jy_asts *asts,
 		  struct jy_tkns *tkns,
-		  struct jy_errs *UNUSED(errs),
+		  struct jy_errs *__unused(errs),
 		  size_t	 *root)
 {
 	if (push_ast(asts, AST_NAME, p->tkn, root) != 0)
@@ -1177,10 +1177,10 @@ PANIC:
 	return true;
 }
 
-USE_RESULT static int _entry(struct parser  *p,
-			     struct jy_asts *asts,
-			     struct jy_tkns *tkns,
-			     struct jy_errs *errs)
+__use_result static int _entry(struct parser  *p,
+			       struct jy_asts *asts,
+			       struct jy_tkns *tkns,
+			       struct jy_errs *errs)
 {
 	size_t roottkn;
 

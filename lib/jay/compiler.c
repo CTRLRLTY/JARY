@@ -92,14 +92,14 @@ static int push_err(struct jy_errs *errs, const char *msg, uint32_t astid)
 	return ERROR_SUCCESS;
 }
 
-static inline void write_byte(struct jy_chunks *cnk, uint8_t code)
+static inline void write_byte(uint8_t **codes, uint32_t *codesz, uint8_t code)
 {
-	jry_mem_push(cnk->codes, cnk->size, code);
+	jry_mem_push(*codes, *codesz, code);
 
-	cnk->size += 1;
+	*codesz += 1;
 }
 
-static void write_push(struct jy_chunks *cnk, size_t constant)
+static void write_push(uint8_t **code, uint32_t *codesz, size_t constant)
 {
 	uint8_t width = 0;
 
@@ -111,212 +111,21 @@ static void write_push(struct jy_chunks *cnk, size_t constant)
 	v.num = constant;
 
 	if (constant <= 0xff) {
-		write_byte(cnk, JY_OP_PUSH8);
+		write_byte(code, codesz, JY_OP_PUSH8);
 		width = 1;
 	} else if (constant <= 0xffff) {
-		write_byte(cnk, JY_OP_PUSH16);
+		write_byte(code, codesz, JY_OP_PUSH16);
 		width = 2;
 	} else if (constant <= 0xffffffff) {
-		write_byte(cnk, JY_OP_PUSH32);
+		write_byte(code, codesz, JY_OP_PUSH32);
 		width = 4;
 	} else {
-		write_byte(cnk, JY_OP_PUSH64);
+		write_byte(code, codesz, JY_OP_PUSH64);
 		width = 8;
 	}
 
 	for (uint8_t i = 0; i < width; ++i)
-		write_byte(cnk, v.c[i]);
-}
-
-static inline bool find_longk(struct jy_kpool *pool, long num, size_t *id)
-{
-	for (size_t i = 0; i < pool->size; ++i) {
-		enum jy_ktype t = pool->types[i];
-
-		if (t != JY_K_LONG)
-			continue;
-
-		long v = jry_v2long(pool->vals[i]);
-
-		if (v != num)
-			continue;
-
-		if (id != NULL)
-			*id = i;
-
-		return true;
-	}
-
-	return false;
-}
-
-static inline bool find_strk(struct jy_kpool *pool,
-			     const char	     *str,
-			     size_t	      length,
-			     size_t	     *id)
-{
-	for (size_t i = 0; i < pool->size; ++i) {
-		enum jy_ktype t = pool->types[i];
-
-		if (t != JY_K_STR)
-			continue;
-
-		struct jy_obj_str *v = jry_v2str(pool->vals[i]);
-
-		if (v->size != length)
-			continue;
-
-		if (v->str[1] != str[1])
-			continue;
-
-		if (memcmp(v->str + 1, str + 1, v->size - 1) != 0)
-			continue;
-
-		if (id != NULL)
-			*id = i;
-
-		return true;
-	}
-
-	return false;
-}
-
-static inline bool find_funck(struct jy_kpool *pool,
-			      jy_funcptr_t     fn,
-			      size_t	      *id)
-{
-	for (size_t i = 0; i < pool->size; ++i) {
-		enum jy_ktype t = pool->types[i];
-
-		if (t != JY_K_FUNC)
-			continue;
-
-		jy_funcptr_t f = jry_v2func(pool->vals[i])->func;
-
-		if (f != fn)
-			continue;
-
-		if (id != NULL)
-			*id = i;
-
-		return true;
-	}
-
-	return false;
-}
-
-static inline bool find_eventk(struct jy_kpool *pool,
-			       uint32_t		event,
-			       uint32_t		name,
-			       size_t	       *id)
-{
-	for (size_t i = 0; i < pool->size; ++i) {
-		enum jy_ktype t = pool->types[i];
-
-		if (t != JY_K_EVENT)
-			continue;
-
-		struct jy_obj_event ev = jry_v2event(pool->vals[i]);
-
-		if (ev.event != event || ev.name != name)
-			continue;
-
-		if (id != NULL)
-			*id = i;
-
-		return true;
-	}
-
-	return false;
-}
-
-USE_RESULT static inline int add_longk(struct jy_kpool *pool,
-				       long		num,
-				       size_t	       *id)
-{
-	jy_val_t val = jry_long2v(num);
-
-	jry_mem_push(pool->vals, pool->size, val);
-	jry_mem_push(pool->types, pool->size, JY_K_LONG);
-
-	if (pool->vals == NULL || pool->types == NULL)
-		return ERROR_NOMEM;
-
-	*id = pool->size++;
-
-	return ERROR_SUCCESS;
-}
-
-USE_RESULT static inline int add_strk(struct jy_kpool *pool,
-				      const char      *str,
-				      size_t	       length,
-				      size_t	      *id)
-{
-	uint32_t moffs1	 = sizeof(struct jy_obj_str);
-	uint32_t moffs2	 = moffs1 + sizeof(length);
-	size_t	 objsz	 = pool->objsz;
-
-	pool->objsz	+= moffs2;
-	pool->obj	 = jry_realloc(pool->obj, pool->objsz);
-
-	if (pool->obj == NULL)
-		return ERROR_NOMEM;
-
-	char		  *mem	= ((char *) pool->obj) + objsz;
-	struct jy_obj_str *ostr = (void *) mem;
-
-	ostr->str		= (void *) (mem + moffs1);
-	ostr->size		= length;
-
-	memcpy(ostr->str, str, length);
-
-	jry_mem_push(pool->vals, pool->size, jry_str2v(ostr));
-	jry_mem_push(pool->types, pool->size, JY_K_STR);
-
-	if (pool->vals == NULL || pool->types == NULL)
-		return ERROR_NOMEM;
-
-	*id = pool->size++;
-
-	return ERROR_SUCCESS;
-}
-
-USE_RESULT static inline int add_funck(struct jy_kpool	  *pool,
-				       struct jy_obj_func *func,
-				       size_t		  *id)
-{
-	jry_mem_push(pool->vals, pool->size, jry_func2v(func));
-
-	if (pool->vals == NULL)
-		return ERROR_NOMEM;
-
-	jry_mem_push(pool->types, pool->size, JY_K_FUNC);
-
-	if (pool->types == NULL)
-		return ERROR_NOMEM;
-
-	*id = pool->size++;
-
-	return ERROR_SUCCESS;
-}
-
-USE_RESULT static inline int add_eventk(struct jy_kpool *pool,
-					uint32_t	 event,
-					uint32_t	 name,
-					size_t		*id)
-{
-	struct jy_obj_event ev	= { .event = event, .name = name };
-	jy_val_t	    val = jry_event2v(ev);
-
-	jry_mem_push(pool->vals, pool->size, val);
-	jry_mem_push(pool->types, pool->size, JY_K_EVENT);
-
-	if (pool->vals == NULL || pool->types == NULL)
-		return ERROR_NOMEM;
-
-	*id = pool->size++;
-
-	return ERROR_SUCCESS;
+		write_byte(code, codesz, v.c[i]);
 }
 
 static inline bool cmplexpr(struct jy_asts     *asts,
@@ -337,7 +146,7 @@ static bool cmplliteral(struct jy_asts	   *asts,
 			struct jy_tkns	   *tkns,
 			struct jy_scan_ctx *ctx,
 			struct jy_errs	   *errs,
-			struct jy_defs	   *UNUSED(scope),
+			struct jy_defs	   *__unused(scope),
 			size_t		    id,
 			struct kexpr	   *expr)
 {
@@ -350,29 +159,73 @@ static bool cmplliteral(struct jy_asts	   *asts,
 	switch (type) {
 	case AST_LONG: {
 		long num   = strtol(lexeme, NULL, 10);
-
 		expr->type = JY_K_LONG;
 
-		if (find_longk(ctx->pool, num, &expr->id))
-			break;
+		for (size_t i = 0; i < ctx->valsz; ++i) {
+			enum jy_ktype t = ctx->types[i];
+			long	      v = jry_v2long(ctx->vals[i]);
 
-		int status = add_longk(ctx->pool, num, &expr->id);
+			if (t != JY_K_LONG || v != num)
+				continue;
 
-		if (status != ERROR_SUCCESS)
+			expr->id = i;
+
+			goto DONE;
+		}
+
+		jy_val_t val = jry_long2v(num);
+
+		jry_mem_push(ctx->vals, ctx->valsz, val);
+		jry_mem_push(ctx->types, ctx->valsz, JY_K_LONG);
+
+		if (ctx->vals == NULL || ctx->types == NULL)
 			goto PANIC;
+
+		expr->id    = ctx->valsz;
+		ctx->valsz += 1;
 
 		break;
 	}
 	case AST_STRING: {
 		expr->type = JY_K_STR;
 
-		if (find_strk(ctx->pool, lexeme, lexsz, &expr->id))
-			break;
+		for (size_t i = 0; i < ctx->valsz; ++i) {
+			enum jy_ktype	   t = ctx->types[i];
+			struct jy_obj_str *v = jry_v2str(ctx->vals[i]);
 
-		int status = add_strk(ctx->pool, lexeme, lexsz, &expr->id);
+			if (t != JY_K_STR || v->size != lexsz ||
+			    v->str[1] != lexeme[1] ||
+			    memcmp(v->str + 1, lexeme + 1, v->size - 1) != 0)
+				continue;
 
-		if (status != ERROR_SUCCESS)
+			expr->id = i;
+
+			goto DONE;
+		}
+
+		size_t moffs1 = sizeof(struct jy_obj_str);
+		size_t moffs2 = moffs1 + lexsz;
+		ctx->obj      = jry_realloc(ctx->obj, moffs2);
+
+		if (ctx->obj == NULL)
 			goto PANIC;
+
+		char		  *mem	= ((char *) ctx->obj) + ctx->objsz;
+		struct jy_obj_str *ostr = (void *) mem;
+		ostr->str		= (void *) (mem + moffs1);
+		ostr->size		= lexsz;
+		ctx->objsz		= moffs2;
+
+		memcpy(ostr->str, lexeme, lexsz);
+
+		jry_mem_push(ctx->vals, ctx->valsz, jry_str2v(ostr));
+		jry_mem_push(ctx->types, ctx->valsz, JY_K_STR);
+
+		if (ctx->vals == NULL || ctx->types == NULL)
+			goto PANIC;
+
+		expr->id    = ctx->valsz;
+		ctx->valsz += 1;
 
 		break;
 	}
@@ -381,6 +234,7 @@ static bool cmplliteral(struct jy_asts	   *asts,
 		goto PANIC;
 	}
 
+DONE:
 	return false;
 
 PANIC:
@@ -389,7 +243,7 @@ PANIC:
 
 static bool cmplfield(struct jy_asts	 *asts,
 		      struct jy_tkns	 *tkns,
-		      struct jy_scan_ctx *UNUSED(ctx),
+		      struct jy_scan_ctx *__unused(ctx),
 		      struct jy_errs	 *errs,
 		      struct jy_defs	 *scope,
 		      size_t		  id,
@@ -453,7 +307,7 @@ static bool cmplevent(struct jy_asts	 *asts,
 		      struct jy_tkns	 *tkns,
 		      struct jy_scan_ctx *ctx,
 		      struct jy_errs	 *errs,
-		      struct jy_defs	 *UNUSED(scope),
+		      struct jy_defs	 *__unused(scope),
 		      size_t		  id,
 		      struct kexpr	 *expr)
 {
@@ -481,8 +335,8 @@ static bool cmplevent(struct jy_asts	 *asts,
 
 	uint32_t event = 0;
 
-	for (uint32_t i = 0; i < ctx->events->size; ++i) {
-		struct jy_defs *temp = &ctx->events->defs[i];
+	for (uint32_t i = 0; i < ctx->eventsz; ++i) {
+		struct jy_defs *temp = &ctx->events[i];
 
 		if (temp == def) {
 			event = i;
@@ -490,13 +344,38 @@ static bool cmplevent(struct jy_asts	 *asts,
 		}
 	}
 
-	size_t kid;
+	uint32_t kid;
 
-	if (!find_eventk(ctx->pool, event, operand.id, &kid))
-		if (add_eventk(ctx->pool, event, operand.id, &kid) != 0)
-			goto PANIC;
+	for (size_t i = 0; i < ctx->valsz; ++i) {
+		enum jy_ktype t = ctx->types[i];
 
-	write_push(ctx->cnk, kid);
+		if (t != JY_K_EVENT)
+			continue;
+
+		struct jy_obj_event ev = jry_v2event(ctx->vals[i]);
+
+		if (ev.event != event || ev.name != operand.id)
+			continue;
+
+		kid = i;
+
+		goto EMIT;
+	}
+
+	struct jy_obj_event ev	= { .event = event, .name = operand.id };
+	jy_val_t	    val = jry_event2v(ev);
+
+	jry_mem_push(ctx->vals, ctx->valsz, val);
+	jry_mem_push(ctx->types, ctx->valsz, JY_K_EVENT);
+
+	if (ctx->types == NULL)
+		goto PANIC;
+
+	kid	    = ctx->valsz;
+	ctx->valsz += 1;
+
+EMIT:
+	write_push(&ctx->codes, &ctx->codesz, kid);
 
 	expr->id   = nid;
 	expr->type = JY_K_EVENT;
@@ -559,12 +438,33 @@ static bool cmplcall(struct jy_asts	*asts,
 
 	size_t kid;
 
-	if (!find_funck(ctx->pool, ofunc->func, &kid))
-		if (add_funck(ctx->pool, ofunc, &kid) != ERROR_SUCCESS)
-			goto PANIC;
+	for (size_t i = 0; i < ctx->valsz; ++i) {
+		enum jy_ktype t = ctx->types[i];
 
-	write_push(ctx->cnk, kid);
-	write_byte(ctx->cnk, JY_OP_CALL);
+		if (t != JY_K_FUNC)
+			continue;
+
+		jy_funcptr_t f = jry_v2func(ctx->vals[i])->func;
+
+		if (f != ofunc->func)
+			continue;
+
+		kid = i;
+		goto EMIT;
+	}
+
+	jry_mem_push(ctx->vals, ctx->valsz, jry_func2v(ofunc));
+	jry_mem_push(ctx->types, ctx->valsz, JY_K_FUNC);
+
+	if (ctx->vals == NULL || ctx->types == NULL)
+		goto PANIC;
+
+	kid	    = ctx->valsz;
+	ctx->valsz += 1;
+
+EMIT:
+	write_push(&ctx->codes, &ctx->codesz, kid);
+	write_byte(&ctx->codes, &ctx->codesz, JY_OP_CALL);
 
 	expr->type = ofunc->return_type;
 
@@ -648,9 +548,9 @@ static bool cmplbinary(struct jy_asts	  *asts,
 		goto PANIC;
 	}
 
-	write_push(ctx->cnk, operand[0].id);
-	write_push(ctx->cnk, operand[1].id);
-	write_byte(ctx->cnk, code);
+	write_push(&ctx->codes, &ctx->codesz, operand[0].id);
+	write_push(&ctx->codes, &ctx->codesz, operand[1].id);
+	write_byte(&ctx->codes, &ctx->codesz, code);
 
 	return false;
 PANIC:
@@ -746,9 +646,9 @@ static inline bool cmplmatchsect(struct jy_asts	    *asts,
 		if (!find_ast_type(asts, AST_EVENT, chid, &event_id))
 			continue;
 
-		write_byte(ctx->cnk, JY_OP_JMPF);
+		write_byte(&ctx->codes, &ctx->codesz, JY_OP_JMPF);
 
-		jry_mem_push(*patchofs, *patchsz, ctx->cnk->size);
+		jry_mem_push(*patchofs, *patchsz, ctx->codesz);
 
 		if (patchofs == NULL)
 			goto PANIC;
@@ -756,8 +656,8 @@ static inline bool cmplmatchsect(struct jy_asts	    *asts,
 		*patchsz += 1;
 
 		// Reserved 2 bytes for short jump
-		write_byte(ctx->cnk, 0);
-		write_byte(ctx->cnk, 0);
+		write_byte(&ctx->codes, &ctx->codesz, 0);
+		write_byte(&ctx->codes, &ctx->codesz, 0);
 	}
 
 	return false;
@@ -902,13 +802,13 @@ static inline bool cmplruledecl(struct jy_asts	   *asts,
 		cmpltargetsect(asts, tkns, ctx, errs, id);
 	}
 
-	size_t endofs = ctx->cnk->size;
+	size_t endofs = ctx->codesz;
 
 	for (size_t i = 0; i < patchsz; ++i) {
 		size_t ofs = patchofs[i];
 		short  jmp = (short) (endofs - ofs + 1);
 
-		memcpy(ctx->cnk->codes + ofs, &jmp, sizeof(jmp));
+		memcpy(ctx->codes + ofs, &jmp, sizeof(jmp));
 	}
 
 	goto END;
@@ -940,7 +840,7 @@ static inline bool cmplingressdecl(struct jy_asts     *asts,
 		goto PANIC;
 	}
 
-	if (ctx->events->size & 0x10000) {
+	if (ctx->eventsz & 0x10000) {
 		push_err(errs, msg_event_capped, id);
 		goto PANIC;
 	}
@@ -963,20 +863,20 @@ static inline bool cmplingressdecl(struct jy_asts     *asts,
 	for (size_t i = 0; i < fieldsz; ++i)
 		cmplfieldsect(asts, tkns, errs, fields[i], &def);
 
-	size_t oldsz	  = ctx->events->size;
-	size_t allocsz	  = sizeof(def) * (oldsz + 1);
-	ctx->events->defs = jry_realloc(ctx->events->defs, allocsz);
+	size_t oldsz   = ctx->eventsz;
+	size_t allocsz = sizeof(def) * (oldsz + 1);
+	ctx->events    = jry_realloc(ctx->events, allocsz);
 
-	if (ctx->events->defs == NULL)
+	if (ctx->events == NULL)
 		goto PANIC;
 
-	ctx->events->defs[oldsz] = def;
-	jy_val_t val		 = jry_def2v(&ctx->events->defs[oldsz]);
+	ctx->events[oldsz] = def;
+	jy_val_t val	   = jry_def2v(&ctx->events[oldsz]);
 
 	if (jry_add_def(ctx->names, lex, lexsz, val, JY_K_EVENT) != 0)
 		goto PANIC;
 
-	ctx->events->size += 1;
+	ctx->eventsz += 1;
 
 	return false;
 
@@ -993,12 +893,12 @@ static inline bool cmplimportstmt(struct jy_asts     *asts,
 	size_t tkn	= asts->tkns[id];
 	char  *lexeme	= tkns->lexemes[tkn];
 	size_t lexsz	= tkns->lexsz[tkn];
-	int    dirlen	= strlen(ctx->modules->dir);
+	int    dirlen	= strlen(ctx->mdir);
 	char   prefix[] = "lib";
 
 	char path[dirlen + sizeof(prefix) - 1 + lexsz];
 
-	strcpy(path, ctx->modules->dir);
+	strcpy(path, ctx->mdir);
 	strcat(path, prefix);
 	strncat(path, lexeme, lexsz);
 
@@ -1012,10 +912,10 @@ static inline bool cmplimportstmt(struct jy_asts     *asts,
 
 	struct jy_defs *def = jry_module_def(module);
 
-	jry_mem_push(ctx->modules->list, ctx->modules->size, module);
-	ctx->modules->size += 1;
+	jry_mem_push(ctx->modules, ctx->modulesz, module);
+	ctx->modulesz += 1;
 
-	jy_val_t v	    = jry_def2v(def);
+	jy_val_t v     = jry_def2v(def);
 
 	if (jry_add_def(ctx->names, lexeme, lexsz, v, JY_K_MODULE) != 0)
 		return true;
@@ -1071,7 +971,7 @@ static inline bool cmplroot(struct jy_asts     *asts,
 	for (size_t i = 0; i < rules_sz; ++i)
 		cmplruledecl(asts, tkns, ctx, errs, rules[i]);
 
-	write_byte(ctx->cnk, JY_OP_END);
+	write_byte(&ctx->codes, &ctx->codesz, JY_OP_END);
 
 	return false;
 }
@@ -1081,6 +981,8 @@ void jry_compile(struct jy_asts	    *asts,
 		 struct jy_scan_ctx *ctx,
 		 struct jy_errs	    *errs)
 {
+	jry_assert(ctx->names != NULL);
+
 	size_t	    root = 0;
 	enum jy_ast type = asts->types[root];
 
@@ -1092,20 +994,20 @@ void jry_compile(struct jy_asts	    *asts,
 
 void jry_free_scan_ctx(struct jy_scan_ctx ctx)
 {
-	for (size_t i = 0; i < ctx.modules->size; ++i)
-		jry_module_unload(ctx.modules->list[i]);
+	for (size_t i = 0; i < ctx.modulesz; ++i)
+		jry_module_unload(ctx.modules[i]);
 
-	jry_free(ctx.modules->list);
-	jry_free(ctx.cnk->codes);
+	jry_free(ctx.modules);
+	jry_free(ctx.codes);
 
-	jry_free(ctx.pool->vals);
-	jry_free(ctx.pool->types);
-	jry_free(ctx.pool->obj);
+	jry_free(ctx.vals);
+	jry_free(ctx.types);
+	jry_free(ctx.obj);
 
-	for (size_t i = 0; i < ctx.events->size; ++i)
-		jry_free_def(ctx.events->defs[i]);
+	for (size_t i = 0; i < ctx.eventsz; ++i)
+		jry_free_def(ctx.events[i]);
 
-	jry_free(ctx.events->defs);
+	jry_free(ctx.events);
 
 	if (ctx.names)
 		jry_free_def(*ctx.names);

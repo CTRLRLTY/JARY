@@ -2,11 +2,12 @@
 #define JAYVM_COMMON_H
 
 #ifdef __GNUC__
-#	define UNUSED(x)  UNUSED_##x __attribute__((__unused__))
-#	define USE_RESULT __attribute__((warn_unused_result))
+#	define __unused(x)  UNUSED_##x __attribute__((__unused__))
+#	define __use_result __attribute__((warn_unused_result))
 #else
-#	define UNUSED(x) UNUSED_##x
-#	define USE_RESULT
+#	define __unused(x) UNUSED_##x
+#	define __use_result
 #endif // __GNUC__
 
 #endif // JAYVM_COMMON_H
+

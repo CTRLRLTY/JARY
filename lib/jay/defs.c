@@ -30,9 +30,9 @@ static inline bool find_entry(struct jy_defs *tbl, uint64_t hash, size_t *id)
 	return type != JY_K_UNKNOWN;
 }
 
-USE_RESULT static int regenerate(struct jy_defs *tbl,
-				 uint64_t	 seed,
-				 size_t		 capacity)
+__use_result static int regenerate(struct jy_defs *tbl,
+				   uint64_t	   seed,
+				   size_t	   capacity)
 {
 	size_t moff1 = sizeof(*(tbl->keys)) * capacity;
 	size_t moff2 = moff1 + sizeof(*(tbl->keysz)) * capacity;

@@ -42,7 +42,7 @@ struct jy_scan_ctx {
 	// code chunk array
 	uint8_t	       *codes;
 	// call table
-	jy_funcptr_t  **call;
+	jy_funcptr_t   *call;
 	// constant table
 	jy_val_t       *vals;
 	enum jy_ktype  *types;

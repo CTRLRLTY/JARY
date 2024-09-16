@@ -24,8 +24,8 @@ static char msg_operation_mismatch[]  = "invalid operation type mismatch";
 static char msg_argument_mismatch[]   = "bad argument type mismatch";
 static char msg_type_mismatch[]	      = "type mismatch";
 static char msg_redefinition[]	      = "redefinition of";
-static char msg_event_capped[] =
-	"too many ingress declaration, you can only have 256. ";
+static char msg_call_capped[]	      = "Too many function definitons...";
+static char msg_event_capped[]	      = "Too many event definitions...";
 
 struct kexpr {
 	size_t	      id;
@@ -436,35 +436,36 @@ static bool cmplcall(struct jy_asts	*asts,
 		}
 	}
 
-	size_t kid;
+	uint32_t call_id;
 
-	for (size_t i = 0; i < ctx->valsz; ++i) {
-		enum jy_ktype t = ctx->types[i];
-
-		if (t != JY_K_FUNC)
-			continue;
-
-		jy_funcptr_t f = jry_v2func(ctx->vals[i])->func;
+	for (size_t i = 0; i < ctx->callsz; ++i) {
+		jy_funcptr_t f = ctx->call[i];
 
 		if (f != ofunc->func)
 			continue;
 
-		kid = i;
+		call_id = i;
 		goto EMIT;
 	}
 
-	jry_mem_push(ctx->vals, ctx->valsz, jry_func2v(ofunc));
-	jry_mem_push(ctx->types, ctx->valsz, JY_K_FUNC);
+	if ((ctx->callsz + 1) & 0x10000) {
+		push_err(errs, msg_call_capped, id);
+		goto PANIC;
+	}
 
-	if (ctx->vals == NULL || ctx->types == NULL)
+	jry_mem_push(ctx->call, ctx->callsz, ofunc->func);
+
+	if (ctx->call == NULL)
 		goto PANIC;
 
-	kid	    = ctx->valsz;
-	ctx->valsz += 1;
+	call_id	     = ctx->callsz;
+	ctx->callsz += 1;
 
 EMIT:
-	write_push(&ctx->codes, &ctx->codesz, kid);
 	write_byte(&ctx->codes, &ctx->codesz, JY_OP_CALL);
+	write_byte(&ctx->codes, &ctx->codesz, ofunc->param_sz);
+	write_byte(&ctx->codes, &ctx->codesz, call_id & 0xFF00);
+	write_byte(&ctx->codes, &ctx->codesz, call_id & 0x00FF);
 
 	expr->type = ofunc->return_type;
 
@@ -976,6 +977,7 @@ void jry_free_scan_ctx(struct jy_scan_ctx ctx)
 	jry_free(ctx.vals);
 	jry_free(ctx.types);
 	jry_free(ctx.obj);
+	jry_free(ctx.call);
 
 	for (size_t i = 0; i < ctx.eventsz; ++i)
 		jry_free_def(ctx.events[i]);

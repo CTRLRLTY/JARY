@@ -414,7 +414,7 @@ static void print_chunks(uint8_t *codes, size_t codesz)
 				uint8_t *code;
 			} ofs;
 
-			ofs.code  = (void *) &codes[i + 1];
+			ofs.code  = &codes[i + 1];
 			i	 += 2;
 			printf("OP_JMPF %d", *ofs.num);
 			break;
@@ -422,9 +422,19 @@ static void print_chunks(uint8_t *codes, size_t codesz)
 		case JY_OP_CMP:
 			printf("OP_CMP");
 			break;
-		case JY_OP_CALL:
-			printf("OP_CALL");
+		case JY_OP_CALL: {
+			union {
+				short	*num;
+				uint8_t *code;
+			} ofs;
+
+			uint8_t paramsz	 = codes[++i];
+			ofs.code	 = &codes[i + 1];
+			i		+= 2;
+
+			printf("OP_CALL %u %u", paramsz, *ofs.num);
 			break;
+		}
 		case JY_OP_END:
 			printf("OP_END");
 			break;

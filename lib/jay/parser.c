@@ -49,6 +49,7 @@ static char msg_expect_newline[]       = "expected '\\n' before";
 static char msg_expect_open_brace[]    = "expected '{' after";
 static char msg_expect_close_brace[]   = "expected '}' after";
 static char msg_expect_string[]	       = "expected string after";
+static char msg_args_limit[]	       = "too many arguments";
 
 struct parser {
 	const char *src;
@@ -539,7 +540,13 @@ static bool _call(struct parser	 *p,
 	enum jy_tkn param  = tkns->types[p->tkn];
 
 	while (param != TKN_RIGHT_PAREN) {
-		size_t topast = 0;
+		size_t	 topast	 = 0;
+		uint32_t paramsz = asts->childsz[*root];
+
+		if ((paramsz + 1) & 0x10000) {
+			push_err(errs, msg_args_limit, param);
+			goto PANIC;
+		}
 
 		if (_expression(p, asts, tkns, errs, &topast))
 			goto PANIC;

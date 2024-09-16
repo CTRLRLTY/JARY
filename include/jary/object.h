@@ -5,6 +5,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 typedef jy_val_t (*jy_funcptr_t)(int, jy_val_t *, int);
 
@@ -16,8 +17,8 @@ struct jy_obj_str {
 struct jy_obj_func {
 	enum jy_ktype  return_type;
 	bool	       internal;
+	uint8_t	       param_sz;
 	enum jy_ktype *param_types;
-	size_t	       param_sz;
 	jy_funcptr_t   func;
 };
 

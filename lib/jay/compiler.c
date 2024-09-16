@@ -359,7 +359,7 @@ static bool cmplevent(struct jy_asts	 *asts,
 
 		kid = i;
 
-		goto EMIT;
+		goto DONE;
 	}
 
 	struct jy_obj_event ev	= { .event = event, .name = operand.id };
@@ -374,10 +374,8 @@ static bool cmplevent(struct jy_asts	 *asts,
 	kid	    = ctx->valsz;
 	ctx->valsz += 1;
 
-EMIT:
-	write_push(&ctx->codes, &ctx->codesz, kid);
-
-	expr->id   = nid;
+DONE:
+	expr->id   = kid;
 	expr->type = JY_K_EVENT;
 
 	return false;
@@ -434,6 +432,8 @@ static bool cmplcall(struct jy_asts	*asts,
 			push_err(errs, msg_argument_mismatch, id);
 			goto PANIC;
 		}
+
+		write_push(&ctx->codes, &ctx->codesz, pexpr.id);
 	}
 
 	uint32_t call_id;
@@ -493,9 +493,19 @@ static bool cmplbinary(struct jy_asts	  *asts,
 		if (cmplexpr(asts, tkns, ctx, errs, scope, child[i], expr))
 			goto PANIC;
 
-		if (expr->type == JY_K_UNKNOWN) {
+		switch (expr->type) {
+		case JY_K_EVENT: {
+			jy_val_t	    v	= ctx->vals[expr->id];
+			struct jy_obj_event ev	= jry_v2event(v);
+			struct jy_defs	    def = ctx->events[ev.event];
+			expr->type		= def.types[ev.name];
+			break;
+		}
+		case JY_K_UNKNOWN:
 			push_err(errs, msg_inv_operation, id);
 			goto PANIC;
+		default:
+			break;
 		}
 	}
 

@@ -27,18 +27,17 @@ TKN_RULE:                                                                      \
 	case TKN_INGRESS:                                                      \
 	case TKN_INCLUDE
 
-static char msg_inv_token[]	 = "unrecognized token";
-static char msg_inv_section[]	 = "invalid section";
-static char msg_inv_decl[]	 = "invalid declaration";
-static char msg_inv_string[]	 = "unterminated string";
-static char msg_inv_literal[]	 = "invalid literal";
-static char msg_inv_group[]	 = "expected ')' after";
-static char msg_inv_invoc[]	 = "inappropriate invocation";
-static char msg_inv_access[]	 = "inappropriate accesor usage";
-static char msg_inv_expression[] = "invalid expression";
-static char msg_inv_type_decl[]	 = "invalid type declaration";
-static char msg_inv_regex[] =
-	"expect a regex afterinvalid regex match expression";
+static char msg_inv_token[]	       = "unrecognized token";
+static char msg_inv_section[]	       = "invalid section";
+static char msg_inv_decl[]	       = "invalid declaration";
+static char msg_inv_string[]	       = "unterminated string";
+static char msg_inv_literal[]	       = "invalid literal";
+static char msg_inv_group[]	       = "expected ')' after";
+static char msg_inv_invoc[]	       = "inappropriate invocation";
+static char msg_inv_access[]	       = "inappropriate accesor usage";
+static char msg_inv_expression[]       = "invalid expression";
+static char msg_inv_type_decl[]	       = "invalid type declaration";
+static char msg_inv_regex[]	       = "invalid regex match expression";
 static char msg_expect_name_or_event[] = "expect a name or event before";
 static char msg_expect_regex[]	       = "expect a regex after";
 static char msg_expect_ident[]	       = "expected identifier";
@@ -1223,33 +1222,12 @@ __use_result static int _entry(struct parser  *p,
 	return ERROR_SUCCESS;
 }
 
-static struct rule rules[] = {
+static struct rule rules[TOTAL_TKN_TYPES] = {
 	[TKN_ERR]	  = { _err, NULL, PREC_NONE },
 	[TKN_ERR_STR]	  = { _err_str, NULL, PREC_NONE },
 
 	[TKN_LEFT_PAREN]  = { _grouping, _call, PREC_CALL },
-	[TKN_RIGHT_PAREN] = { NULL, NULL, PREC_NONE },
-	[TKN_LEFT_BRACE]  = { NULL, NULL, PREC_NONE },
-	[TKN_RIGHT_BRACE] = { NULL, NULL, PREC_NONE },
 	[TKN_DOT]	  = { NULL, _dot, PREC_CALL },
-	[TKN_COMMA]	  = { NULL, NULL, PREC_NONE },
-	[TKN_COLON]	  = { NULL, NULL, PREC_NONE },
-	[TKN_NEWLINE]	  = { NULL, NULL, PREC_NONE },
-	[TKN_SPACES]	  = { NULL, NULL, PREC_NONE },
-
-	[TKN_RULE]	  = { NULL, NULL, PREC_NONE },
-	[TKN_IMPORT]	  = { NULL, NULL, PREC_NONE },
-	[TKN_INCLUDE]	  = { NULL, NULL, PREC_NONE },
-	[TKN_INGRESS]	  = { NULL, NULL, PREC_NONE },
-
-	[TKN_JUMP]	  = { NULL, NULL, PREC_NONE },
-	[TKN_INPUT]	  = { NULL, NULL, PREC_NONE },
-	[TKN_MATCH]	  = { NULL, NULL, PREC_NONE },
-	[TKN_CONDITION]	  = { NULL, NULL, PREC_NONE },
-	[TKN_FIELD]	  = { NULL, NULL, PREC_NONE },
-
-	[TKN_LONG_TYPE]	  = { NULL, NULL, PREC_NONE },
-	[TKN_STRING_TYPE] = { NULL, NULL, PREC_NONE },
 
 	[TKN_TILDE]	  = { NULL, _tilde, PREC_LAST },
 
@@ -1266,10 +1244,7 @@ static struct rule rules[] = {
 	[TKN_OR]	  = { NULL, _binary, PREC_OR },
 
 	[TKN_NOT]	  = { _not, NULL, PREC_NONE },
-	[TKN_ANY]	  = { NULL, NULL, PREC_NONE },
-	[TKN_ALL]	  = { NULL, NULL, PREC_NONE },
 
-	[TKN_REGEXP]	  = { NULL, NULL, PREC_NONE },
 	[TKN_STRING]	  = { _literal, NULL, PREC_NONE },
 	[TKN_NUMBER]	  = { _literal, NULL, PREC_NONE },
 	[TKN_FALSE]	  = { _literal, NULL, PREC_NONE },
@@ -1277,10 +1252,6 @@ static struct rule rules[] = {
 
 	[TKN_IDENTIFIER]  = { _name, NULL, PREC_NONE },
 	[TKN_DOLLAR]	  = { _event, NULL, PREC_NONE },
-	[TKN_ALIAS]	  = { NULL, NULL, PREC_NONE },
-
-	[TKN_CUSTOM]	  = { NULL, NULL, PREC_NONE },
-	[TKN_EOF]	  = { NULL, NULL, PREC_NONE },
 };
 
 static struct rule *rule(enum jy_tkn type)

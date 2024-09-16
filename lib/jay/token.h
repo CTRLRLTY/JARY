@@ -62,7 +62,9 @@ enum jy_tkn {
 
 	TKN_CUSTOM,
 	TKN_EOF,
+
+	// THIS VARIANT MUST BE LAST!
+	TOTAL_TKN_TYPES,
 };
 
 #endif // JAYVM_TOKEN_H
-

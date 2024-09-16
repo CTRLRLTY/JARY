@@ -557,58 +557,31 @@ PANIC:
 	return true;
 }
 
-static cmplfn_t rules[] = {
-	[AST_ROOT]	     = NULL,
+static cmplfn_t rules[TOTAL_AST_TYPES] = {
+	[AST_EVENT]    = cmplevent,
+	[AST_FIELD]    = cmplfield,
+	[AST_CALL]     = cmplcall,
 
-	// > statements
-	[AST_IMPORT_STMT]    = NULL,
-	[AST_INCLUDE_STMT]   = NULL,
-	// < statements
+	// > binaries
+	[AST_EQUALITY] = cmplbinary,
+	[AST_LESSER]   = cmplbinary,
+	[AST_GREATER]  = cmplbinary,
 
-	// > declarations
-	[AST_RULE_DECL]	     = NULL,
-	[AST_INGRESS_DECL]   = NULL,
-	[AST_NAME_DECL]	     = NULL,
-	// < declarations
+	[AST_ADDITION] = cmplbinary,
+	[AST_SUBTRACT] = cmplbinary,
+	[AST_MULTIPLY] = cmplbinary,
+	[AST_DIVIDE]   = cmplbinary,
+	// < binaries
 
-	// > sections
-	[AST_JUMP_SECT]	     = NULL,
-	[AST_INPUT_SECT]     = NULL,
-	[AST_MATCH_SECT]     = NULL,
-	[AST_CONDITION_SECT] = NULL,
-	[AST_FIELD_SECT]     = NULL,
-	// < sections
+	[AST_NAME]     = cmplname,
 
-	[AST_LONG_TYPE]	     = NULL,
-	[AST_STR_TYPE]	     = NULL,
-
-	// > expression
-	[AST_ALIAS]	     = NULL,
-	[AST_EVENT]	     = cmplevent,
-	[AST_FIELD]	     = cmplfield,
-	[AST_CALL]	     = cmplcall,
-
-	[AST_REGMATCH]	     = NULL,
-	[AST_EQUALITY]	     = cmplbinary,
-	[AST_LESSER]	     = cmplbinary,
-	[AST_GREATER]	     = cmplbinary,
-	[AST_NOT]	     = NULL,
-
-	[AST_ADDITION]	     = cmplbinary,
-	[AST_SUBTRACT]	     = cmplbinary,
-	[AST_MULTIPLY]	     = cmplbinary,
-	[AST_DIVIDE]	     = cmplbinary,
-
-	[AST_NAME]	     = cmplname,
-	[AST_FIELD_NAME]     = NULL,
-	[AST_PATH]	     = NULL,
-
-	[AST_REGEXP]	     = cmplliteral,
-	[AST_LONG]	     = cmplliteral,
-	[AST_STRING]	     = cmplliteral,
-	[AST_FALSE]	     = cmplliteral,
-	[AST_TRUE]	     = cmplliteral,
-	// < expression
+	// > literal
+	[AST_REGEXP]   = cmplliteral,
+	[AST_LONG]     = cmplliteral,
+	[AST_STRING]   = cmplliteral,
+	[AST_FALSE]    = cmplliteral,
+	[AST_TRUE]     = cmplliteral,
+	// < literal
 };
 
 static inline cmplfn_t rule_expression(enum jy_ast type)

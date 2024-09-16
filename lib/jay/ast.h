@@ -47,7 +47,9 @@ enum jy_ast {
 	AST_STRING,
 	AST_FALSE,
 	AST_TRUE,
+
+	// THIS VARIANT MUST BE LAST!
+	TOTAL_AST_TYPES
 };
 
 #endif // JAYVM_AST_H
-

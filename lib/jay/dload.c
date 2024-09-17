@@ -130,7 +130,7 @@ const char *jry_module_error(int module)
 // > user modules API
 int define_function(int			module,
 		    const char	       *key,
-		    size_t		keysz,
+		    uint32_t		keysz,
 		    struct jy_obj_func *func)
 {
 	if (module >= MODULE_COUNT_LIMIT || module < 0)

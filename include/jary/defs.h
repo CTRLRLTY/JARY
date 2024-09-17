@@ -5,26 +5,26 @@
 #include "jary/types.h"
 
 #include <stdbool.h>
-#include <stddef.h>
+#include <stdint.h>
 
 struct jy_defs {
 	char	     **keys;
-	size_t	      *keysz;
+	uint32_t      *keysz;
 	jy_val_t      *vals;
 	enum jy_ktype *types;
-	size_t	       seed;
+	uint32_t       seed;
 	unsigned int   capacity;
 	unsigned int   size;
 };
 
 bool jry_find_def(struct jy_defs *tbl,
 		  const char	 *key,
-		  size_t	  length,
-		  size_t	 *id);
+		  uint32_t	  length,
+		  uint32_t	 *id);
 
 __use_result int jry_add_def(struct jy_defs *tbl,
 			     const char	    *key,
-			     size_t	     length,
+			     uint32_t	     length,
 			     jy_val_t	     value,
 			     enum jy_ktype   type);
 

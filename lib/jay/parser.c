@@ -27,35 +27,34 @@ TKN_RULE:                                                                      \
 	case TKN_INGRESS:                                                      \
 	case TKN_INCLUDE
 
-static char msg_inv_token[]	       = "unrecognized token";
-static char msg_inv_section[]	       = "invalid section";
-static char msg_inv_decl[]	       = "invalid declaration";
-static char msg_inv_string[]	       = "unterminated string";
-static char msg_inv_literal[]	       = "invalid literal";
-static char msg_inv_group[]	       = "expected ')' after";
-static char msg_inv_invoc[]	       = "inappropriate invocation";
-static char msg_inv_access[]	       = "inappropriate accesor usage";
-static char msg_inv_expression[]       = "invalid expression";
-static char msg_inv_type_decl[]	       = "invalid type declaration";
-static char msg_inv_regex[]	       = "invalid regex match expression";
-static char msg_expect_name_or_event[] = "expect a name or event before";
-static char msg_expect_regex[]	       = "expect a regex after";
-static char msg_expect_ident[]	       = "expected identifier";
-static char msg_expect_ident_after[]   = "expect identifier after";
-static char msg_expect_eqsign[]	       = "expects = after";
-static char msg_expect_type[]	       = "expect a type after";
-static char msg_expect_semicolon[]     = "expected ':' after";
-static char msg_expect_newline[]       = "expected '\\n' before";
-static char msg_expect_open_brace[]    = "expected '{' after";
-static char msg_expect_close_brace[]   = "expected '}' after";
-static char msg_expect_string[]	       = "expected string after";
-static char msg_args_limit[]	       = "too many arguments";
+static const char msg_inv_token[]	     = "unrecognized token";
+static const char msg_inv_section[]	     = "invalid section";
+static const char msg_inv_decl[]	     = "invalid declaration";
+static const char msg_inv_string[]	     = "unterminated string";
+static const char msg_inv_literal[]	     = "invalid literal";
+static const char msg_inv_invoc[]	     = "inappropriate invocation";
+static const char msg_inv_access[]	     = "inappropriate accesor usage";
+static const char msg_inv_expression[]	     = "invalid expression";
+static const char msg_inv_type_decl[]	     = "invalid type declaration";
+static const char msg_inv_regex[]	     = "invalid regex match expression";
+static const char msg_expect_name_or_event[] = "not a name or event";
+static const char msg_expect_regex[]	     = "not a regex";
+static const char msg_expect_ident[]	     = "not an identifier";
+static const char msg_expect_eqsign[]	     = "expected '='";
+static const char msg_expect_type[]	     = "not a type";
+static const char msg_expect_semicolon[]     = "missing ':'";
+static const char msg_expect_newline[]	     = "missing newline '\\n'";
+static const char msg_expect_open_brace[]    = "missing '{'";
+static const char msg_expect_close_brace[]   = "missing '}'";
+static const char msg_expect_paren_close[]   = "missing ')'";
+static const char msg_expect_string[]	     = "expected string";
+static const char msg_args_limit[]	     = "too many arguments";
 
 struct parser {
 	const char *src;
-	size_t	    srcsz;
+	uint32_t    srcsz;
 	// current tkn id
-	size_t	    tkn;
+	uint32_t    tkn;
 };
 
 enum prec {
@@ -76,7 +75,7 @@ typedef bool (*parsefn_t)(struct parser *,
 			  struct jy_asts *,
 			  struct jy_tkns *,
 			  struct jy_errs *,
-			  size_t *);
+			  uint32_t *);
 
 struct rule {
 	parsefn_t prefix;
@@ -90,32 +89,19 @@ static bool _precedence(struct parser  *p,
 			struct jy_asts *asts,
 			struct jy_tkns *tkns,
 			struct jy_errs *errs,
-			size_t	       *topast,
+			uint32_t       *topast,
 			enum prec	rbp);
 
 static bool _expression(struct parser  *p,
 			struct jy_asts *asts,
 			struct jy_tkns *tkns,
 			struct jy_errs *errs,
-			size_t	       *topast);
-
-static int push_err(struct jy_errs *errs, const char *msg, uint32_t id)
-{
-	jry_mem_push(errs->msgs, errs->size, msg);
-	jry_mem_push(errs->ids, errs->size, id);
-
-	if (errs->ids == NULL)
-		return ERROR_NOMEM;
-
-	errs->size += 1;
-
-	return ERROR_SUCCESS;
-}
+			uint32_t       *topast);
 
 __use_result static inline int push_ast(struct jy_asts *asts,
 					enum jy_ast	type,
-					size_t		tkn,
-					size_t	       *id)
+					uint32_t	tkn,
+					uint32_t       *id)
 {
 	jry_mem_push(asts->types, asts->size, type);
 	jry_mem_push(asts->tkns, asts->size, tkn);
@@ -137,8 +123,8 @@ static inline void pop_ast(struct jy_asts *asts)
 {
 	jry_assert(asts->size > 0);
 
-	size_t	 id    = asts->size - 1;
-	size_t **child = &asts->child[id];
+	uint32_t   id	 = asts->size - 1;
+	uint32_t **child = &asts->child[id];
 
 	jry_free(*child);
 
@@ -148,14 +134,14 @@ static inline void pop_ast(struct jy_asts *asts)
 }
 
 __use_result static inline int push_child(struct jy_asts *asts,
-					  size_t	  astid,
-					  size_t	  childid)
+					  uint32_t	  astid,
+					  uint32_t	  childid)
 {
 	jry_assert(asts->size > astid);
 	jry_assert(asts->size > childid);
 
-	size_t **child	 = &asts->child[astid];
-	size_t	*childsz = &asts->childsz[astid];
+	uint32_t **child   = &asts->child[astid];
+	uint32_t  *childsz = &asts->childsz[astid];
 
 	if (*childsz == 0) {
 		*child = jry_alloc(sizeof(**child));
@@ -164,8 +150,8 @@ __use_result static inline int push_child(struct jy_asts *asts,
 			return ERROR_NOMEM;
 
 	} else {
-		size_t degree = *childsz + 1;
-		*child	      = jry_realloc(*child, sizeof(**child) * degree);
+		uint32_t degree = *childsz + 1;
+		*child		= jry_realloc(*child, sizeof(**child) * degree);
 
 		if (*child == NULL)
 			return ERROR_NOMEM;
@@ -179,11 +165,11 @@ __use_result static inline int push_child(struct jy_asts *asts,
 
 __use_result static inline int push_tkn(struct jy_tkns *tkns,
 					enum jy_tkn	type,
-					size_t		line,
-					size_t		ofs,
+					uint32_t	line,
+					uint32_t	ofs,
 					char	       *lexeme,
-					size_t		lexsz,
-					size_t	       *id)
+					uint32_t	lexsz,
+					uint32_t       *id)
 {
 	jry_mem_push(tkns->types, tkns->size, type);
 	jry_mem_push(tkns->lines, tkns->size, line);
@@ -200,23 +186,7 @@ __use_result static inline int push_tkn(struct jy_tkns *tkns,
 	return ERROR_SUCCESS;
 }
 
-// return last non newline or eof tkn
-static inline size_t find_last_tkn(struct jy_tkns *tkns)
-{
-	jry_assert(tkns->size > 0);
-
-	size_t	    tkn = tkns->size - 1;
-	enum jy_tkn t	= tkns->types[tkn];
-
-	while (tkn < tkns->size && (t == TKN_NEWLINE || t == TKN_EOF)) {
-		tkn--;
-		t = tkns->types[tkn];
-	}
-
-	return tkn;
-}
-
-static inline bool ended(const enum jy_tkn *types, size_t length)
+static inline bool ended(const enum jy_tkn *types, uint32_t length)
 {
 	return types[length - 1] == TKN_EOF;
 }
@@ -224,27 +194,29 @@ static inline bool ended(const enum jy_tkn *types, size_t length)
 // advance scanner and fill tkn
 static inline void next(struct jy_tkns *tkns,
 			const char    **src,
-			size_t	       *srcsz,
-			size_t	       *tkn)
+			uint32_t       *srcsz,
+			uint32_t       *tkn)
 {
 	enum jy_tkn type;
 
-	// getting previous line
-	size_t line	  = tkns->lines[tkns->size - 1];
-	// getting previous ofs
-	size_t ofs	  = tkns->ofs[tkns->size - 1];
+	uint32_t lastkn = tkns->size - 1;
+	uint32_t line	= tkns->lines[lastkn];
+	uint32_t ofs	= tkns->ofs[lastkn];
+
+	if (tkns->types[lastkn] == TKN_NEWLINE)
+		ofs = 0;
 
 	const char *start = *src;
 	const char *end	  = *src;
 
 	jry_scan(*src, *srcsz, &type, &line, &ofs, &start, &end);
 
-	size_t read  = end - *src;
-	*src	     = end;
-	*srcsz	     = (*srcsz > read) ? *srcsz - read : 0;
+	uint32_t read  = end - *src;
+	*src	       = end;
+	*srcsz	       = (*srcsz > read) ? *srcsz - read : 0;
 
-	size_t lexsz = (end - start) + 1;
-	char  *lex   = jry_alloc(lexsz);
+	uint32_t lexsz = (end - start) + 1;
+	char	*lex   = jry_alloc(lexsz);
 
 	// you are screwed.
 	if (lex == NULL)
@@ -272,8 +244,8 @@ PANIC:
 
 static inline void skipnewline(struct jy_tkns *tkns,
 			       const char    **src,
-			       size_t	      *srcsz,
-			       size_t	      *tkn)
+			       uint32_t	      *srcsz,
+			       uint32_t	      *tkn)
 {
 	while (tkns->types[*tkn] == TKN_NEWLINE)
 		next(tkns, src, srcsz, tkn);
@@ -281,8 +253,8 @@ static inline void skipnewline(struct jy_tkns *tkns,
 
 static inline bool synclist(struct jy_tkns *tkns,
 			    const char	  **src,
-			    size_t	   *srcsz,
-			    size_t	   *tkn)
+			    uint32_t	   *srcsz,
+			    uint32_t	   *tkn)
 {
 	enum jy_tkn t = tkns->types[*tkn];
 
@@ -309,8 +281,8 @@ PANIC:
 
 static inline bool syncsection(struct jy_tkns *tkns,
 			       const char    **src,
-			       size_t	      *srcsz,
-			       size_t	      *tkn)
+			       uint32_t	      *srcsz,
+			       uint32_t	      *tkn)
 {
 	enum jy_tkn t = tkns->types[*tkn];
 
@@ -339,8 +311,8 @@ PANIC:
 
 static bool syncdecl(struct jy_tkns *tkns,
 		     const char	   **src,
-		     size_t	    *srcsz,
-		     size_t	    *tkn)
+		     uint32_t	    *srcsz,
+		     uint32_t	    *tkn)
 {
 	enum jy_tkn t = tkns->types[*tkn];
 
@@ -366,9 +338,9 @@ static bool _err(struct parser	*p,
 		 struct jy_asts *__unused(asts),
 		 struct jy_tkns *__unused(tkns),
 		 struct jy_errs *errs,
-		 size_t		*__unused(root))
+		 uint32_t	*__unused(root))
 {
-	push_err(errs, msg_inv_token, p->tkn);
+	jry_push_error(errs, msg_inv_token, p->tkn, p->tkn);
 
 	return true;
 }
@@ -377,9 +349,9 @@ static bool _err_str(struct parser  *p,
 		     struct jy_asts *__unused(asts),
 		     struct jy_tkns *__unused(tkns),
 		     struct jy_errs *errs,
-		     size_t	    *__unused(root))
+		     uint32_t	    *__unused(root))
 {
-	push_err(errs, msg_inv_string, p->tkn);
+	jry_push_error(errs, msg_inv_string, p->tkn, p->tkn);
 
 	return true;
 }
@@ -388,7 +360,7 @@ static bool _literal(struct parser  *p,
 		     struct jy_asts *asts,
 		     struct jy_tkns *tkns,
 		     struct jy_errs *errs,
-		     size_t	    *root)
+		     uint32_t	    *root)
 {
 	enum jy_tkn type = tkns->types[p->tkn];
 
@@ -408,7 +380,7 @@ static bool _literal(struct parser  *p,
 		break;
 
 	default: {
-		push_err(errs, msg_inv_literal, p->tkn);
+		jry_push_error(errs, msg_inv_literal, p->tkn, p->tkn);
 		goto PANIC;
 	}
 	}
@@ -429,7 +401,7 @@ static bool _name(struct parser	 *p,
 		  struct jy_asts *asts,
 		  struct jy_tkns *tkns,
 		  struct jy_errs *__unused(errs),
-		  size_t	 *root)
+		  uint32_t	 *root)
 {
 	if (push_ast(asts, AST_NAME, p->tkn, root) != 0)
 		return true;
@@ -443,12 +415,12 @@ static bool _not(struct parser	*p,
 		 struct jy_asts *asts,
 		 struct jy_tkns *tkns,
 		 struct jy_errs *errs,
-		 size_t		*root)
+		 uint32_t	*root)
 {
 	if (push_ast(asts, AST_NOT, p->tkn, root) != 0)
 		goto PANIC;
 
-	size_t topast = 0;
+	uint32_t topast = 0;
 
 	// consume !
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
@@ -469,16 +441,16 @@ static bool _event(struct parser  *p,
 		   struct jy_asts *asts,
 		   struct jy_tkns *tkns,
 		   struct jy_errs *errs,
-		   size_t	  *root)
+		   uint32_t	  *root)
 {
+	uint32_t dlrtkn = p->tkn;
 	// consume $
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 	enum jy_tkn type = tkns->types[p->tkn];
 
 	if (type != TKN_IDENTIFIER) {
-		size_t tkn = find_last_tkn(tkns);
-		push_err(errs, msg_expect_ident, tkn);
+		jry_push_error(errs, msg_expect_ident, dlrtkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -497,8 +469,9 @@ static bool _grouping(struct parser  *p,
 		      struct jy_asts *asts,
 		      struct jy_tkns *tkns,
 		      struct jy_errs *errs,
-		      size_t	     *root)
+		      uint32_t	     *root)
 {
+	uint32_t grptkn = p->tkn;
 	// consume (
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
@@ -506,8 +479,7 @@ static bool _grouping(struct parser  *p,
 		goto PANIC;
 
 	if (tkns->types[p->tkn] != TKN_RIGHT_PAREN) {
-		size_t tkn = find_last_tkn(tkns);
-		push_err(errs, msg_inv_group, tkn);
+		jry_push_error(errs, msg_expect_paren_close, grptkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -523,12 +495,12 @@ static bool _call(struct parser	 *p,
 		  struct jy_asts *asts,
 		  struct jy_tkns *tkns,
 		  struct jy_errs *errs,
-		  size_t	 *root)
+		  uint32_t	 *root)
 {
-	enum jy_ast type = asts->types[*root];
-
+	enum jy_ast type    = asts->types[*root];
+	uint32_t    nametkn = p->tkn;
 	if (type != AST_NAME) {
-		push_err(errs, msg_inv_invoc, p->tkn);
+		jry_push_error(errs, msg_inv_invoc, p->tkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -540,11 +512,11 @@ static bool _call(struct parser	 *p,
 	enum jy_tkn param  = tkns->types[p->tkn];
 
 	while (param != TKN_RIGHT_PAREN) {
-		size_t	 topast	 = 0;
 		uint32_t paramsz = asts->childsz[*root];
+		uint32_t topast	 = *root;
 
 		if ((paramsz + 1) & 0x10000) {
-			push_err(errs, msg_args_limit, param);
+			jry_push_error(errs, msg_args_limit, nametkn, p->tkn);
 			goto PANIC;
 		}
 
@@ -564,8 +536,7 @@ static bool _call(struct parser	 *p,
 	}
 
 	if (tkns->types[p->tkn] != TKN_RIGHT_PAREN) {
-		size_t tkn = find_last_tkn(tkns);
-		push_err(errs, msg_inv_group, tkn);
+		jry_push_error(errs, msg_expect_paren_close, nametkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -581,7 +552,7 @@ static bool _dot(struct parser	*p,
 		 struct jy_asts *asts,
 		 struct jy_tkns *tkns,
 		 struct jy_errs *errs,
-		 size_t		*root)
+		 uint32_t	*root)
 {
 	enum jy_ast prevtype = asts->types[*root];
 	enum jy_ast member_type;
@@ -594,23 +565,23 @@ static bool _dot(struct parser	*p,
 		member_type = AST_FIELD;
 		break;
 	default: {
-		push_err(errs, msg_inv_access, p->tkn);
+		jry_push_error(errs, msg_inv_access, p->tkn, p->tkn);
 		goto PANIC;
 	}
 	}
 
 	// consume .
-	size_t tkndot = p->tkn;
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 	enum jy_tkn type = tkns->types[p->tkn];
 
 	if (type != TKN_IDENTIFIER) {
-		push_err(errs, msg_expect_ident, tkndot);
+		jry_push_error(errs, msg_expect_ident, asts->tkns[*root],
+			       p->tkn);
 		goto PANIC;
 	}
 
-	size_t member;
+	uint32_t member;
 
 	if (push_ast(asts, member_type, p->tkn, &member) != 0)
 		goto PANIC;
@@ -646,25 +617,26 @@ static bool _tilde(struct parser  *p,
 		   struct jy_asts *asts,
 		   struct jy_tkns *tkns,
 		   struct jy_errs *errs,
-		   size_t	  *root)
+		   uint32_t	  *root)
 {
-	size_t	    optkn   = p->tkn;
-	size_t	    left    = *root;
+	uint32_t    optkn   = p->tkn;
+	uint32_t    left    = *root;
+	uint32_t    lefttkn = asts->tkns[*root];
 	enum jy_ast leftype = asts->types[left];
 
 	if (leftype != AST_NAME && leftype != AST_EVENT) {
-		push_err(errs, msg_expect_name_or_event, optkn);
+		jry_push_error(errs, msg_expect_name_or_event, lefttkn, p->tkn);
 		goto PANIC;
 	}
 
 	// consume ~
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
-	size_t	    regextkn = p->tkn;
+	uint32_t    regextkn = p->tkn;
 	enum jy_tkn ttype    = tkns->types[p->tkn];
 
 	if (ttype != TKN_REGEXP) {
-		push_err(errs, msg_expect_regex, optkn);
+		jry_push_error(errs, msg_expect_regex, lefttkn, regextkn);
 		goto PANIC;
 	}
 
@@ -674,12 +646,12 @@ static bool _tilde(struct parser  *p,
 	ttype = tkns->types[p->tkn];
 
 	if (ttype != TKN_NEWLINE) {
-		push_err(errs, msg_inv_regex, optkn);
+		jry_push_error(errs, msg_inv_regex, lefttkn, p->tkn);
 		goto PANIC;
 	}
 
-	size_t optast;
-	size_t right;
+	uint32_t optast;
+	uint32_t right;
 
 	if (push_ast(asts, AST_REGMATCH, optkn, &optast) != 0)
 		goto PANIC;
@@ -704,11 +676,11 @@ static bool _binary(struct parser  *p,
 		    struct jy_asts *asts,
 		    struct jy_tkns *tkns,
 		    struct jy_errs *errs,
-		    size_t	   *root)
+		    uint32_t	   *root)
 {
-	size_t left	    = *root;
-	size_t right	    = 0;
-	size_t optkn	    = p->tkn;
+	uint32_t left	    = *root;
+	uint32_t right	    = 0;
+	uint32_t optkn	    = p->tkn;
 
 	enum jy_tkn  optype = tkns->types[p->tkn];
 	struct rule *oprule = rule(optype);
@@ -766,7 +738,7 @@ static bool _precedence(struct parser  *p,
 			struct jy_asts *asts,
 			struct jy_tkns *tkns,
 			struct jy_errs *errs,
-			size_t	       *root,
+			uint32_t       *root,
 			enum prec	rbp)
 {
 	enum jy_tkn  pretype	= tkns->types[p->tkn];
@@ -774,8 +746,8 @@ static bool _precedence(struct parser  *p,
 	parsefn_t    prefixfn	= prefixrule->prefix;
 
 	if (prefixfn == NULL) {
-		size_t tkn = find_last_tkn(tkns);
-		push_err(errs, msg_inv_expression, tkn);
+		jry_push_error(errs, msg_inv_expression, asts->tkns[*root],
+			       p->tkn);
 		goto PANIC;
 	}
 
@@ -803,9 +775,9 @@ static inline bool _expression(struct parser  *p,
 			       struct jy_asts *asts,
 			       struct jy_tkns *tkns,
 			       struct jy_errs *errs,
-			       size_t	      *root)
+			       uint32_t	      *root)
 {
-	size_t lastast = asts->size - 1;
+	uint32_t lastast = asts->size - 1;
 
 	if (_precedence(p, asts, tkns, errs, root, PREC_ASSIGNMENT)) {
 		// clean until last valid (non inclusive)
@@ -824,30 +796,30 @@ static bool _types(struct parser  *p,
 		   struct jy_asts *asts,
 		   struct jy_tkns *tkns,
 		   struct jy_errs *errs,
-		   size_t	  *root)
+		   uint32_t	  *root)
 {
-	size_t	    lastast = asts->size - 1;
-	size_t	    nametkn = p->tkn;
+	uint32_t    sectast = asts->size - 1;
+	uint32_t    sectkn  = asts->tkns[sectast];
+	uint32_t    nametkn = p->tkn;
 	enum jy_tkn type    = tkns->types[nametkn];
 
 	if (type != TKN_IDENTIFIER) {
-		size_t tkn = find_last_tkn(tkns);
-		push_err(errs, msg_inv_type_decl, tkn);
+		jry_push_error(errs, msg_inv_type_decl, sectkn, nametkn);
 		goto PANIC;
 	}
 
-	size_t left;
+	uint32_t left;
 
 	if (push_ast(asts, AST_FIELD_NAME, nametkn, &left) != 0)
 		goto PANIC;
 
 	// consume name
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
-	type	     = tkns->types[p->tkn];
-	size_t eqtkn = p->tkn;
+	type	       = tkns->types[p->tkn];
+	uint32_t eqtkn = p->tkn;
 
 	if (type != TKN_EQUAL) {
-		push_err(errs, msg_expect_eqsign, nametkn);
+		jry_push_error(errs, msg_expect_eqsign, sectkn, eqtkn);
 		goto PANIC;
 	}
 
@@ -867,12 +839,12 @@ static bool _types(struct parser  *p,
 		right_type = AST_STR_TYPE;
 		break;
 	default: {
-		push_err(errs, msg_expect_type, eqtkn);
+		jry_push_error(errs, msg_expect_type, sectkn, p->tkn);
 		goto PANIC;
 	}
 	}
 
-	size_t right;
+	uint32_t right;
 	if (push_ast(asts, right_type, p->tkn, &right) != 0)
 		goto PANIC;
 
@@ -889,7 +861,7 @@ static bool _types(struct parser  *p,
 
 PANIC:
 	// clean until last valid (non inclusive)
-	while (lastast + 1 < asts->size)
+	while (sectast + 1 < asts->size)
 		pop_ast(asts);
 
 	return true;
@@ -899,17 +871,20 @@ static bool _section(struct parser  *p,
 		     struct jy_asts *asts,
 		     struct jy_tkns *tkns,
 		     struct jy_errs *errs,
-		     enum jy_ast decltype)
+		     uint32_t	     declast)
 {
-	size_t	    sectast    = asts->size - 1;
-	size_t	    secttkn    = p->tkn;
+	enum jy_ast decltype   = asts->types[declast];
+	uint32_t    sectast    = asts->size - 1;
+	uint32_t    secttkn    = p->tkn;
 	enum jy_tkn sectkntype = tkns->types[secttkn];
 
 	// consume section
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 	bool (*listfn)(struct parser *, struct jy_asts *, struct jy_tkns *,
-		       struct jy_errs *, size_t *);
+		       struct jy_errs *, uint32_t *);
+
+	listfn = NULL;
 
 	switch (sectkntype) {
 	case TKN_JUMP:
@@ -924,6 +899,7 @@ static bool _section(struct parser  *p,
 			goto INVALID_SECTION;
 
 		asts->types[sectast] = AST_INPUT_SECT;
+		goto INVALID_SECTION;
 		break;
 	case TKN_MATCH:
 		if (decltype != AST_RULE_DECL)
@@ -951,7 +927,7 @@ static bool _section(struct parser  *p,
 	}
 
 	if (tkns->types[p->tkn] != TKN_COLON) {
-		push_err(errs, msg_expect_semicolon, secttkn);
+		jry_push_error(errs, msg_expect_semicolon, secttkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -973,11 +949,9 @@ static bool _section(struct parser  *p,
 			break;
 		}
 
-		size_t root;
+		uint32_t root;
 
-		bool needsync = listfn(p, asts, tkns, errs, &root);
-
-		if (needsync) {
+		if (listfn(p, asts, tkns, errs, &root)) {
 			if (synclist(tkns, &p->src, &p->srcsz, &p->tkn))
 				goto PANIC;
 		} else {
@@ -986,8 +960,8 @@ static bool _section(struct parser  *p,
 		}
 
 		if (tkns->types[p->tkn] != TKN_NEWLINE) {
-			size_t tkn = find_last_tkn(tkns);
-			push_err(errs, msg_expect_newline, tkn);
+			jry_push_error(errs, msg_expect_newline, secttkn,
+				       p->tkn);
 			goto PANIC;
 		}
 
@@ -1000,7 +974,7 @@ CLOSING:
 	return false;
 
 INVALID_SECTION: {
-	push_err(errs, msg_inv_section, secttkn);
+	jry_push_error(errs, msg_inv_section, asts->tkns[declast], p->tkn);
 }
 PANIC:
 	// remove all node up to sectast (inclusive)
@@ -1014,14 +988,12 @@ static bool _block(struct parser  *p,
 		   struct jy_asts *asts,
 		   struct jy_tkns *tkns,
 		   struct jy_errs *errs,
-		   size_t	   declast)
+		   uint32_t	   declast)
 {
-	enum jy_ast decl = asts->types[declast];
-	enum jy_tkn tkn	 = tkns->types[p->tkn];
+	uint32_t decltkn = asts->tkns[declast];
 
-	if (tkn != TKN_LEFT_BRACE) {
-		size_t tkn = asts->tkns[declast];
-		push_err(errs, msg_expect_open_brace, tkn);
+	if (tkns->types[p->tkn] != TKN_LEFT_BRACE) {
+		jry_push_error(errs, msg_expect_open_brace, decltkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -1043,12 +1015,12 @@ static bool _block(struct parser  *p,
 			break;
 		}
 
-		size_t sectast;
+		uint32_t sectast;
 
 		if (push_ast(asts, AST_NONE, p->tkn, &sectast) != 0)
 			goto PANIC;
 
-		if (_section(p, asts, tkns, errs, decl)) {
+		if (_section(p, asts, tkns, errs, declast)) {
 			if (syncsection(tkns, &p->src, &p->srcsz, &p->tkn))
 				goto CLOSING;
 			goto NEXT_SECTION;
@@ -1064,8 +1036,7 @@ NEXT_SECTION:
 
 CLOSING:
 	if (tkns->types[p->tkn] != TKN_RIGHT_BRACE) {
-		size_t tkn = find_last_tkn(tkns);
-		push_err(errs, msg_expect_close_brace, tkn);
+		jry_push_error(errs, msg_expect_close_brace, decltkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -1086,20 +1057,18 @@ static inline bool _identifier(struct parser  *p,
 			       struct jy_asts *asts,
 			       struct jy_tkns *tkns,
 			       struct jy_errs *errs,
-			       size_t	       ast)
+			       uint32_t	       ast)
 {
-	size_t	    nametkn  = p->tkn;
-	enum jy_tkn nametype = tkns->types[nametkn];
+	enum jy_tkn type = tkns->types[p->tkn];
 
-	if (nametype != TKN_IDENTIFIER) {
-		push_err(errs, msg_expect_ident_after, asts->tkns[ast]);
+	if (type != TKN_IDENTIFIER) {
+		jry_push_error(errs, msg_expect_ident, asts->tkns[ast], p->tkn);
 		goto PANIC;
 	}
 
+	asts->tkns[ast] = p->tkn;
 	// consume name
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	asts->tkns[ast] = nametkn;
 
 	return false;
 PANIC:
@@ -1111,8 +1080,8 @@ static bool _declstmt(struct parser  *p,
 		      struct jy_tkns *tkns,
 		      struct jy_errs *errs)
 {
-	size_t declast	     = asts->size - 1;
-	size_t decltkn	     = p->tkn;
+	uint32_t declast     = asts->size - 1;
+	uint32_t decltkn     = p->tkn;
 	enum jy_tkn decltype = tkns->types[decltkn];
 
 	// consume decl tkn
@@ -1147,17 +1116,18 @@ static bool _declstmt(struct parser  *p,
 		break;
 	case TKN_INCLUDE: {
 		asts->types[declast] = AST_INCLUDE_STMT;
-		size_t pattkn	     = p->tkn;
+		uint32_t pattkn	     = p->tkn;
 
 		if (tkns->types[pattkn] != TKN_STRING) {
-			push_err(errs, msg_expect_string, pattkn);
+			jry_push_error(errs, msg_expect_string, decltkn,
+				       pattkn);
 			goto PANIC;
 		}
 
 		// consume path token
 		next(tkns, &p->src, &p->srcsz, &p->tkn);
 
-		size_t pathast;
+		uint32_t pathast;
 
 		if (push_ast(asts, AST_PATH, pattkn, &pathast) != 0)
 			goto PANIC;
@@ -1169,7 +1139,7 @@ static bool _declstmt(struct parser  *p,
 	}
 
 	default: {
-		push_err(errs, msg_inv_decl, decltkn);
+		jry_push_error(errs, msg_inv_decl, decltkn, decltkn);
 		goto PANIC;
 	}
 	}
@@ -1188,14 +1158,14 @@ __use_result static int _entry(struct parser  *p,
 			       struct jy_tkns *tkns,
 			       struct jy_errs *errs)
 {
-	size_t roottkn;
+	uint32_t roottkn;
 
 	int status = push_tkn(tkns, TKN_NONE, 0, 0, NULL, 0, &roottkn);
 
 	if (status != 0)
 		return status;
 
-	size_t rootast;
+	uint32_t rootast;
 
 	status = push_ast(asts, AST_ROOT, roottkn, &rootast);
 
@@ -1206,7 +1176,7 @@ __use_result static int _entry(struct parser  *p,
 	skipnewline(tkns, &p->src, &p->srcsz, &p->tkn);
 
 	while (!ended(tkns->types, tkns->size)) {
-		size_t declast;
+		uint32_t declast;
 
 		status = push_ast(asts, AST_NONE, p->tkn, &declast);
 
@@ -1271,7 +1241,7 @@ void jry_free_asts(struct jy_asts asts)
 	jry_free(asts.types);
 	jry_free(asts.tkns);
 
-	for (size_t i = 0; i < asts.size; ++i)
+	for (uint32_t i = 0; i < asts.size; ++i)
 		jry_free(asts.child[i]);
 
 	jry_free(asts.child);
@@ -1284,7 +1254,7 @@ void jry_free_tkns(struct jy_tkns tkns)
 	jry_free(tkns.lines);
 	jry_free(tkns.ofs);
 
-	for (size_t i = 0; i < tkns.size; ++i)
+	for (uint32_t i = 0; i < tkns.size; ++i)
 		jry_free(tkns.lexemes[i]);
 
 	jry_free(tkns.lexemes);
@@ -1292,7 +1262,7 @@ void jry_free_tkns(struct jy_tkns tkns)
 }
 
 void jry_parse(const char     *src,
-	       size_t	       length,
+	       uint32_t	       length,
 	       struct jy_asts *asts,
 	       struct jy_tkns *tkns,
 	       struct jy_errs *errs)
@@ -1309,8 +1279,26 @@ void jry_parse(const char     *src,
 	}
 }
 
+int jry_push_error(struct jy_errs *errs,
+		   const char	  *msg,
+		   uint32_t	   from,
+		   uint32_t	   to)
+{
+	jry_mem_push(errs->msgs, errs->size, msg);
+	jry_mem_push(errs->from, errs->size, from);
+	jry_mem_push(errs->to, errs->size, to);
+
+	if (errs->from == NULL)
+		return ERROR_NOMEM;
+
+	errs->size += 1;
+
+	return ERROR_SUCCESS;
+}
+
 void jry_free_errs(struct jy_errs errs)
 {
 	jry_free(errs.msgs);
-	jry_free(errs.ids);
+	jry_free(errs.from);
+	jry_free(errs.to);
 }

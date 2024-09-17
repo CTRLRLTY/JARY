@@ -4,14 +4,13 @@
 #include "jary/types.h"
 
 #include <stdbool.h>
-#include <stddef.h>
 #include <stdint.h>
 
 typedef jy_val_t (*jy_funcptr_t)(int, jy_val_t *, int);
 
 struct jy_obj_str {
-	char  *str;
-	size_t size;
+	char	*str;
+	uint32_t size;
 };
 
 struct jy_obj_func {

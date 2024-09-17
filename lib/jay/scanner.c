@@ -5,14 +5,14 @@
 #include <string.h>
 
 void jry_scan(const char  *src,
-	      size_t	   length,
+	      uint32_t	   length,
 	      enum jy_tkn *type,
-	      size_t	  *line,
-	      size_t	  *ofs,
+	      uint32_t	  *line,
+	      uint32_t	  *ofs,
 	      const char **lxstart,
 	      const char **lxend)
 {
-#define READ	  ((size_t) (current - src))
+#define READ	  ((uint32_t) (current - src))
 #define ENDED()	  (READ >= length && current[0] == '\0')
 #define PREV()	  (current[-1])
 #define CURRENT() (current[0])
@@ -21,14 +21,12 @@ void jry_scan(const char  *src,
 	const char *start   = src;
 	const char *current = src;
 
-	bool reset_ofs	    = false;
-
 	*line		    = (*line > 0) ? *line : 1;
 	*ofs		    = (*ofs > 0) ? *ofs : 1;
 
 	if (ENDED()) {
 		*type = TKN_EOF;
-		goto END_FINISH;
+		goto FINISH;
 	}
 
 	start  = current;
@@ -44,58 +42,58 @@ void jry_scan(const char  *src,
 		if (ENDED()) {
 			current = old;
 			*type	= TKN_ERR_STR;
-			goto END_UPDATE;
+			goto FINISH;
 		}
 
 		(void) NEXT(); // consume closing "
 		*type = TKN_STRING;
-		goto END_UPDATE;
+		goto FINISH;
 	}
 	case '(':
 		*type = TKN_LEFT_PAREN;
-		goto END_UPDATE;
+		goto FINISH;
 	case ')':
 		*type = TKN_RIGHT_PAREN;
-		goto END_UPDATE;
+		goto FINISH;
 	case '=':
 		*type = TKN_EQUAL;
-		goto END_UPDATE;
+		goto FINISH;
 	case '{':
 		*type = TKN_LEFT_BRACE;
-		goto END_UPDATE;
+		goto FINISH;
 	case '}':
 		*type = TKN_RIGHT_BRACE;
-		goto END_UPDATE;
+		goto FINISH;
 	case '<':
 		*type = TKN_LESSTHAN;
-		goto END_UPDATE;
+		goto FINISH;
 	case '>':
 		*type = TKN_GREATERTHAN;
-		goto END_UPDATE;
+		goto FINISH;
 	case ':':
 		*type = TKN_COLON;
-		goto END_UPDATE;
+		goto FINISH;
 	case '~':
 		*type = TKN_TILDE;
-		goto END_UPDATE;
+		goto FINISH;
 	case '+':
 		*type = TKN_PLUS;
-		goto END_UPDATE;
+		goto FINISH;
 	case '-':
 		*type = TKN_MINUS;
-		goto END_UPDATE;
+		goto FINISH;
 	case '*':
 		*type = TKN_STAR;
-		goto END_UPDATE;
+		goto FINISH;
 	case '.':
 		*type = TKN_DOT;
-		goto END_UPDATE;
+		goto FINISH;
 	case ',':
 		*type = TKN_COMMA;
-		goto END_UPDATE;
+		goto FINISH;
 	case '$':
 		*type = TKN_DOLLAR;
-		goto END_UPDATE;
+		goto FINISH;
 
 	// Ignore
 	case ' ':
@@ -111,11 +109,11 @@ void jry_scan(const char  *src,
 				(void) NEXT();
 				continue;
 			default:
-				goto END_UPDATE;
+				goto FINISH;
 			}
 		}
 
-		goto END_UPDATE;
+		goto FINISH;
 
 	case '\n':
 		*line += 1;
@@ -125,13 +123,12 @@ void jry_scan(const char  *src,
 			*line += 1;
 		}
 
-		*type	  = TKN_NEWLINE;
-		reset_ofs = true;
-		goto END_UPDATE;
+		*type = TKN_NEWLINE;
+		goto FINISH;
 
 	case '\0':
 		*type = TKN_EOF;
-		goto END_FINISH;
+		goto FINISH;
 
 	case '/': {
 		const char *old = current;
@@ -140,14 +137,14 @@ void jry_scan(const char  *src,
 			if (CURRENT() == '/' && PREV() != '\\') {
 				*type = TKN_REGEXP;
 				(void) NEXT(); // consume '/'
-				goto END_UPDATE;
+				goto FINISH;
 			}
 		} while (!ENDED() && CURRENT() >= ' ' && NEXT() <= '~');
 
 		current = old;
 		*type	= TKN_SLASH;
 
-		goto END_UPDATE;
+		goto FINISH;
 	}
 
 	case '1':
@@ -163,12 +160,12 @@ void jry_scan(const char  *src,
 			(void) NEXT();
 
 		*type = TKN_NUMBER;
-		goto END_UPDATE;
+		goto FINISH;
 	}
 
 	if (!isalpha(c) && c != '_') {
 		*type = TKN_ERR;
-		goto END_UPDATE;
+		goto FINISH;
 	}
 
 	while (!ENDED() && (isalnum(CURRENT()) || CURRENT() == '_'))
@@ -190,14 +187,14 @@ void jry_scan(const char  *src,
 		else
 			*type = TKN_IDENTIFIER;
 
-		goto END_UPDATE;
+		goto FINISH;
 	case 'c':
 		if (STREQ(start + 1, "ondition", 8))
 			*type = TKN_CONDITION;
 		else
 			*type = TKN_IDENTIFIER;
 
-		goto END_UPDATE;
+		goto FINISH;
 	case 'f':
 		if (STREQ(start + 1, "alse", 4))
 			*type = TKN_FALSE;
@@ -206,21 +203,21 @@ void jry_scan(const char  *src,
 		else
 			*type = TKN_IDENTIFIER;
 
-		goto END_UPDATE;
+		goto FINISH;
 	case 'l':
 		if (STREQ(start + 1, "ong", 3))
 			*type = TKN_LONG_TYPE;
 		else
 			*type = TKN_IDENTIFIER;
 
-		goto END_UPDATE;
+		goto FINISH;
 	case 'o':
 		if (start[1] == 'r')
 			*type = TKN_OR;
 		else
 			*type = TKN_IDENTIFIER;
 
-		goto END_UPDATE;
+		goto FINISH;
 	case 'i':
 		if (STREQ(start + 1, "nclude", 6))
 			*type = TKN_INCLUDE;
@@ -233,7 +230,7 @@ void jry_scan(const char  *src,
 		else
 			*type = TKN_IDENTIFIER;
 
-		goto END_UPDATE;
+		goto FINISH;
 	case 't':
 		if (STREQ(start + 1, "rue", 3))
 			*type = TKN_TRUE;
@@ -242,46 +239,41 @@ void jry_scan(const char  *src,
 		else
 			*type = TKN_IDENTIFIER;
 
-		goto END_UPDATE;
+		goto FINISH;
 	case 'r': // rule
 		if (STREQ(start + 1, "ule", 3))
 			*type = TKN_RULE;
 		else
 			*type = TKN_IDENTIFIER;
 
-		goto END_UPDATE;
+		goto FINISH;
 	case 'm':
 		if (STREQ(start + 1, "atch", 4))
 			*type = TKN_MATCH;
 		else
 			*type = TKN_IDENTIFIER;
 
-		goto END_UPDATE;
+		goto FINISH;
 	case 'n':
 		if (STREQ(start + 1, "ot", 2))
 			*type = TKN_NOT;
 		else
 			*type = TKN_IDENTIFIER;
 
-		goto END_UPDATE;
+		goto FINISH;
 	case 's':
 		if (STREQ(start + 1, "tring", 5))
 			*type = TKN_STRING_TYPE;
 		else
 			*type = TKN_IDENTIFIER;
 
-		goto END_UPDATE;
+		goto FINISH;
 	}
 
 	*type = TKN_IDENTIFIER;
 
-END_UPDATE:
-	if (reset_ofs)
-		*ofs = 1;
-	else
-		*ofs += READ;
-
-END_FINISH:
-	*lxstart = start;
-	*lxend	 = current;
+FINISH:
+	*ofs	 += READ;
+	*lxstart  = start;
+	*lxend	  = current;
 }

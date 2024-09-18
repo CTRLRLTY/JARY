@@ -1,17 +1,15 @@
-add_executable( jassy
-	jassy/jassy.c
-	${CMAKE_SOURCE_DIR}/lib/jay/compiler.c
-	${CMAKE_SOURCE_DIR}/lib/jay/parser.c
-	${CMAKE_SOURCE_DIR}/lib/jay/scanner.c
-	${CMAKE_SOURCE_DIR}/lib/jay/defs.c
-)
+add_executable( jassy )
 
-target_link_libraries(jassy PRIVATE dload)
+target_sources( jassy PRIVATE jassy/jassy.c )
 
-target_include_directories( jassy
-	PRIVATE
-        	${CMAKE_SOURCE_DIR}/lib/jay/
-        	${CMAKE_SOURCE_DIR}/include/
-)
+target_link_libraries( jassy PRIVATE compiler )
 
-set_target_properties(jassy PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/)
+if ( SCRUTINY AND CMAKE_C_COMPILER_ID STREQUAL "GNU" )
+        target_compile_options( jassy BEFORE PRIVATE -fanalyzer )
+endif()
+
+if ( SANITIZE AND UNIX AND CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$" )
+        target_link_options( jassy BEFORE PRIVATE -fsanitize=address -fno-omit-frame-pointer )
+endif()
+
+set_target_properties( jassy PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/ )

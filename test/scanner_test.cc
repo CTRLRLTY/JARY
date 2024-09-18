@@ -1,199 +1,163 @@
-#include <string>
-#include <vector>
-#include <cstring>
-
 #include <gtest/gtest.h>
 
 extern "C" {
 #include "scanner.h"
-#include "memory.h"
 }
 
-// TEST(ScannerTest, ScanEOF) {
-//   char samplestr[] = "\0\0";
+TEST(ScannerTest, ScanEOF)
+{
+	char str[] = "\0\0";
 
-//   enum jy_tkn type;
-//   size_t line = 1;
-//   size_t ofs = 0;
-//   size_t len = sizeof(samplestr);
-//   char* lexeme = NULL;
-//   size_t read = jry_scan(samplestr, len, &type, &line, &ofs, &lexeme);
+	enum jy_tkn type;
+	uint32_t    len	  = sizeof(str);
+	const char *start = str, *end = NULL;
+	end = jry_scan(str, len, &type);
 
-//   ASSERT_EQ(read, 0);
-//   ASSERT_EQ(line, 1);
+	ASSERT_EQ(type, TKN_EOF);
+	ASSERT_EQ(1, end - start);
+}
 
-//   ASSERT_EQ(type, TKN_EOF);
-// }
+TEST(ScannerTest, ScanNewline)
+{
+	char str[] = "\n\n\n\n\n";
 
-// TEST(ScannerTest, ScanNewline) {
-//   char samplestr[] = "\n\n\n\n\n";
+	enum jy_tkn type;
+	uint32_t    len	  = sizeof(str);
+	const char *start = str, *end = NULL;
+	end = jry_scan(str, len, &type);
 
-//   enum jy_tkn type;
-//   size_t line = 1;
-//   size_t ofs = 0;
-//   size_t len = sizeof(samplestr);
-//   char* lexeme = NULL;
-//   size_t read = jry_scan(samplestr, len, &type, &line, &ofs, &lexeme);
+	ASSERT_EQ(type, TKN_NEWLINE);
+	ASSERT_EQ(memcmp(str, start, end - start), 0);
+}
 
-//   ASSERT_EQ(read, 5);
-//   ASSERT_EQ(type, TKN_NEWLINE);
-//   ASSERT_EQ(line, 6);
-//   ASSERT_STREQ(lexeme, samplestr);
-//   jry_free(lexeme);
-// }
+TEST(ScannerTest, ScanWhitespace)
+{
+	enum jy_tkn type;
+	char	    str[] = "    \t\t\r\t  \r";
+	int32_t	    len	  = sizeof(str);
+	const char *start = str, *end = NULL;
+	end = jry_scan(str, len, &type);
 
-// TEST(ScannerTest, ScanWhitespace) {
-//   enum jy_tkn type;
-//   size_t line = 1;
-//   char* lexeme = NULL;
-//   char samplestr[] = "    \t\t\r\t  \r";
-//   size_t ofs = 0;
-//   size_t len = sizeof(samplestr);
+	ASSERT_EQ(type, TKN_SPACES);
+	ASSERT_EQ(memcmp(str, start, end - start), 0);
+}
 
-//   size_t read = jry_scan(samplestr, len, &type, &line, &ofs, &lexeme);
-  
-//   ASSERT_EQ(read, 12);
-//   ASSERT_EQ(line, 1);
-//   ASSERT_EQ(type, TKN_EOF);
-// }
+TEST(ScannerTest, ScanSymbol)
+{
+	char str[]	    = "(){}=~<>:,$";
 
-// TEST(ScannerTest, ScanSymbol) {
-//   struct {
-//     char* cstr;
-//     enum jy_tkn type;
-//   } symbols[] = {
-//     {"(", TKN_LEFT_PAREN}, {")", TKN_RIGHT_PAREN},
-//     {"{", TKN_LEFT_BRACE}, {"}", TKN_RIGHT_BRACE},
-//     {"=", TKN_EQUAL}, {"~", TKN_TILDE},
-//     {"<", TKN_LESSTHAN}, {">", TKN_GREATERTHAN},
-//     {":", TKN_COLON},
-//     {",", TKN_COMMA}, 
-//     {"$", TKN_DOLLAR},
-//   };
+	enum jy_tkn types[] = {
+		// group
+		TKN_LEFT_PAREN,
+		TKN_RIGHT_PAREN,
+		// block
+		TKN_LEFT_BRACE,
+		TKN_RIGHT_BRACE,
+		// operator
+		TKN_EQUAL,
+		TKN_TILDE,
+		TKN_LESSTHAN,
+		TKN_GREATERTHAN,
+		TKN_COLON,
+		TKN_COMMA,
+		TKN_DOLLAR,
+	};
 
-//   size_t symsz = sizeof(symbols)/sizeof(symbols[0]);
+	ASSERT_EQ(sizeof(str) - 1, sizeof(types) / sizeof(types[0]));
 
-//   for (size_t i = 0; i < symsz; ++i) {
-//     enum jy_tkn type;
-//     size_t line = 1;
-//     size_t ofs = 0;
-//     char* lexeme = NULL;
+	for (uint32_t i = 0; i < sizeof(str) - 1; ++i) {
+		enum jy_tkn type;
+		const char *start = str + i, *end = NULL;
+		end = jry_scan(start, sizeof(str) - i, &type);
 
-//     size_t read = jry_scan(symbols[i].cstr, 2, &type, &line, &ofs, &lexeme);
-    
-//     ASSERT_EQ(read, 1);
-//     ASSERT_EQ(line, 1);
-//     ASSERT_EQ(type, symbols[i].type) << "i: " << i;
-//     ASSERT_STREQ(lexeme, symbols[i].cstr);
+		ASSERT_EQ(type, types[i]);
+		ASSERT_EQ(end - start, 1) << "i: " << i;
+	}
+}
 
-//     jry_free(lexeme);
-//   }
-// }
+TEST(ScannerTest, ScanKeyword)
+{
+	const char *str[] = {
+		"all",	 "and",	   "any",	"false",  "true",    "or",
+		"not",	 "input",  "rule",	"import", "ingress", "include",
+		"match", "target", "condition", "field",
+	};
 
-// TEST(ScannerTest, ScanKeyword) {
-//   struct {
-//     char* cstr;
-//     size_t size;
-//     enum jy_tkn type;
-//   } keywords[] = {
-//     {"all", 4, TKN_ALL},
-//     {"and", 4, TKN_AND},
-//     {"any", 4,TKN_ANY},
-//     {"false", 6, TKN_FALSE}, 
-//     {"true", 5, TKN_TRUE},
-//     {"or", 3, TKN_OR},
-//     {"not", 4, TKN_NOT},
-//     {"input", 6, TKN_INPUT},
-//     {"rule", 5, TKN_RULE},
-//     {"import", 7, TKN_IMPORT},
-//     {"ingress", 8, TKN_INGRESS},
-//     {"include", 8, TKN_INCLUDE},
-//     {"match", 6, TKN_MATCH},
-//     {"target", 7, TKN_TARGET},
-//     {"condition", 10, TKN_CONDITION},
-//     {"fields", 7, TKN_FIELDS},
-//   };
+	enum jy_tkn types[] {
+		TKN_ALL,
+		TKN_AND,
+		TKN_ANY,
+		TKN_FALSE,
+		TKN_TRUE,
+		TKN_OR,
+		TKN_NOT,
+		TKN_INPUT,
+		TKN_RULE,
+		TKN_IMPORT,
+		TKN_INGRESS,
+		TKN_INCLUDE,
+		TKN_MATCH,
+		TKN_JUMP,
+		TKN_CONDITION,
+		TKN_FIELD,
+	};
 
-//   size_t kwsz = sizeof(keywords)/sizeof(keywords[0]);
+	ASSERT_EQ(sizeof(str) / sizeof(str[0]),
+		  sizeof(types) / sizeof(types[0]));
 
-//   for (size_t i = 0; i < kwsz; ++i) { // Check every keyword
-//     enum jy_tkn type;
-//     size_t line = 1;
-//     size_t ofs = 0;
-//     char* lexeme = NULL;
+	for (uint32_t i = 0; i < sizeof(str) / sizeof(str[0]); ++i) {
+		enum jy_tkn type;
+		const char *start = str[i], *end = NULL;
+		// + 1 include '\0'
+		size_t	    strsz = strlen(str[i]) + 1;
+		end		  = jry_scan(start, strsz, &type);
 
-//     size_t read = jry_scan(keywords[i].cstr, keywords[i].size, &type, &line, &ofs, &lexeme);
-    
-//     ASSERT_EQ(read, keywords[i].size - 1) << "i: " << i;
-//     ASSERT_EQ(line, 1) << "i: " << i;
-//     ASSERT_EQ(type, keywords[i].type) << "i: " << i;
-//     ASSERT_STREQ(lexeme, keywords[i].cstr) << "i: " << i;
+		ASSERT_EQ(type, types[i]) << "i: " << i;
+		ASSERT_EQ(memcmp(str[i], start, end - start), 0);
+		ASSERT_EQ(strsz - 1, end - start) << "i: " << i;
+	}
+}
 
-//     jry_free(lexeme);
-//   }
-// }
+TEST(ScannerTest, ScanString)
+{
+	enum jy_tkn type;
+	char	    str[] = "\"hello world\"";
+	const char *start = str, *end = NULL;
 
-// TEST(ScannerTest, ScanString) {
-//     enum jy_tkn type;
-//     size_t line = 1;
-//     size_t ofs = 0;
-//     char* lexeme = NULL;
-//     char str[] = "\"hello world\"";
-//     size_t len = sizeof(str);
+	end = jry_scan(start, sizeof(str), &type);
+	ASSERT_EQ(type, TKN_STRING);
+	ASSERT_EQ(strlen(start), end - start);
+	ASSERT_EQ(memcmp(str, start, end - start), 0);
+}
 
-//     size_t read = jry_scan(str, len, &type, &line, &ofs, &lexeme);
+TEST(ScannerTest, ScanRegexp)
+{
+	char	    str[] = "/Hello world\\//";
+	enum jy_tkn type;
+	const char *start = str, *end = NULL;
+	end = jry_scan(start, sizeof(str), &type);
 
-//     ASSERT_EQ(type, TKN_STRING);
-//     ASSERT_EQ(read, sizeof(str) - 1);
-//     ASSERT_STREQ(lexeme, str);
-//     ASSERT_EQ(line, 1);
+	ASSERT_EQ(type, TKN_REGEXP);
+	ASSERT_EQ(strlen(str), end - start);
+	ASSERT_EQ(memcmp(str, start, end - start), 0);
+}
 
-//     jry_free(lexeme);
-// }
+TEST(ScannerTest, ScanIdentifier)
+{
+	const char *names[] = {
+		"hello",
+		"_my_name"
+		"identifier123",
+	};
 
-// TEST(ScannerTest, ScanRegexp) {
-//   char str[] = "/Hello world\\//";
-
-//   enum jy_tkn type;
-//   size_t line = 1;
-//   size_t ofs = 0;
-//   size_t len = sizeof(str);
-//   char* lexeme = NULL;
-
-//   size_t read = jry_scan(str, len, &type, &line, &ofs, &lexeme);
-
-//   ASSERT_EQ(type, TKN_REGEXP);
-//   ASSERT_EQ(read, sizeof(str) - 1);
-//   ASSERT_STREQ(lexeme, str);
-//   ASSERT_EQ(line, 1);
-
-//   jry_free(lexeme);
-// }
-
-// TEST(ScannerTest, ScanIdentifier) {
-//   { // legal identifiers
-//     std::vector<std::string> ident = {
-//       "hello",
-//       "_my_name"
-//       "identifier123",
-//     };
-
-//     for (size_t i = 0; i < ident.size(); ++i) {
-//       char str[ident[i].size() + 1] = "\0";
-//       enum jy_tkn type;
-//       size_t line = 0;
-//       size_t ofs = 0;
-//       char* lexeme = NULL;
-//       size_t len = sizeof(str);
-      
-//       std::strcpy(str, ident[i].c_str());
-      
-//       jry_scan(str, len, &type, &line, &ofs, &lexeme);
-
-//       ASSERT_STREQ(lexeme, str);
-//       ASSERT_EQ(type, TKN_IDENTIFIER);
-
-//       jry_free(lexeme);
-//     }
-//   }
-// }
+	for (uint32_t i = 0; i < sizeof(names) / sizeof(names[0]) - 1; ++i) {
+		enum jy_tkn type;
+		const char *start = names[i], *end = NULL;
+		// + 1 to include '\0'
+		uint32_t    len = strlen(start) + 1;
+		end		= jry_scan(start, len, &type);
+		ASSERT_EQ(type, TKN_IDENTIFIER);
+		ASSERT_EQ(memcmp(start, start, end - start), 0);
+		ASSERT_EQ(len - 1, end - start);
+	}
+}

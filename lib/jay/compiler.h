@@ -31,7 +31,7 @@ enum jy_opcode {
 	JY_OP_END
 };
 
-struct jy_scan_ctx {
+struct jy_jay {
 	// module dirpath
 	const char     *mdir;
 	// list of modules
@@ -49,19 +49,19 @@ struct jy_scan_ctx {
 	enum jy_ktype  *types;
 	// object linear memory buffer
 	void	       *obj;
-	uint32_t	modulesz;
 	uint32_t	objsz;
-	uint32_t	valsz;
-	uint32_t	eventsz;
 	uint32_t	codesz;
-	uint32_t	callsz;
+	uint16_t	valsz;
+	uint16_t	modulesz;
+	uint16_t	eventsz;
+	uint16_t	callsz;
 };
 
-void jry_compile(struct jy_asts	    *asts,
-		 struct jy_tkns	    *tkns,
-		 struct jy_scan_ctx *ctx,
-		 struct jy_errs	    *errs);
+void jry_compile(struct jy_asts *asts,
+		 struct jy_tkns *tkns,
+		 struct jy_jay	*ctx,
+		 struct jy_errs *errs);
 
-void jry_free_scan_ctx(struct jy_scan_ctx ctx);
+void jry_free_jay(struct jy_jay ctx);
 
 #endif // JAYVM_COMPILER_H

@@ -19,7 +19,9 @@ enum jy_ktype {
 
 typedef unsigned long jy_val_t;
 
+#ifndef __cplusplus
 // Just for clarity
 _Static_assert(sizeof(jy_val_t) == 8, "Values must be 8 bytes");
+#endif // __cplusplus
 
 #endif // JAYVM_TYPES_H

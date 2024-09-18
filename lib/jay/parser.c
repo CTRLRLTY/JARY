@@ -12,8 +12,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX(__a, __b) ((__b > __a) ? __b : __a)
-
 #define CASE_TKN_SECT                                                          \
 TKN_INPUT:                                                                     \
 	case TKN_MATCH:                                                        \
@@ -83,7 +81,7 @@ struct rule {
 	enum prec prec;
 };
 
-static struct rule *rule(enum jy_tkn type);
+static inline struct rule *rule(enum jy_tkn type);
 
 static bool _precedence(struct parser  *p,
 			struct jy_asts *asts,
@@ -168,8 +166,7 @@ __use_result static inline int push_tkn(struct jy_tkns *tkns,
 					uint32_t	line,
 					uint32_t	ofs,
 					char	       *lexeme,
-					uint32_t	lexsz,
-					uint32_t       *id)
+					uint32_t	lexsz)
 {
 	jry_mem_push(tkns->types, tkns->size, type);
 	jry_mem_push(tkns->lines, tkns->size, line);
@@ -180,8 +177,7 @@ __use_result static inline int push_tkn(struct jy_tkns *tkns,
 	if (tkns->lexsz == NULL)
 		return ERROR_NOMEM;
 
-	if (id != NULL)
-		*id = tkns->size++;
+	tkns->size += 1;
 
 	return ERROR_SUCCESS;
 }
@@ -197,40 +193,38 @@ static inline void next(struct jy_tkns *tkns,
 			uint32_t       *srcsz,
 			uint32_t       *tkn)
 {
-	enum jy_tkn type;
+	uint32_t    lastkn = tkns->size - 1;
+	uint32_t    line   = tkns->lines[lastkn];
+	uint32_t    ofs	   = tkns->ofs[lastkn] + tkns->lexsz[lastkn];
+	enum jy_tkn type   = tkns->types[lastkn];
 
-	uint32_t lastkn = tkns->size - 1;
-	uint32_t line	= tkns->lines[lastkn];
-	uint32_t ofs	= tkns->ofs[lastkn];
-
-	if (tkns->types[lastkn] == TKN_NEWLINE)
-		ofs = 0;
+	if (type == TKN_NEWLINE || type == TKN_NONE) {
+		line += 1;
+		ofs   = 1;
+	}
 
 	const char *start = *src;
-	const char *end	  = *src;
+	const char *end	  = jry_scan(start, *srcsz, &type);
 
-	jry_scan(*src, *srcsz, &type, &line, &ofs, &start, &end);
+	uint32_t lexsz	  = end - start;
+	char	*lex	  = jry_alloc(lexsz + 1);
+	*src		  = end;
+	*srcsz		  = (*srcsz > lexsz) ? *srcsz - lexsz : 0;
 
-	uint32_t read  = end - *src;
-	*src	       = end;
-	*srcsz	       = (*srcsz > read) ? *srcsz - read : 0;
-
-	uint32_t lexsz = (end - start) + 1;
-	char	*lex   = jry_alloc(lexsz);
+	if (type == TKN_NEWLINE)
+		line += lexsz - 1;
 
 	// you are screwed.
 	if (lex == NULL)
 		goto PANIC;
 
-	memcpy(lex, start, lexsz - 1);
+	memcpy(lex, start, lexsz);
 
-	lex[lexsz - 1] = '\0';
+	lex[lexsz] = '\0';
+	*tkn	   = tkns->size;
 
-	if (push_tkn(tkns, type, line, ofs, lex, lexsz, NULL) != 0)
+	if (push_tkn(tkns, type, line, ofs, lex, lexsz) != 0)
 		goto PANIC;
-
-	*tkn	    = tkns->size;
-	tkns->size += 1;
 
 	if (type == TKN_SPACES)
 		next(tkns, src, srcsz, tkn);
@@ -238,17 +232,10 @@ static inline void next(struct jy_tkns *tkns,
 	return;
 
 PANIC:
-	tkns->types[lexsz - 2] = TKN_EOF;
+	jry_free(lex);
+	*tkn			    = tkns->size - 1;
+	tkns->types[tkns->size - 1] = TKN_EOF;
 	return;
-}
-
-static inline void skipnewline(struct jy_tkns *tkns,
-			       const char    **src,
-			       uint32_t	      *srcsz,
-			       uint32_t	      *tkn)
-{
-	while (tkns->types[*tkn] == TKN_NEWLINE)
-		next(tkns, src, srcsz, tkn);
 }
 
 static inline bool synclist(struct jy_tkns *tkns,
@@ -530,7 +517,9 @@ static bool _call(struct parser	 *p,
 			break;
 
 		next(tkns, &p->src, &p->srcsz, &p->tkn);
-		skipnewline(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (tkns->types[p->tkn] == TKN_NEWLINE)
+			next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 		param = tkns->types[p->tkn];
 	}
@@ -939,7 +928,9 @@ static bool _section(struct parser  *p,
 
 	// consume colon
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
-	skipnewline(tkns, &p->src, &p->srcsz, &p->tkn);
+
+	if (tkns->types[p->tkn] == TKN_NEWLINE)
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 	enum jy_tkn listype = tkns->types[p->tkn];
 
@@ -948,7 +939,7 @@ static bool _section(struct parser  *p,
 		case CASE_TKN_DECL:
 		case CASE_TKN_SECT:
 		case TKN_RIGHT_BRACE:
-			goto CLOSING;
+			goto FINISH;
 		case TKN_EOF:
 			goto PANIC;
 		default:
@@ -971,12 +962,13 @@ static bool _section(struct parser  *p,
 			goto PANIC;
 		}
 
-		skipnewline(tkns, &p->src, &p->srcsz, &p->tkn);
+		// consume NEWLINE
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 		listype = tkns->types[p->tkn];
 	}
 
-CLOSING:
+FINISH:
 	return false;
 
 INVALID_SECTION: {
@@ -1006,17 +998,16 @@ static bool _block(struct parser  *p,
 	// consume {
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
-	skipnewline(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	enum jy_tkn sectype = tkns->types[p->tkn];
-
 	for (;;) {
-		switch (sectype) {
+		switch (tkns->types[p->tkn]) {
 		case CASE_TKN_DECL:
 		case TKN_RIGHT_BRACE:
 			goto CLOSING;
 		case TKN_EOF:
 			goto PANIC;
+		case TKN_NEWLINE:
+			next(tkns, &p->src, &p->srcsz, &p->tkn);
+			continue;
 		default:
 			break;
 		}
@@ -1029,15 +1020,11 @@ static bool _block(struct parser  *p,
 		if (_section(p, asts, tkns, errs, declast)) {
 			if (syncsection(tkns, &p->src, &p->srcsz, &p->tkn))
 				goto CLOSING;
-			goto NEXT_SECTION;
+			continue;
 		}
 
 		if (push_child(asts, declast, sectast) != 0)
 			goto PANIC;
-
-NEXT_SECTION:
-		sectype = tkns->types[p->tkn];
-		skipnewline(tkns, &p->src, &p->srcsz, &p->tkn);
 	}
 
 CLOSING:
@@ -1164,9 +1151,8 @@ __use_result static int _entry(struct parser  *p,
 			       struct jy_tkns *tkns,
 			       struct jy_errs *errs)
 {
-	uint32_t roottkn;
-
-	int status = push_tkn(tkns, TKN_NONE, 0, 0, NULL, 0, &roottkn);
+	uint32_t roottkn = tkns->size;
+	int	 status	 = push_tkn(tkns, TKN_NONE, 0, 0, NULL, 0);
 
 	if (status != 0)
 		return status;
@@ -1179,7 +1165,9 @@ __use_result static int _entry(struct parser  *p,
 		return status;
 
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
-	skipnewline(tkns, &p->src, &p->srcsz, &p->tkn);
+
+	if (tkns->types[p->tkn] == TKN_NEWLINE)
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 	while (!ended(tkns->types, tkns->size)) {
 		uint32_t declast;
@@ -1199,7 +1187,8 @@ __use_result static int _entry(struct parser  *p,
 		if (status != 0)
 			return status;
 
-		skipnewline(tkns, &p->src, &p->srcsz, &p->tkn);
+		if (tkns->types[p->tkn] == TKN_NEWLINE)
+			next(tkns, &p->src, &p->srcsz, &p->tkn);
 	}
 
 	return ERROR_SUCCESS;
@@ -1237,34 +1226,9 @@ static struct rule rules[TOTAL_TKN_TYPES] = {
 	[TKN_DOLLAR]	  = { _event, NULL, PREC_NONE },
 };
 
-static struct rule *rule(enum jy_tkn type)
+static inline struct rule *rule(enum jy_tkn type)
 {
 	return &rules[type];
-}
-
-void jry_free_asts(struct jy_asts asts)
-{
-	jry_free(asts.types);
-	jry_free(asts.tkns);
-
-	for (uint32_t i = 0; i < asts.size; ++i)
-		jry_free(asts.child[i]);
-
-	jry_free(asts.child);
-	jry_free(asts.childsz);
-}
-
-void jry_free_tkns(struct jy_tkns tkns)
-{
-	jry_free(tkns.types);
-	jry_free(tkns.lines);
-	jry_free(tkns.ofs);
-
-	for (uint32_t i = 0; i < tkns.size; ++i)
-		jry_free(tkns.lexemes[i]);
-
-	jry_free(tkns.lexemes);
-	jry_free(tkns.lexsz);
 }
 
 void jry_parse(const char     *src,
@@ -1300,6 +1264,31 @@ int jry_push_error(struct jy_errs *errs,
 	errs->size += 1;
 
 	return ERROR_SUCCESS;
+}
+
+void jry_free_asts(struct jy_asts asts)
+{
+	jry_free(asts.types);
+	jry_free(asts.tkns);
+
+	for (uint32_t i = 0; i < asts.size; ++i)
+		jry_free(asts.child[i]);
+
+	jry_free(asts.child);
+	jry_free(asts.childsz);
+}
+
+void jry_free_tkns(struct jy_tkns tkns)
+{
+	jry_free(tkns.types);
+	jry_free(tkns.lines);
+	jry_free(tkns.ofs);
+
+	for (uint32_t i = 0; i < tkns.size; ++i)
+		jry_free(tkns.lexemes[i]);
+
+	jry_free(tkns.lexemes);
+	jry_free(tkns.lexsz);
 }
 
 void jry_free_errs(struct jy_errs errs)

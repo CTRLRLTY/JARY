@@ -39,7 +39,7 @@ struct kexpr {
 // expression compile subroutine signature
 typedef bool (*cmplfn_t)(struct jy_asts *,
 			 struct jy_tkns *,
-			 struct jy_scan_ctx *,
+			 struct jy_jay *,
 			 struct jy_errs *,
 			 struct jy_defs *,
 			 uint32_t,
@@ -113,13 +113,13 @@ static void write_push(uint8_t **code, uint32_t *codesz, uint32_t constant)
 		write_byte(code, codesz, v.c[i]);
 }
 
-static inline bool _expr(struct jy_asts	    *asts,
-			 struct jy_tkns	    *tkns,
-			 struct jy_scan_ctx *ctx,
-			 struct jy_errs	    *errs,
-			 struct jy_defs	    *scope,
-			 uint32_t	     id,
-			 struct kexpr	    *expr)
+static inline bool _expr(struct jy_asts *asts,
+			 struct jy_tkns *tkns,
+			 struct jy_jay	*ctx,
+			 struct jy_errs *errs,
+			 struct jy_defs *scope,
+			 uint32_t	 id,
+			 struct kexpr	*expr)
 {
 	enum jy_ast type = asts->types[id];
 	cmplfn_t    fn	 = rule_expression(type);
@@ -128,13 +128,13 @@ static inline bool _expr(struct jy_asts	    *asts,
 	return fn(asts, tkns, ctx, errs, scope, id, expr);
 }
 
-static bool _literal_expr(struct jy_asts     *asts,
-			  struct jy_tkns     *tkns,
-			  struct jy_scan_ctx *ctx,
-			  struct jy_errs     *errs,
-			  struct jy_defs     *__unused(scope),
-			  uint32_t	      id,
-			  struct kexpr	     *expr)
+static bool _literal_expr(struct jy_asts *asts,
+			  struct jy_tkns *tkns,
+			  struct jy_jay	 *ctx,
+			  struct jy_errs *errs,
+			  struct jy_defs *__unused(scope),
+			  uint32_t	  id,
+			  struct kexpr	 *expr)
 {
 	enum jy_ast type = asts->types[id];
 
@@ -190,7 +190,8 @@ static bool _literal_expr(struct jy_asts     *asts,
 		}
 
 		uint32_t moffs1 = sizeof(struct jy_obj_str);
-		uint32_t moffs2 = moffs1 + lexsz;
+		// + 1 to include '\0'
+		uint32_t moffs2 = moffs1 + lexsz + 1;
 		ctx->obj	= jry_realloc(ctx->obj, moffs2);
 
 		if (ctx->obj == NULL)
@@ -203,6 +204,7 @@ static bool _literal_expr(struct jy_asts     *asts,
 		ctx->objsz		= moffs2;
 
 		memcpy(ostr->str, lexeme, lexsz);
+		ostr->str[lexsz] = '\0';
 
 		jry_mem_push(ctx->vals, ctx->valsz, jry_str2v(ostr));
 		jry_mem_push(ctx->types, ctx->valsz, JY_K_STR);
@@ -254,13 +256,13 @@ PANIC:
 	return true;
 }
 
-static bool _name_expr(struct jy_asts	  *asts,
-		       struct jy_tkns	  *tkns,
-		       struct jy_scan_ctx *ctx,
-		       struct jy_errs	  *errs,
-		       struct jy_defs	  *scope,
-		       uint32_t		   id,
-		       struct kexpr	  *expr)
+static bool _name_expr(struct jy_asts *asts,
+		       struct jy_tkns *tkns,
+		       struct jy_jay  *ctx,
+		       struct jy_errs *errs,
+		       struct jy_defs *scope,
+		       uint32_t	       id,
+		       struct kexpr   *expr)
 {
 	uint32_t tkn	= asts->tkns[id];
 	char	*lexeme = tkns->lexemes[tkn];
@@ -289,13 +291,13 @@ PANIC:
 	return true;
 }
 
-static bool _event_expr(struct jy_asts	   *asts,
-			struct jy_tkns	   *tkns,
-			struct jy_scan_ctx *ctx,
-			struct jy_errs	   *errs,
-			struct jy_defs	   *__unused(scope),
-			uint32_t	    id,
-			struct kexpr	   *expr)
+static bool _event_expr(struct jy_asts *asts,
+			struct jy_tkns *tkns,
+			struct jy_jay  *ctx,
+			struct jy_errs *errs,
+			struct jy_defs *__unused(scope),
+			uint32_t	id,
+			struct kexpr   *expr)
 {
 	uint32_t tkn	= asts->tkns[id];
 	char	*lexeme = tkns->lexemes[tkn];
@@ -370,13 +372,13 @@ PANIC:
 	return true;
 }
 
-static bool _call_expr(struct jy_asts	  *asts,
-		       struct jy_tkns	  *tkns,
-		       struct jy_scan_ctx *ctx,
-		       struct jy_errs	  *errs,
-		       struct jy_defs	  *scope,
-		       uint32_t		   ast,
-		       struct kexpr	  *expr)
+static bool _call_expr(struct jy_asts *asts,
+		       struct jy_tkns *tkns,
+		       struct jy_jay  *ctx,
+		       struct jy_errs *errs,
+		       struct jy_defs *scope,
+		       uint32_t	       ast,
+		       struct kexpr   *expr)
 {
 	uint32_t tkn	= asts->tkns[ast];
 	char	*lexeme = tkns->lexemes[tkn];
@@ -439,12 +441,15 @@ static bool _call_expr(struct jy_asts	  *asts,
 		goto PANIC;
 	}
 
+	jry_mem_push(ctx->types, ctx->valsz, JY_K_FUNC);
+	jry_mem_push(ctx->vals, ctx->valsz, jry_func2v(ofunc));
 	jry_mem_push(ctx->call, ctx->callsz, ofunc->func);
 
-	if (ctx->call == NULL)
+	if (ctx->types == NULL || ctx->vals == NULL || ctx->call == NULL)
 		goto PANIC;
 
 	call_id	     = ctx->callsz;
+	ctx->valsz  += 1;
 	ctx->callsz += 1;
 
 EMIT:
@@ -460,13 +465,13 @@ PANIC:
 	return true;
 }
 
-static bool _not_expr(struct jy_asts	 *asts,
-		      struct jy_tkns	 *tkns,
-		      struct jy_scan_ctx *ctx,
-		      struct jy_errs	 *errs,
-		      struct jy_defs	 *scope,
-		      uint32_t		  ast,
-		      struct kexpr	 *expr)
+static bool _not_expr(struct jy_asts *asts,
+		      struct jy_tkns *tkns,
+		      struct jy_jay  *ctx,
+		      struct jy_errs *errs,
+		      struct jy_defs *scope,
+		      uint32_t	      ast,
+		      struct kexpr   *expr)
 {
 	jry_assert(asts->childsz[ast] == 1);
 
@@ -489,13 +494,13 @@ PANIC:
 	return true;
 }
 
-static bool _and_expr(struct jy_asts	 *asts,
-		      struct jy_tkns	 *tkns,
-		      struct jy_scan_ctx *ctx,
-		      struct jy_errs	 *errs,
-		      struct jy_defs	 *scope,
-		      uint32_t		  ast,
-		      struct kexpr	 *expr)
+static bool _and_expr(struct jy_asts *asts,
+		      struct jy_tkns *tkns,
+		      struct jy_jay  *ctx,
+		      struct jy_errs *errs,
+		      struct jy_defs *scope,
+		      uint32_t	      ast,
+		      struct kexpr   *expr)
 {
 	jry_assert(asts->childsz[ast] == 2);
 
@@ -535,13 +540,13 @@ PANIC:
 	return true;
 }
 
-static bool _or_expr(struct jy_asts	*asts,
-		     struct jy_tkns	*tkns,
-		     struct jy_scan_ctx *ctx,
-		     struct jy_errs	*errs,
-		     struct jy_defs	*scope,
-		     uint32_t		 ast,
-		     struct kexpr	*expr)
+static bool _or_expr(struct jy_asts *asts,
+		     struct jy_tkns *tkns,
+		     struct jy_jay  *ctx,
+		     struct jy_errs *errs,
+		     struct jy_defs *scope,
+		     uint32_t	     ast,
+		     struct kexpr   *expr)
 {
 	jry_assert(asts->childsz[ast] == 2);
 
@@ -581,13 +586,13 @@ PANIC:
 	return true;
 }
 
-static bool _binary_expr(struct jy_asts	    *asts,
-			 struct jy_tkns	    *tkns,
-			 struct jy_scan_ctx *ctx,
-			 struct jy_errs	    *errs,
-			 struct jy_defs	    *scope,
-			 uint32_t	     ast,
-			 struct kexpr	    *expr)
+static bool _binary_expr(struct jy_asts *asts,
+			 struct jy_tkns *tkns,
+			 struct jy_jay	*ctx,
+			 struct jy_errs *errs,
+			 struct jy_defs *scope,
+			 uint32_t	 ast,
+			 struct kexpr	*expr)
 {
 	jry_assert(asts->childsz[ast] == 2);
 
@@ -722,13 +727,13 @@ static inline cmplfn_t rule_expression(enum jy_ast type)
 	return rules[type];
 }
 
-static inline bool _match_sect(struct jy_asts	  *asts,
-			       struct jy_tkns	  *tkns,
-			       struct jy_scan_ctx *ctx,
-			       struct jy_errs	  *errs,
-			       uint32_t		   sect,
-			       uint32_t		 **patchofs,
-			       uint32_t		  *patchsz)
+static inline bool _match_sect(struct jy_asts *asts,
+			       struct jy_tkns *tkns,
+			       struct jy_jay  *ctx,
+			       struct jy_errs *errs,
+			       uint32_t	       sect,
+			       uint32_t	     **patchofs,
+			       uint32_t	      *patchsz)
 {
 	uint32_t  sectkn  = asts->tkns[sect];
 	uint32_t *child	  = asts->child[sect];
@@ -771,13 +776,13 @@ PANIC:
 	return true;
 }
 
-static inline bool _condition_sect(struct jy_asts     *asts,
-				   struct jy_tkns     *tkns,
-				   struct jy_scan_ctx *ctx,
-				   struct jy_errs     *errs,
-				   uint32_t	       sect,
-				   uint32_t	     **patchofs,
-				   uint32_t	      *patchsz)
+static inline bool _condition_sect(struct jy_asts *asts,
+				   struct jy_tkns *tkns,
+				   struct jy_jay  *ctx,
+				   struct jy_errs *errs,
+				   uint32_t	   sect,
+				   uint32_t	 **patchofs,
+				   uint32_t	  *patchsz)
 {
 	uint32_t  sectkn  = asts->tkns[sect];
 	uint32_t *child	  = asts->child[sect];
@@ -815,11 +820,11 @@ PANIC:
 	return true;
 }
 
-static inline bool _target_sect(struct jy_asts	   *asts,
-				struct jy_tkns	   *tkns,
-				struct jy_scan_ctx *ctx,
-				struct jy_errs	   *errs,
-				uint32_t	    sect)
+static inline bool _target_sect(struct jy_asts *asts,
+				struct jy_tkns *tkns,
+				struct jy_jay  *ctx,
+				struct jy_errs *errs,
+				uint32_t	sect)
 {
 	uint32_t *child	  = asts->child[sect];
 	uint32_t  childsz = asts->childsz[sect];
@@ -895,11 +900,11 @@ PANIC:
 	return true;
 }
 
-static inline bool _rule_decl(struct jy_asts	 *asts,
-			      struct jy_tkns	 *tkns,
-			      struct jy_scan_ctx *ctx,
-			      struct jy_errs	 *errs,
-			      uint32_t		  rule)
+static inline bool _rule_decl(struct jy_asts *asts,
+			      struct jy_tkns *tkns,
+			      struct jy_jay  *ctx,
+			      struct jy_errs *errs,
+			      uint32_t	      rule)
 {
 	bool panic	   = false;
 
@@ -967,11 +972,9 @@ static inline bool _rule_decl(struct jy_asts	 *asts,
 		_target_sect(asts, tkns, ctx, errs, id);
 	}
 
-	uint32_t endofs = ctx->codesz;
-
 	for (uint32_t i = 0; i < patchsz; ++i) {
 		uint32_t ofs = patchofs[i];
-		short	 jmp = (short) (endofs - ofs + 1);
+		short	 jmp = (short) (ctx->codesz - ofs + 1);
 
 		memcpy(ctx->codes + ofs, &jmp, sizeof(jmp));
 	}
@@ -985,11 +988,11 @@ END:
 	return panic;
 }
 
-static inline bool _ingress_decl(struct jy_asts	    *asts,
-				 struct jy_tkns	    *tkns,
-				 struct jy_scan_ctx *ctx,
-				 struct jy_errs	    *errs,
-				 uint32_t	     id)
+static inline bool _ingress_decl(struct jy_asts *asts,
+				 struct jy_tkns *tkns,
+				 struct jy_jay	*ctx,
+				 struct jy_errs *errs,
+				 uint32_t	 id)
 {
 	uint32_t  tkn	  = asts->tkns[id];
 	uint32_t *child	  = asts->child[id];
@@ -1050,11 +1053,11 @@ PANIC:
 	return true;
 }
 
-static inline bool _import_stmt(struct jy_asts	   *asts,
-				struct jy_tkns	   *tkns,
-				struct jy_scan_ctx *ctx,
-				struct jy_errs	   *errs,
-				uint32_t	    id)
+static inline bool _import_stmt(struct jy_asts *asts,
+				struct jy_tkns *tkns,
+				struct jy_jay  *ctx,
+				struct jy_errs *errs,
+				uint32_t	id)
 {
 	uint32_t tkn	  = asts->tkns[id];
 	char	*lexeme	  = tkns->lexemes[tkn];
@@ -1089,11 +1092,11 @@ static inline bool _import_stmt(struct jy_asts	   *asts,
 	return false;
 }
 
-static inline bool _root(struct jy_asts	    *asts,
-			 struct jy_tkns	    *tkns,
-			 struct jy_scan_ctx *ctx,
-			 struct jy_errs	    *errs,
-			 uint32_t	     id)
+static inline bool _root(struct jy_asts *asts,
+			 struct jy_tkns *tkns,
+			 struct jy_jay	*ctx,
+			 struct jy_errs *errs,
+			 uint32_t	 id)
 {
 	uint32_t *child	  = asts->child[id];
 	uint32_t  childsz = asts->childsz[id];
@@ -1142,10 +1145,10 @@ static inline bool _root(struct jy_asts	    *asts,
 	return false;
 }
 
-void jry_compile(struct jy_asts	    *asts,
-		 struct jy_tkns	    *tkns,
-		 struct jy_scan_ctx *ctx,
-		 struct jy_errs	    *errs)
+void jry_compile(struct jy_asts *asts,
+		 struct jy_tkns *tkns,
+		 struct jy_jay	*ctx,
+		 struct jy_errs *errs)
 {
 	jry_assert(ctx->names != NULL);
 
@@ -1158,7 +1161,7 @@ void jry_compile(struct jy_asts	    *asts,
 	_root(asts, tkns, ctx, errs, root);
 }
 
-void jry_free_scan_ctx(struct jy_scan_ctx ctx)
+void jry_free_jay(struct jy_jay ctx)
 {
 	for (uint32_t i = 0; i < ctx.modulesz; ++i)
 		jry_module_unload(ctx.modules[i]);

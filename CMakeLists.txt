@@ -1,38 +1,36 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required( VERSION 3.22 )
 
-project(jary)
+project( jary )
 
-set(CMAKE_C_STANDARD 17)
-set(CMAKE_C_STANDARD_REQUIRED on)
-set(CMAKE_EXPORT_COMPILE_COMMANDS on)
+option( SCRUTINY "Use analyzer" OFF )
+option( SANITIZE "Use asan" OFF )
+option( BUILD_TEST "Build tests" OFF )
+option( BUILD_TOOLS "Build Tools" OFF )
 
-add_library(dload OBJECT ${CMAKE_SOURCE_DIR}/lib/jay/dload.c)
+set( CMAKE_C_STANDARD 17 )
+set( CMAKE_C_STANDARD_REQUIRED on )
+set( CMAKE_EXPORT_COMPILE_COMMANDS on )
 
-if(CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$")
-	target_link_options(dload INTERFACE "-rdynamic")
+if( CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$" )
+        add_compile_options( -Wall -Wextra )
+        add_compile_options( -pedantic-errors )
 
-	add_compile_options(-Wall -Wextra)
-	add_compile_options(-pedantic-errors)
-
-	if (CMAKE_BUILD_TYPE STREQUAL Debug)
-		add_compile_options(-gdwarf -g3)
-	endif()
-
-	if(SANITIZE)
-		message(STATUS "Using ASAN")
-		add_link_options(-fsanitize=address -fno-omit-frame-pointer)
-	endif()
-
-	if(SCRUTINY)
-		message(STATUS "Using Analyzer")
-		add_compile_options(-fanalyzer -Wno-analyzer-malloc-leak)
-	endif()
-
-	add_compile_options($<$<COMPILE_LANGUAGE:CXX>:"-Wno-write-strings -fpermissive">)
+        if ( CMAKE_BUILD_TYPE STREQUAL Debug )
+                add_compile_options( -gdwarf -g3 )
+        endif()
 endif()
 
-target_include_directories(dload PRIVATE ${CMAKE_SOURCE_DIR}/include)
+add_library( dload OBJECT )
+add_library( scanner OBJECT )
+add_library( parser STATIC )
+add_library( compiler STATIC )
 
-add_subdirectory(${CMAKE_SOURCE_DIR}/lib/jay/modules ${CMAKE_BINARY_DIR}/modules)
-# add_subdirectory(test)
-add_subdirectory(tool)
+add_subdirectory( lib/jay )
+
+if ( BUILD_TOOLS )
+        add_subdirectory( tool )
+endif()
+
+if ( BUILD_TEST )
+        add_subdirectory( test )
+endif()

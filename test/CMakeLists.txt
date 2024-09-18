@@ -1,53 +1,52 @@
 # GoogleTest requires at least C++14
-set(CMAKE_CXX_STANDARD 14 CACHE STRING "" FORCE)
-set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE STRING "" FORCE)
+set( CMAKE_CXX_STANDARD 14 CACHE STRING "" FORCE )
+set( CMAKE_CXX_STANDARD_REQUIRED ON CACHE STRING "" FORCE )
 
-include(FetchContent)
+include( FetchContent )
 FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+        googletest
+        URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+        DOWNLOAD_EXTRACT_TIMESTAMP true
 )
 # For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+set( gtest_force_shared_crt ON CACHE BOOL "" FORCE )
 
-FetchContent_MakeAvailable(googletest)
+FetchContent_MakeAvailable( googletest )
 
 enable_testing()
 
-include(GoogleTest)
+add_executable( scanner_test scanner_test.cc )
+add_executable( parser_test parser_test.cc )
+add_executable( compiler_test compiler_test.cc )
 
-add_executable( scanner_test
-    	scanner_test.cc
-	${LIBJAYVM_SRC_DIR}/scanner.c
-)
-
-add_executable( parser_test
-	parser_test.cc
-    	${LIBJAYVM_SRC_DIR}/parser.c
-    	${LIBJAYVM_SRC_DIR}/scanner.c
-)
-
-target_include_directories( parser_test
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-        ${LIBJAYVM_SRC_DIR}
-)
-
-target_include_directories( scanner_test
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
-        ${LIBJAYVM_SRC_DIR}
-)
+target_compile_options( scanner_test PRIVATE -Wno-write-strings -fpermissive )
+target_compile_options( parser_test PRIVATE -Wno-write-strings -fpermissive )
+target_compile_options( compiler_test PRIVATE -Wno-write-strings -fpermissive )
 
 target_link_libraries( scanner_test
-    PRIVATE
+        PRIVATE
         GTest::gtest_main
+        scanner
 )
 
-target_link_libraries( parser_test
-    PRIVATE
+target_link_libraries( parser_test 
+        PRIVATE
         GTest::gtest_main
+        parser 
 )
 
-gtest_discover_tests(scanner_test)
-gtest_discover_tests(parser_test)
+target_link_libraries( compiler_test 
+        PRIVATE
+        GTest::gtest_main
+        compiler
+)
+
+include( GoogleTest )
+
+gtest_discover_tests( scanner_test )
+gtest_discover_tests( parser_test )
+gtest_discover_tests( compiler_test )
+
+
+
+

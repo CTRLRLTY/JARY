@@ -111,7 +111,7 @@ bool jry_find_def(struct jy_defs *tbl,
 	if (length != ekeysz)
 		return false;
 
-	return memcmp(key, ekey, length) == 0;
+	return memcmp(key, ekey, ekeysz) == 0;
 }
 
 int jry_add_def(struct jy_defs *tbl,
@@ -146,11 +146,13 @@ int jry_add_def(struct jy_defs *tbl,
 			goto FINISH;
 	}
 
-	tbl->keys[id]	= strndup(key, length);
-	tbl->keysz[id]	= length;
-	tbl->vals[id]	= value;
-	tbl->types[id]	= type;
-	tbl->size      += 1;
+	tbl->keys[id] = jry_alloc(length + 1);
+	memcpy(tbl->keys[id], key, length);
+	tbl->keys[id][length]  = '\0';
+	tbl->keysz[id]	       = length;
+	tbl->vals[id]	       = value;
+	tbl->types[id]	       = type;
+	tbl->size	      += 1;
 
 FINISH:
 	return status;

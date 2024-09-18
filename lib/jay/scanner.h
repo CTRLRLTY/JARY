@@ -5,13 +5,6 @@
 
 #include <stdint.h>
 
-// line and ofs start from 1
-void jry_scan(const char  *src,
-	      uint32_t	   length,
-	      enum jy_tkn *type,
-	      uint32_t	  *line,
-	      uint32_t	  *ofs,
-	      const char **lxstart,
-	      const char **lxend);
+const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type);
 
 #endif // JAYVM_SCAN_H

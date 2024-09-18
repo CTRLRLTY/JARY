@@ -10,6 +10,7 @@ struct jy_errs {
 	const char **msgs;
 	uint32_t    *from;
 	uint32_t    *to;
+	uint32_t    *code;
 	uint32_t     size;
 };
 

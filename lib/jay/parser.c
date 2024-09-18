@@ -708,6 +708,12 @@ static bool _binary(struct parser  *p,
 	case TKN_GREATERTHAN:
 		root_type = AST_GREATER;
 		break;
+	case TKN_AND:
+		root_type = AST_AND;
+		break;
+	case TKN_OR:
+		root_type = AST_OR;
+		break;
 
 	default:
 		goto PANIC;

@@ -32,6 +32,8 @@ enum jy_ast {
 	AST_GREATER,
 
 	AST_NOT,
+	AST_AND,
+	AST_OR,
 
 	AST_ADDITION,
 	AST_SUBTRACT,

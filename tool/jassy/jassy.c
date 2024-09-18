@@ -136,6 +136,8 @@ static const char *codestring(enum jy_opcode code)
 		return "OP_LT";
 	case JY_OP_CMP:
 		return "OP_CMP";
+	case JY_OP_NOT:
+		return "OP_NOT";
 	case JY_OP_JMPF:
 		return "OP_JMPF";
 	case JY_OP_JMPT:
@@ -238,13 +240,14 @@ static void print_asts(struct jy_asts *asts,
 		print_ast(asts, lexemes, length, midpoint, idsz, 0, 0);
 }
 
-static inline void print_tkn_line(struct jy_tkns *tkns, uint32_t line)
+static inline int print_tkn_line(struct jy_tkns *tkns, uint32_t line)
 {
+	int printed = 0;
 	for (uint32_t i = 0; i < tkns->size; ++i) {
 		uint32_t l = tkns->lines[i];
 
 		if (line < l)
-			return;
+			goto FINISH;
 
 		if (l != line)
 			continue;
@@ -254,9 +257,12 @@ static inline void print_tkn_line(struct jy_tkns *tkns, uint32_t line)
 		if (type == TKN_NEWLINE)
 			continue;
 
-		const char *lexeme = tkns->lexemes[i];
-		printf("%s", lexeme);
+		const char *lexeme  = tkns->lexemes[i];
+		printed		   += printf("%s", lexeme);
 	}
+
+FINISH:
+	return printed;
 }
 
 static inline void print_tkn_errs(struct jy_errs *errs,
@@ -373,7 +379,8 @@ static void print_chunks(uint8_t *codes, uint32_t codesz)
 		case JY_OP_PUSH8:
 			printf(" %d", codes[++i]);
 			break;
-		case JY_OP_JMPF: {
+		case JY_OP_JMPF:
+		case JY_OP_JMPT: {
 			union {
 				short	*num;
 				uint8_t *code;

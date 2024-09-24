@@ -1,12 +1,15 @@
 #ifndef JAYVM_DLOAD_H
 #define JAYVM_DLOAD_H
 
-#include "jary/common.h"
+#include "jary/memory.h"
 
-// negative result = error
-// positive return = handle to module
-__use_result int jry_module_load(const char *path);
-void		 jry_module_unload(int module);
-struct jy_defs	*jry_module_def(int module);
-const char	*jry_module_error(int module);
+struct jy_defs;
+
+int jry_module_load(const char	     *path,
+		    struct jy_defs   *def,
+		    struct allocator *object);
+
+int jry_module_unload(struct jy_defs *def);
+
+const char *jry_module_error(int err);
 #endif // JAYVM_DLOAD_H

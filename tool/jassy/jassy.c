@@ -234,6 +234,8 @@ static const char *k2string(enum jy_ktype type)
 		return "[INGRESS]";
 	case JY_K_RULE:
 		return "[RULE]";
+	case JY_K_HANDLE:
+		return "[HANDLE]";
 	case JY_K_UNKNOWN:
 	default:
 		return "[UNKNOWN]";
@@ -249,8 +251,6 @@ static const char *codestring(enum jy_opcode code)
 		return "OP_PUSH16";
 	case JY_OP_PUSH32:
 		return "OP_PUSH32";
-	case JY_OP_PUSH64:
-		return "OP_PUSH64";
 	case JY_OP_ADD:
 		return "OP_ADD";
 	case JY_OP_SUB:
@@ -273,6 +273,8 @@ static const char *codestring(enum jy_opcode code)
 		return "OP_JMPT";
 	case JY_OP_CALL:
 		return "OP_CALL";
+	case JY_OP_EVENT:
+		return "OP_EVENT";
 	case JY_OP_END:
 		return "OP_END";
 	default:
@@ -280,9 +282,39 @@ static const char *codestring(enum jy_opcode code)
 	}
 }
 
-static inline uint32_t findmaxdepth(struct jy_asts *asts,
-				    uint32_t	    id,
-				    uint32_t	    depth)
+static inline uint32_t count_constant(const enum jy_ktype *types,
+				      uint16_t		   length,
+				      enum jy_ktype	   type)
+{
+	uint32_t count = 0;
+
+	for (uint32_t i = 0; i < length; ++i)
+		if (types[i] == type)
+			count += 1;
+
+	return count;
+}
+
+static inline int find_constant(const jy_val_t	    *vals,
+				const enum jy_ktype *types,
+				uint16_t	     length,
+				enum jy_ktype	     type,
+				jy_val_t	     val)
+{
+	for (uint32_t i = 0; i < length; ++i) {
+		if (types[i] == type)
+			continue;
+
+		if (val == vals[i])
+			return i;
+	}
+
+	return -1;
+}
+
+static inline uint32_t findmaxdepth(const struct jy_asts *asts,
+				    uint32_t		  id,
+				    uint32_t		  depth)
 {
 	uint32_t *child	   = asts->child[id];
 	uint32_t  childsz  = asts->childsz[id];
@@ -475,14 +507,7 @@ NEXT_TKN:
 	}
 }
 
-static inline void print_defs(struct jy_defs *names,
-			      struct jy_defs *events,
-			      uint32_t	      eventsz,
-			      int	     *modules,
-			      uint32_t	      modulesz,
-			      jy_funcptr_t   *call,
-			      uint32_t	      callsz,
-			      int	      indent)
+static inline void print_defs(const struct jy_defs *names, int indent)
 {
 	int maxtypesz = 0;
 	int maxkeysz  = 0;
@@ -502,28 +527,12 @@ static inline void print_defs(struct jy_defs *names,
 
 	for (uint32_t i = 0; i < names->capacity; ++i) {
 		const char   *key  = names->keys[i];
-		jy_val_t      v	   = names->vals[i];
 		enum jy_ktype type = names->types[i];
 
 		if (type == JY_K_UNKNOWN)
 			continue;
 
 		const char *typestr = k2string(type);
-		uint32_t    id	    = 0;
-
-		switch (type) {
-		case JY_K_MODULE:
-			find_data(modules, modulesz, v, id);
-			break;
-		case JY_K_EVENT:
-			find_data(events, eventsz, v, id);
-			break;
-		case JY_K_FUNC:
-			find_data(call, callsz, v, id);
-			break;
-		default:
-			break;
-		}
 
 		if (indent)
 			printf("%*c", indent, '\t');
@@ -539,81 +548,52 @@ static inline void print_defs(struct jy_defs *names,
 
 		if (printed < maxkeysz)
 			printf("%*c", maxkeysz - printed, ' ');
+
 		printf(" ");
-		printf("%u\n", id);
+		if (type == JY_K_HANDLE) {
+			void *handle = (void *) names->vals[i];
+			printf("%p\n", handle);
+		} else {
+			long ofs = jry_v2long(names->vals[i]);
+			printf("%ld\n", ofs);
+		}
 	}
 }
 
-static inline void print_event(struct jy_defs *events)
+static inline void print_events(const struct allocator obj,
+				const jy_val_t	      *vals,
+				const enum jy_ktype   *types,
+				uint16_t	       valsz)
 {
-	int maxtypesz = 0;
-	int maxkeysz  = 0;
-
-	for (uint32_t i = 0; i < events->capacity; ++i) {
-		enum jy_ktype type = events->types[i];
-
-		if (type == JY_K_UNKNOWN)
+	for (uint32_t i = 0; i < valsz; ++i) {
+		if (types[i] != JY_K_EVENT)
 			continue;
 
-		const char *ts	= k2string(type);
-		int	    len = strlen(ts);
-		int	    ks	= events->keysz[i];
-		maxtypesz	= len > maxtypesz ? len : maxtypesz;
-		maxkeysz	= ks > maxkeysz ? ks : maxkeysz;
-	}
-
-	for (uint32_t i = 0; i < events->capacity; ++i) {
-		const char   *key  = events->keys[i];
-		enum jy_ktype type = events->types[i];
-
-		if (type == JY_K_UNKNOWN)
-			continue;
-
-		const char *typestr = k2string(type);
-
-		printf("\t%5u | ", i);
-		int printed = printf("%s", typestr);
-
-		if (printed < maxtypesz)
-			printf("%*c", maxtypesz - printed, ' ');
-
-		printf(" ");
-		printed = printf("%s", key);
-
-		if (printed < maxkeysz)
-			printf("%*c", maxkeysz - printed, ' ');
-
-		printf("\n");
-	}
-}
-
-static inline void print_events(struct jy_defs *events, uint16_t eventsz
-
-)
-{
-	for (uint32_t i = 0; i < eventsz; ++i) {
 		printf("%5u [EVENT] \n", i);
-		print_event(&events[i]);
+		struct jy_defs *m = jry_fetchobj(obj, vals[i]);
+		print_defs(m, 1);
 	}
 }
 
-static inline void print_modules(int		*modules,
-				 uint32_t	 modulesz,
-				 struct jy_defs *events,
-				 uint32_t	 eventsz,
-				 jy_funcptr_t	*call,
-				 uint32_t	 callsz)
+static inline void print_modules(const struct allocator obj,
+				 const jy_val_t	       *vals,
+				 const enum jy_ktype   *types,
+				 uint16_t		valsz)
 {
-	for (uint32_t i = 0; i < modulesz; ++i) {
+	for (uint32_t i = 0; i < valsz; ++i) {
+		if (types[i] != JY_K_MODULE)
+			continue;
+
 		printf("%5u [MODULE] \n", i);
-		struct jy_defs *m = jry_module_def(modules[i]);
-		print_defs(m, events, eventsz, NULL, 0, call, callsz, 1);
+		struct jy_defs *m = jry_fetchobj(obj, vals[i]);
+		print_defs(m, 1);
 	}
 }
 
-static inline void print_calls(enum jy_ktype *types,
-			       jy_val_t	     *vals,
-			       uint16_t	      valsz)
+static inline void print_calls(const struct allocator obj,
+			       const enum jy_ktype   *types,
+			       const jy_val_t	     *vals,
+			       uint16_t		      valsz)
 {
 	int		    maxtypesz = 0;
 	int		    fnsz      = 0;
@@ -623,7 +603,7 @@ static inline void print_calls(enum jy_ktype *types,
 		if (types[i] != JY_K_FUNC)
 			continue;
 
-		struct jy_obj_func *ofunc  = jry_v2func(vals[i]);
+		struct jy_obj_func *ofunc  = jry_fetchobj(obj, vals[i]);
 		const char	   *ts	   = k2string(ofunc->return_type);
 		int		    sz	   = strlen(ts);
 		maxtypesz		   = sz > maxtypesz ? sz : maxtypesz;
@@ -643,7 +623,7 @@ static inline void print_calls(enum jy_ktype *types,
 		if (printed < maxtypesz)
 			printf("%*c", maxtypesz - printed, ' ');
 
-		for (uint8_t j = 0; j < ofunc->param_sz; ++j) {
+		for (uint8_t j = 0; j < ofunc->param_size; ++j) {
 			const char *ts = k2string(ofunc->param_types[j]);
 			printf(" %s", ts);
 		}
@@ -652,7 +632,10 @@ static inline void print_calls(enum jy_ktype *types,
 	}
 }
 
-static void print_kpool(enum jy_ktype *types, jy_val_t *vals, uint16_t valsz)
+static void print_kpool(struct allocator     obj,
+			const enum jy_ktype *types,
+			const jy_val_t	    *vals,
+			uint16_t	     valsz)
 {
 	int maxtypesz = 0;
 
@@ -661,8 +644,6 @@ static void print_kpool(enum jy_ktype *types, jy_val_t *vals, uint16_t valsz)
 		int	    sz = strlen(ts);
 		maxtypesz      = sz > maxtypesz ? sz : maxtypesz;
 	}
-
-	uint16_t fncount = 0;
 
 	for (uint32_t i = 0; i < valsz; ++i) {
 		jy_val_t      val     = vals[i];
@@ -679,22 +660,16 @@ static void print_kpool(enum jy_ktype *types, jy_val_t *vals, uint16_t valsz)
 		printf(" ");
 
 		switch (type) {
+		case JY_K_EVENT:
+		case JY_K_MODULE:
+		case JY_K_FUNC:
 		case JY_K_LONG:
 			printf("%ld", jry_v2long(val));
 			break;
-		case JY_K_STR:
-			printf("%s", jry_v2str(val)->str);
-			break;
-		case JY_K_EVENT: {
-			struct jy_obj_event ev = jry_v2event(val);
-			printf("%u %u", ev.event, ev.name);
-			break;
-		}
-		case JY_K_FUNC: {
-			printf("%u", fncount);
-			fncount += 1;
-			break;
-		}
+		case JY_K_STR: {
+			struct jy_obj_str *s = jry_fetchobj(obj, val);
+			printf("%s", s->str);
+		} break;
 		default:
 			break;
 		}
@@ -727,6 +702,19 @@ static void print_chunks(uint8_t *codes, uint32_t codesz)
 			ofs.code  = &codes[i + 1];
 			i	 += 2;
 			printf(" %d", *ofs.num);
+			break;
+		}
+		case JY_OP_EVENT: {
+			union {
+				short	*objofs;
+				uint8_t *code;
+			} ofs;
+
+			uint8_t field  = codes[++i];
+			ofs.code       = &codes[i + 1];
+			i	      += 2;
+
+			printf(" %u %u", field, *ofs.objofs);
 			break;
 		}
 		case JY_OP_CALL: {
@@ -847,10 +835,15 @@ static void run_file(const char *path, const char *dirpath)
 	       "\n\n");
 
 	jry_compile(&asts, &tkns, &ctx, &errs);
-	printf("Total Modules : %u\n", ctx.modulesz);
+
+	uint32_t modulesz = count_constant(ctx.types, ctx.valsz, JY_K_MODULE);
+	uint32_t eventsz  = count_constant(ctx.types, ctx.valsz, JY_K_EVENT);
+	uint32_t callsz	  = count_constant(ctx.types, ctx.valsz, JY_K_FUNC);
+
+	printf("Total Modules : %u\n", modulesz);
 	printf("Constant Pool : %u\n", ctx.valsz);
 	printf("Total Names   : %u\n", names.size);
-	printf("Total Events  : %u\n", ctx.eventsz);
+	printf("Total Events  : %u\n", eventsz);
 	printf("Total Chunk   : %u\n", ctx.codesz);
 
 	printf("\n");
@@ -860,8 +853,7 @@ static void run_file(const char *path, const char *dirpath)
 	       "__________________\n\n");
 
 	if (names.size) {
-		print_defs(&names, ctx.events, ctx.eventsz, ctx.modules,
-			   ctx.modulesz, ctx.call, ctx.callsz, 0);
+		print_defs(&names, 0);
 		printf("\n");
 	}
 
@@ -869,9 +861,8 @@ static void run_file(const char *path, const char *dirpath)
 	       "\n"
 	       "__________________\n\n");
 
-	if (ctx.eventsz) {
-		print_modules(ctx.modules, ctx.modulesz, ctx.events,
-			      ctx.eventsz, ctx.call, ctx.callsz);
+	if (modulesz) {
+		print_modules(ctx.obj, ctx.vals, ctx.types, ctx.valsz);
 		printf("\n");
 	}
 
@@ -879,8 +870,8 @@ static void run_file(const char *path, const char *dirpath)
 	       "\n"
 	       "__________________\n\n");
 
-	if (ctx.eventsz) {
-		print_events(ctx.events, ctx.eventsz);
+	if (eventsz) {
+		print_events(ctx.obj, ctx.vals, ctx.types, ctx.valsz);
 		printf("\n");
 	}
 
@@ -888,8 +879,8 @@ static void run_file(const char *path, const char *dirpath)
 	       "\n"
 	       "__________________\n\n");
 
-	if (ctx.callsz) {
-		print_calls(ctx.types, ctx.vals, ctx.valsz);
+	if (callsz) {
+		print_calls(ctx.obj, ctx.types, ctx.vals, ctx.valsz);
 		printf("\n");
 	}
 
@@ -898,7 +889,7 @@ static void run_file(const char *path, const char *dirpath)
 	       "__________________\n\n");
 
 	if (ctx.valsz) {
-		print_kpool(ctx.types, ctx.vals, ctx.valsz);
+		print_kpool(ctx.obj, ctx.types, ctx.vals, ctx.valsz);
 		printf("\n");
 	}
 

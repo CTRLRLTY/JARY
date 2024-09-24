@@ -1,25 +1,19 @@
-#include "jary/common.h"
 #include "jary/modules.h"
 
-static jy_val_t mark(int module, jy_val_t *vals, int count)
+static jy_val_t mark(jy_val_t *vals, int count)
 {
 	return 0;
 }
 
-static enum jy_ktype	  markfn_param = JY_K_EVENT;
-static struct jy_obj_func markfn       = { .return_type = JY_K_TARGET,
-					   .param_types = &markfn_param,
-					   .param_sz	= 1,
-					   .func	= (jy_funcptr_t) mark };
-
-int module_load(int module)
+int module_load(void)
 {
-	define_function(module, "mark", 4, &markfn);
+	enum jy_ktype params = JY_K_STR;
+	define_function("mark", JY_K_TARGET, 1, &params, (jy_funcptr_t) mark);
 
 	return 0;
 }
 
-int module_unload(int __unused(module))
+int module_unload(void)
 {
 	return 0;
 }

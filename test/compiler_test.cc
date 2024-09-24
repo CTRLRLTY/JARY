@@ -57,30 +57,32 @@ TEST(CompilerTest, Basic)
 	// clang-format off
 	uint8_t codes[] = {
                 //
-                JY_OP_PUSH8, 0,
-                JY_OP_PUSH8, 1,
-                JY_OP_CMP,
-                JY_OP_JMPF,  25, 0,
-                //
-                JY_OP_PUSH8, 2,
+                JY_OP_EVENT, 0, 1, 0,
                 JY_OP_PUSH8, 3,
+                JY_OP_CMP,
+                JY_OP_JMPF,  27, 0,
+                //
+                JY_OP_PUSH8, 4,
+                JY_OP_PUSH8, 5,
                 JY_OP_CMP,
                 JY_OP_JMPF,  8, 0,
                 //
-                JY_OP_PUSH8, 2,
-                JY_OP_PUSH8, 4,
+                JY_OP_PUSH8, 3,
+                JY_OP_PUSH8, 6,
                 JY_OP_GT,
-                JY_OP_JMPF,  9, 0,
+                JY_OP_JMPF,  11, 0,
                 //
-                JY_OP_PUSH8, 0,
-                JY_OP_CALL,  1, 0, 0,
+                JY_OP_EVENT, 0, 1, 0,
+                JY_OP_CALL,  1, 6, 0,
                 JY_OP_END,
         };
 	// clang-format on
 
 	ASSERT_EQ(errs.size, 0);
-	ASSERT_EQ(ctx.codesz, sizeof(codes) / sizeof(codes[0]));
-	ASSERT_EQ(memcmp(ctx.codes, codes, sizeof(codes)), 0);
+	ASSERT_EQ(ctx.codesz, sizeof(codes));
+
+	for (size_t i = 0; i < sizeof(codes); ++i)
+		ASSERT_EQ(ctx.codes[i], codes[i]) << "codes[" << i << "]";
 
 	jry_free_asts(asts);
 	jry_free_tkns(tkns);

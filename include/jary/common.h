@@ -10,4 +10,3 @@
 #endif // __GNUC__
 
 #endif // JAYVM_COMMON_H
-

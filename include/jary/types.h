@@ -15,6 +15,8 @@ enum jy_ktype {
 	JY_K_LONG,
 	JY_K_STR,
 	JY_K_BOOL,
+
+	JY_K_HANDLE,
 };
 
 typedef unsigned long jy_val_t;

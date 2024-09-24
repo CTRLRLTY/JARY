@@ -13,8 +13,8 @@ struct jy_defs {
 	jy_val_t      *vals;
 	enum jy_ktype *types;
 	uint32_t       seed;
-	unsigned int   capacity;
-	unsigned int   size;
+	unsigned short capacity;
+	unsigned short size;
 };
 
 bool jry_find_def(struct jy_defs *tbl,

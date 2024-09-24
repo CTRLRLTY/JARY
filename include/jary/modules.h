@@ -3,11 +3,12 @@
 
 #include "jary/object.h"
 
-int define_function(int			module,
-		    const char	       *key,
-		    uint32_t		keysz,
-		    struct jy_obj_func *func);
+extern int define_function(const char	       *key,
+			   enum jy_ktype	return_type,
+			   uint8_t		param_size,
+			   const enum jy_ktype *param_types,
+			   jy_funcptr_t		func);
 
-const char *error_message(int status);
+extern const char *error_message(int status);
 
 #endif // JAYVM_MODULES_H

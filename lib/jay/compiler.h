@@ -4,7 +4,7 @@
 #include "parser.h"
 
 #include "jary/defs.h"
-#include "jary/object.h"
+#include "jary/memory.h"
 
 #include <stdint.h>
 
@@ -12,8 +12,8 @@ enum jy_opcode {
 	JY_OP_PUSH8,
 	JY_OP_PUSH16,
 	JY_OP_PUSH32,
-	JY_OP_PUSH64,
 
+	JY_OP_EVENT,
 	JY_OP_JMPT,
 	JY_OP_JMPF,
 	JY_OP_CALL,
@@ -33,34 +33,26 @@ enum jy_opcode {
 
 struct jy_jay {
 	// module dirpath
-	const char     *mdir;
-	// list of modules
-	int	       *modules;
+	const char	*mdir;
 	// global names
-	struct jy_defs *names;
-	// event array
-	struct jy_defs *events;
+	struct jy_defs	*names;
 	// code chunk array
-	uint8_t	       *codes;
-	// call table
-	jy_funcptr_t   *call;
+	uint8_t		*codes;
 	// constant table
-	jy_val_t       *vals;
-	enum jy_ktype  *types;
+	jy_val_t	*vals;
+	enum jy_ktype	*types;
 	// object linear memory buffer
-	void	       *obj;
-	uint32_t	objsz;
-	uint32_t	codesz;
-	uint16_t	valsz;
-	uint16_t	modulesz;
-	uint16_t	eventsz;
-	uint16_t	callsz;
+	struct allocator obj;
+	uint32_t	 codesz;
+	uint16_t	 valsz;
 };
 
-void jry_compile(struct jy_asts *asts,
-		 struct jy_tkns *tkns,
-		 struct jy_jay	*ctx,
-		 struct jy_errs *errs);
+void jry_compile(const struct jy_asts *asts,
+		 const struct jy_tkns *tkns,
+		 struct jy_jay	      *ctx,
+		 struct jy_errs	      *errs);
+
+void *jry_fetchobj(const struct allocator obj, jy_val_t v);
 
 void jry_free_jay(struct jy_jay ctx);
 

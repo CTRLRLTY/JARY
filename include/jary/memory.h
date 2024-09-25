@@ -49,12 +49,13 @@ static inline void *alloc_linear(uint16_t	   nmemb,
 	if (alloc->size >= alloc->capacity) {
 		uint32_t newcap = alloc->capacity + grow;
 		alloc->capacity = newcap;
-		alloc->buf	= realloc(alloc->buf, newcap);
+		char *block	= (char *) realloc(alloc->buf, newcap);
+		memset(block + oldsz, 0, newcap - oldsz);
 
-		memset((char *) alloc->buf + oldsz, 0, newcap - oldsz);
-
-		if (alloc->buf == NULL)
+		if (block == NULL)
 			return NULL;
+
+		alloc->buf = block;
 	}
 
 	return (char *) alloc->buf + oldsz;

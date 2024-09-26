@@ -1,5 +1,6 @@
 #include "compiler.h"
 #include "dload.h"
+#include "exec.h"
 
 #include "jary/memory.h"
 #include "jary/object.h"
@@ -249,8 +250,6 @@ static const char *codestring(enum jy_opcode code)
 		return "OP_PUSH8";
 	case JY_OP_PUSH16:
 		return "OP_PUSH16";
-	case JY_OP_PUSH32:
-		return "OP_PUSH32";
 	case JY_OP_ADD:
 		return "OP_ADD";
 	case JY_OP_SUB:
@@ -263,6 +262,8 @@ static const char *codestring(enum jy_opcode code)
 		return "OP_GT";
 	case JY_OP_LT:
 		return "OP_LT";
+	case JY_OP_CMPSTR:
+		return "OP_CMPSTR";
 	case JY_OP_CMP:
 		return "OP_CMP";
 	case JY_OP_NOT:
@@ -293,23 +294,6 @@ static inline uint32_t count_constant(const enum jy_ktype *types,
 			count += 1;
 
 	return count;
-}
-
-static inline int find_constant(const jy_val_t	    *vals,
-				const enum jy_ktype *types,
-				uint16_t	     length,
-				enum jy_ktype	     type,
-				jy_val_t	     val)
-{
-	for (uint32_t i = 0; i < length; ++i) {
-		if (types[i] == type)
-			continue;
-
-		if (val == vals[i])
-			return i;
-	}
-
-	return -1;
 }
 
 static inline uint32_t findmaxdepth(const struct jy_asts *asts,
@@ -520,7 +504,7 @@ static inline void print_defs(const struct jy_defs *names, int indent)
 
 		const char *ts	= k2string(type);
 		int	    len = strlen(ts);
-		int	    ks	= names->keysz[i];
+		int	    ks	= strlen(names->keys[i]);
 		maxtypesz	= len > maxtypesz ? len : maxtypesz;
 		maxkeysz	= ks > maxkeysz ? ks : maxkeysz;
 	}
@@ -560,40 +544,42 @@ static inline void print_defs(const struct jy_defs *names, int indent)
 	}
 }
 
-static inline void print_events(const struct allocator obj,
-				const jy_val_t	      *vals,
-				const enum jy_ktype   *types,
-				uint16_t	       valsz)
+static inline void print_events(const void	    *obj,
+				const jy_val_t	    *vals,
+				const enum jy_ktype *types,
+				uint16_t	     valsz)
 {
 	for (uint32_t i = 0; i < valsz; ++i) {
 		if (types[i] != JY_K_EVENT)
 			continue;
 
 		printf("%5u [EVENT] \n", i);
-		struct jy_defs *m = jry_fetchobj(obj, vals[i]);
+		long		ofs = jry_v2long(vals[i]);
+		struct jy_defs *m   = memory_fetch(obj, ofs);
 		print_defs(m, 1);
 	}
 }
 
-static inline void print_modules(const struct allocator obj,
-				 const jy_val_t	       *vals,
-				 const enum jy_ktype   *types,
-				 uint16_t		valsz)
+static inline void print_modules(const void	     *obj,
+				 const jy_val_t	     *vals,
+				 const enum jy_ktype *types,
+				 uint16_t	      valsz)
 {
 	for (uint32_t i = 0; i < valsz; ++i) {
 		if (types[i] != JY_K_MODULE)
 			continue;
 
 		printf("%5u [MODULE] \n", i);
-		struct jy_defs *m = jry_fetchobj(obj, vals[i]);
+		long		ofs = jry_v2long(vals[i]);
+		struct jy_defs *m   = memory_fetch(obj, ofs);
 		print_defs(m, 1);
 	}
 }
 
-static inline void print_calls(const struct allocator obj,
-			       const enum jy_ktype   *types,
-			       const jy_val_t	     *vals,
-			       uint16_t		      valsz)
+static inline void print_calls(const void	   *obj,
+			       const enum jy_ktype *types,
+			       const jy_val_t	   *vals,
+			       uint16_t		    valsz)
 {
 	int		    maxtypesz = 0;
 	int		    fnsz      = 0;
@@ -603,7 +589,8 @@ static inline void print_calls(const struct allocator obj,
 		if (types[i] != JY_K_FUNC)
 			continue;
 
-		struct jy_obj_func *ofunc  = jry_fetchobj(obj, vals[i]);
+		long		    ofs	   = jry_v2long(vals[i]);
+		struct jy_obj_func *ofunc  = memory_fetch(obj, ofs);
 		const char	   *ts	   = k2string(ofunc->return_type);
 		int		    sz	   = strlen(ts);
 		maxtypesz		   = sz > maxtypesz ? sz : maxtypesz;
@@ -632,7 +619,7 @@ static inline void print_calls(const struct allocator obj,
 	}
 }
 
-static void print_kpool(struct allocator     obj,
+static void print_kpool(const void	    *obj,
 			const enum jy_ktype *types,
 			const jy_val_t	    *vals,
 			uint16_t	     valsz)
@@ -667,9 +654,11 @@ static void print_kpool(struct allocator     obj,
 			printf("%ld", jry_v2long(val));
 			break;
 		case JY_K_STR: {
-			struct jy_obj_str *s = jry_fetchobj(obj, val);
+			long		   ofs = jry_v2long(val);
+			struct jy_obj_str *s   = memory_fetch(obj, ofs);
 			printf("%s", s->str);
-		} break;
+			break;
+		}
 		default:
 			break;
 		}
@@ -706,15 +695,22 @@ static void print_chunks(uint8_t *codes, uint32_t codesz)
 		}
 		case JY_OP_EVENT: {
 			union {
-				short	*objofs;
+				uint16_t *field;
+				uint8_t	 *code;
+			} arg1;
+
+			union {
+				short	*k_id;
 				uint8_t *code;
-			} ofs;
+			} arg2;
 
-			uint8_t field  = codes[++i];
-			ofs.code       = &codes[i + 1];
-			i	      += 2;
+			arg1.code = codes + i + 1;
 
-			printf(" %u %u", field, *ofs.objofs);
+			arg2.code = codes + i + 3;
+
+			printf(" %u %u", *arg1.field, *arg2.k_id);
+
+			i += 4;
 			break;
 		}
 		case JY_OP_CALL: {
@@ -782,7 +778,7 @@ static void run_file(const char *path, const char *dirpath)
 	strcpy(buf, dirpath);
 	strcat(buf, dirname);
 
-	struct jy_jay ctx = {
+	struct jy_jay jay = {
 		.names = &names,
 		.mdir  = buf,
 	};
@@ -834,17 +830,17 @@ static void run_file(const char *path, const char *dirpath)
 	       "===================================="
 	       "\n\n");
 
-	jry_compile(&asts, &tkns, &ctx, &errs);
+	jry_compile(&asts, &tkns, &jay, &errs);
 
-	uint32_t modulesz = count_constant(ctx.types, ctx.valsz, JY_K_MODULE);
-	uint32_t eventsz  = count_constant(ctx.types, ctx.valsz, JY_K_EVENT);
-	uint32_t callsz	  = count_constant(ctx.types, ctx.valsz, JY_K_FUNC);
+	uint32_t modulesz = count_constant(jay.types, jay.valsz, JY_K_MODULE);
+	uint32_t eventsz  = count_constant(jay.types, jay.valsz, JY_K_EVENT);
+	uint32_t callsz	  = count_constant(jay.types, jay.valsz, JY_K_FUNC);
 
 	printf("Total Modules : %u\n", modulesz);
-	printf("Constant Pool : %u\n", ctx.valsz);
+	printf("Constant Pool : %u\n", jay.valsz);
 	printf("Total Names   : %u\n", names.size);
 	printf("Total Events  : %u\n", eventsz);
-	printf("Total Chunk   : %u\n", ctx.codesz);
+	printf("Total Chunk   : %u\n", jay.codesz);
 
 	printf("\n");
 
@@ -862,7 +858,7 @@ static void run_file(const char *path, const char *dirpath)
 	       "__________________\n\n");
 
 	if (modulesz) {
-		print_modules(ctx.obj, ctx.vals, ctx.types, ctx.valsz);
+		print_modules(jay.obj.buf, jay.vals, jay.types, jay.valsz);
 		printf("\n");
 	}
 
@@ -871,7 +867,7 @@ static void run_file(const char *path, const char *dirpath)
 	       "__________________\n\n");
 
 	if (eventsz) {
-		print_events(ctx.obj, ctx.vals, ctx.types, ctx.valsz);
+		print_events(jay.obj.buf, jay.vals, jay.types, jay.valsz);
 		printf("\n");
 	}
 
@@ -880,7 +876,7 @@ static void run_file(const char *path, const char *dirpath)
 	       "__________________\n\n");
 
 	if (callsz) {
-		print_calls(ctx.obj, ctx.types, ctx.vals, ctx.valsz);
+		print_calls(jay.obj.buf, jay.types, jay.vals, jay.valsz);
 		printf("\n");
 	}
 
@@ -888,8 +884,8 @@ static void run_file(const char *path, const char *dirpath)
 	       "\n"
 	       "__________________\n\n");
 
-	if (ctx.valsz) {
-		print_kpool(ctx.obj, ctx.types, ctx.vals, ctx.valsz);
+	if (jay.valsz) {
+		print_kpool(jay.obj.buf, jay.types, jay.vals, jay.valsz);
 		printf("\n");
 	}
 
@@ -897,8 +893,8 @@ static void run_file(const char *path, const char *dirpath)
 	       "\n"
 	       "__________________\n\n");
 
-	if (ctx.codesz) {
-		print_chunks(ctx.codes, ctx.codesz);
+	if (jay.codesz) {
+		print_chunks(jay.codes, jay.codesz);
 		printf("\n");
 	}
 
@@ -907,11 +903,15 @@ static void run_file(const char *path, const char *dirpath)
 		printf("\n");
 	}
 
+	struct jy_obj_str str = { .str = "hello world!", .size = 12 };
+	jry_set_event("data", "yes", jry_str2v(&str), jay.obj.buf, &names);
+	jry_exec(jay.vals, jay.types, jay.obj.buf, jay.codes, jay.codesz);
+
 END:
 	jry_free_asts(asts);
 	jry_free_tkns(tkns);
 	jry_free_errs(errs);
-	jry_free_jay(ctx);
+	jry_free_jay(jay);
 }
 
 int main(int argc, const char **argv)

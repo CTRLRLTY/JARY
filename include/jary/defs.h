@@ -9,7 +9,6 @@
 
 struct jy_defs {
 	char	     **keys;
-	uint32_t      *keysz;
 	jy_val_t      *vals;
 	enum jy_ktype *types;
 	uint32_t       seed;
@@ -17,14 +16,10 @@ struct jy_defs {
 	unsigned short size;
 };
 
-bool jry_find_def(struct jy_defs *tbl,
-		  const char	 *key,
-		  uint32_t	  length,
-		  uint32_t	 *id);
+bool jry_find_def(const struct jy_defs *tbl, const char *key, uint32_t *id);
 
 __use_result int jry_add_def(struct jy_defs *tbl,
 			     const char	    *key,
-			     uint32_t	     length,
 			     jy_val_t	     value,
 			     enum jy_ktype   type);
 

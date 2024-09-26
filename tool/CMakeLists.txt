@@ -2,7 +2,7 @@ add_executable( jassy )
 
 target_sources( jassy PRIVATE jassy/jassy.c )
 
-target_link_libraries( jassy PRIVATE compiler )
+target_link_libraries( jassy PRIVATE exec )
 
 if ( SCRUTINY AND CMAKE_C_COMPILER_ID STREQUAL "GNU" )
         target_compile_options( jassy BEFORE PRIVATE -fanalyzer )

@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 #include <stdlib.h>
-#include <string.h>
 
 #define ERROR_NOMEM		   10
 
@@ -33,37 +32,14 @@
 		*(__data) = (__ptr)[(__sz) - 1];                               \
 	} while (0)
 
-struct allocator {
-	void	*buf;
-	uint32_t size;
-	uint32_t capacity;
-};
-
-static inline void *alloc_linear(uint16_t	   nmemb,
-				 uint32_t	   grow,
-				 struct allocator *alloc)
-{
-	uint32_t oldsz	= alloc->size;
-	alloc->size    += nmemb;
-
-	if (alloc->size >= alloc->capacity) {
-		uint32_t newcap = alloc->capacity + grow;
-		alloc->capacity = newcap;
-		char *block	= (char *) realloc(alloc->buf, newcap);
-		memset(block + oldsz, 0, newcap - oldsz);
-
-		if (block == NULL)
-			return NULL;
-
-		alloc->buf = block;
-	}
-
-	return (char *) alloc->buf + oldsz;
-}
-
 static inline long memory_offset(void *from, void *to)
 {
 	return (char *) to - (char *) from;
+}
+
+static inline void *memory_fetch(const void *buf, long ofs)
+{
+	return (char *) buf + ofs;
 }
 
 #endif // JAYVM_MEM_H

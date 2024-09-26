@@ -4,7 +4,6 @@
 
 #include "jary/error.h"
 #include "jary/memory.h"
-#include "jary/object.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -44,32 +43,22 @@ typedef bool (*cmplfn_t)(const struct jy_asts *,
 
 static inline cmplfn_t rule_expression(enum jy_ast type);
 
-static bool isnum(enum jy_ktype type)
-{
-	switch (type) {
-	case JY_K_LONG:
-		return true;
-	default:
-		return false;
-	}
-}
-
-static inline struct jy_defs *defobj(struct allocator *alloc)
+static inline struct jy_defs *defobj(struct jy_object_allocator *alloc)
 {
 	uint32_t nmemb = sizeof(struct jy_defs);
-	void	*ptr   = alloc_linear(nmemb, nmemb, alloc);
+	void	*ptr   = jry_allocobj(nmemb, nmemb, alloc);
 
 	return memset(ptr, 0, sizeof(struct jy_defs));
 }
 
-static struct jy_obj_str *stringobj(const char	     *str,
-				    uint32_t	      len,
-				    struct allocator *alloc)
+static struct jy_obj_str *stringobj(const char		       *str,
+				    uint32_t			len,
+				    struct jy_object_allocator *alloc)
 {
 	// + 1 to include '\0'
 	uint32_t allocsz	= sizeof(struct jy_obj_str) + len + 1;
 
-	struct jy_obj_str *ostr = alloc_linear(allocsz, allocsz, alloc);
+	struct jy_obj_str *ostr = jry_allocobj(allocsz, allocsz, alloc);
 
 	if (ostr) {
 		ostr->str  = (void *) (ostr + 1);
@@ -121,38 +110,19 @@ __use_result static int write_push(uint32_t  constant,
 				   uint8_t **code,
 				   uint32_t *codesz)
 {
-	uint8_t width = 0;
-
-	union {
-		uint32_t num;
-		uint8_t	 byte[sizeof(constant)];
-	} v;
-
-	v.num	= constant;
 	int res = 0;
 
 	if (constant <= 0xff) {
-		res   = write_byte(JY_OP_PUSH8, code, codesz);
-		width = 1;
+		res = write_byte(JY_OP_PUSH8, code, codesz);
+		res = write_byte(constant, code, codesz);
+
 	} else if (constant <= 0xffff) {
-		res   = write_byte(JY_OP_PUSH16, code, codesz);
-		width = 2;
-	} else {
-		res   = write_byte(JY_OP_PUSH32, code, codesz);
-		width = 4;
+		res = write_byte(JY_OP_PUSH16, code, codesz);
+		res = write_byte(constant & 0x00FF, code, codesz);
+		res = write_byte(constant & 0xFF00, code, codesz);
 	}
 
-	if (res != ERROR_SUCCESS)
-		return res;
-
-	for (uint8_t i = 0; i < width; ++i) {
-		res = write_byte(v.byte[i], code, codesz);
-
-		if (res != ERROR_SUCCESS)
-			return res;
-	}
-
-	return ERROR_SUCCESS;
+	return res;
 }
 
 __use_result static int write_constant(jy_val_t	       constant,
@@ -266,12 +236,11 @@ static bool _string_expr(const struct jy_asts *asts,
 
 	jy_val_t v = jry_long2v(memory_offset(ctx->obj.buf, ostr));
 
+	expr->id   = ctx->valsz;
+
 	if (write_constant(v, JY_K_STR, &ctx->vals, &ctx->types, &ctx->valsz) !=
 	    0)
 		goto PANIC;
-
-	expr->id = ctx->valsz;
-
 DONE:
 	if (write_push(expr->id, &ctx->codes, &ctx->codesz) != 0)
 		goto PANIC;
@@ -290,11 +259,10 @@ static bool _field_expr(const struct jy_asts *asts,
 {
 	uint32_t tkn	= asts->tkns[id];
 	char	*lexeme = tkns->lexemes[tkn];
-	uint32_t lexsz	= tkns->lexsz[tkn];
 
 	uint32_t nid;
 
-	if (!jry_find_def(scope, lexeme, lexsz, &nid)) {
+	if (!jry_find_def(scope, lexeme, &nid)) {
 		jry_push_error(errs, msg_no_definition, tkn, tkn);
 		goto PANIC;
 	}
@@ -317,11 +285,10 @@ static bool _name_expr(const struct jy_asts *asts,
 {
 	uint32_t tkn	= asts->tkns[id];
 	char	*lexeme = tkns->lexemes[tkn];
-	uint32_t lexsz	= tkns->lexsz[tkn];
 
 	uint32_t nid;
 
-	if (!jry_find_def(scope, lexeme, lexsz, &nid)) {
+	if (!jry_find_def(scope, lexeme, &nid)) {
 		jry_push_error(errs, msg_no_definition, tkn, tkn);
 		goto PANIC;
 	}
@@ -329,7 +296,8 @@ static bool _name_expr(const struct jy_asts *asts,
 	jy_val_t	value = scope->vals[nid];
 	struct jy_defs *def   = NULL;
 
-	def		      = jry_fetchobj(ctx->obj, value);
+	long ofs	      = jry_v2long(value);
+	def		      = memory_fetch(ctx->obj.buf, ofs);
 	uint32_t *child	      = asts->child[id];
 	uint32_t  childsz     = asts->childsz[id];
 
@@ -355,16 +323,16 @@ static bool _event_expr(const struct jy_asts *asts,
 {
 	uint32_t tkn	= asts->tkns[id];
 	char	*lexeme = tkns->lexemes[tkn];
-	uint32_t lexsz	= tkns->lexsz[tkn];
 
 	uint32_t nid;
 
-	if (!jry_find_def(ctx->names, lexeme, lexsz, &nid)) {
+	if (!jry_find_def(ctx->names, lexeme, &nid)) {
 		jry_push_error(errs, msg_no_definition, tkn, tkn);
 		goto PANIC;
 	}
 
-	struct jy_defs *def   = jry_fetchobj(ctx->obj, ctx->names->vals[nid]);
+	long		ofs   = jry_v2long(ctx->names->vals[nid]);
+	struct jy_defs *def   = memory_fetch(ctx->obj.buf, ofs);
 	uint32_t       *child = asts->child[id];
 
 	jry_assert(asts->childsz[id] == 1);
@@ -380,7 +348,8 @@ static bool _event_expr(const struct jy_asts *asts,
 		if (ctx->types[i] != JY_K_EVENT)
 			continue;
 
-		struct jy_defs *temp = jry_fetchobj(ctx->obj, ctx->vals[i]);
+		long		ofs  = jry_v2long(ctx->vals[i]);
+		struct jy_defs *temp = memory_fetch(ctx->obj.buf, ofs);
 
 		if (def == temp) {
 			event_id = i;
@@ -392,7 +361,9 @@ static bool _event_expr(const struct jy_asts *asts,
 
 	if (write_byte(JY_OP_EVENT, &ctx->codes, &ctx->codesz) != 0)
 		goto PANIC;
-	if (write_byte(expr->id, &ctx->codes, &ctx->codesz) != 0)
+	if (write_byte(expr->id & 0x00FF, &ctx->codes, &ctx->codesz) != 0)
+		goto PANIC;
+	if (write_byte(expr->id & 0xFF00, &ctx->codes, &ctx->codesz) != 0)
 		goto PANIC;
 	if (write_byte(event_id & 0x00FF, &ctx->codes, &ctx->codesz) != 0)
 		goto PANIC;
@@ -414,11 +385,10 @@ static bool _call_expr(const struct jy_asts *asts,
 {
 	uint32_t tkn	= asts->tkns[ast];
 	char	*lexeme = tkns->lexemes[tkn];
-	uint32_t lexsz	= tkns->lexsz[tkn];
 
 	uint32_t nid;
 
-	if (!jry_find_def(scope, lexeme, lexsz, &nid)) {
+	if (!jry_find_def(scope, lexeme, &nid)) {
 		jry_push_error(errs, msg_no_definition, tkn, tkn);
 		goto PANIC;
 	}
@@ -430,8 +400,9 @@ static bool _call_expr(const struct jy_asts *asts,
 		goto PANIC;
 	}
 
-	jy_val_t	    val	  = scope->vals[nid];
-	struct jy_obj_func *ofunc = jry_fetchobj(ctx->obj, val);
+	jy_val_t	    value = scope->vals[nid];
+	long		    ofs	  = jry_v2long(value);
+	struct jy_obj_func *ofunc = memory_fetch(ctx->obj.buf, ofs);
 
 	uint32_t *child		  = asts->child[ast];
 	uint32_t  childsz	  = asts->childsz[ast];
@@ -472,7 +443,7 @@ static bool _call_expr(const struct jy_asts *asts,
 
 	if (call_id == -1u) {
 		call_id = ctx->valsz;
-		if (write_constant(val, JY_K_FUNC, &ctx->vals, &ctx->types,
+		if (write_constant(value, JY_K_FUNC, &ctx->vals, &ctx->types,
 				   &ctx->valsz) != 0)
 			goto PANIC;
 	}
@@ -667,42 +638,73 @@ static bool _binary_expr(const struct jy_asts *asts,
 
 	switch (optype) {
 	case AST_EQUALITY:
-		code	   = JY_OP_CMP;
+		if (operand[0].type == JY_K_STR)
+			code = JY_OP_CMPSTR;
+		else
+			code = JY_OP_CMP;
+
 		expr->type = JY_K_BOOL;
 		break;
 	case AST_LESSER:
-		if (!isnum(operand[0].type)) {
+		if (operand[0].type != JY_K_LONG) {
 			uint32_t from = asts->tkns[child[0]];
 			uint32_t to   = asts->tkns[ast];
 			jry_push_error(errs, msg_inv_operation, from, to);
 			goto PANIC;
 		}
+
 		code	   = JY_OP_LT;
 		expr->type = JY_K_BOOL;
 		break;
 	case AST_GREATER:
-		if (!isnum(operand[0].type)) {
+		if (operand[0].type != JY_K_LONG) {
 			uint32_t from = asts->tkns[child[0]];
 			uint32_t to   = asts->tkns[ast];
 			jry_push_error(errs, msg_inv_operation, from, to);
 			goto PANIC;
 		}
+
 		code	   = JY_OP_GT;
 		expr->type = JY_K_BOOL;
 		break;
 	case AST_ADDITION:
-		code	   = JY_OP_ADD;
+		if (operand[0].type == JY_K_STR)
+			code = JY_OP_CONCAT;
+		else
+			code = JY_OP_ADD;
+
 		expr->type = operand[0].type;
 		break;
 	case AST_SUBTRACT:
+		if (operand[0].type != JY_K_LONG) {
+			uint32_t from = asts->tkns[child[0]];
+			uint32_t to   = asts->tkns[ast];
+			jry_push_error(errs, msg_inv_operation, from, to);
+			goto PANIC;
+		}
+
 		code	   = JY_OP_SUB;
 		expr->type = operand[0].type;
 		break;
 	case AST_MULTIPLY:
+		if (operand[0].type != JY_K_LONG) {
+			uint32_t from = asts->tkns[child[0]];
+			uint32_t to   = asts->tkns[ast];
+			jry_push_error(errs, msg_inv_operation, from, to);
+			goto PANIC;
+		}
+
 		code	   = JY_OP_MUL;
 		expr->type = operand[0].type;
 		break;
 	case AST_DIVIDE:
+		if (operand[0].type != JY_K_LONG) {
+			uint32_t from = asts->tkns[child[0]];
+			uint32_t to   = asts->tkns[ast];
+			jry_push_error(errs, msg_inv_operation, from, to);
+			goto PANIC;
+		}
+
 		code	   = JY_OP_DIV;
 		expr->type = operand[0].type;
 		break;
@@ -901,9 +903,8 @@ static inline bool _field_sect(const struct jy_asts *asts,
 		uint32_t name_id = asts->child[op_id][0];
 		uint32_t type_id = asts->child[op_id][1];
 		char	*name	 = tkns->lexemes[asts->tkns[name_id]];
-		uint32_t length	 = tkns->lexsz[asts->tkns[name_id]];
 
-		if (jry_find_def(def, name, length, NULL)) {
+		if (jry_find_def(def, name, NULL)) {
 			uint32_t from = asts->tkns[id];
 			uint32_t to   = asts->tkns[op_id];
 			jry_push_error(errs, msg_redefinition, from, to);
@@ -928,7 +929,7 @@ static inline bool _field_sect(const struct jy_asts *asts,
 		}
 		}
 
-		int e = jry_add_def(def, name, length, (jy_val_t) NULL, ktype);
+		int e = jry_add_def(def, name, (jy_val_t) NULL, ktype);
 
 		if (e != ERROR_SUCCESS)
 			goto PANIC;
@@ -1037,13 +1038,12 @@ static inline bool _ingress_decl(const struct jy_asts *asts,
 	uint32_t *child	  = asts->child[id];
 	uint32_t  childsz = asts->childsz[id];
 
-	char	*lex	  = tkns->lexemes[asts->tkns[id]];
-	uint32_t lexsz	  = tkns->lexsz[asts->tkns[id]];
+	char *lex	  = tkns->lexemes[asts->tkns[id]];
 
 	uint32_t fields[childsz];
 	uint32_t fieldsz = 0;
 
-	if (jry_find_def(ctx->names, lex, lexsz, NULL)) {
+	if (jry_find_def(ctx->names, lex, NULL)) {
 		jry_push_error(errs, msg_redefinition, tkn, tkn);
 		goto PANIC;
 	}
@@ -1076,7 +1076,7 @@ static inline bool _ingress_decl(const struct jy_asts *asts,
 			   &ctx->valsz) != 0)
 		goto PANIC;
 
-	if (jry_add_def(ctx->names, lex, lexsz, offset, JY_K_EVENT) != 0)
+	if (jry_add_def(ctx->names, lex, offset, JY_K_EVENT) != 0)
 		goto PANIC;
 
 	return false;
@@ -1116,7 +1116,7 @@ static inline bool _import_stmt(const struct jy_asts *asts,
 	*module		       = def;
 	jy_val_t value = jry_long2v(memory_offset(ctx->obj.buf, module));
 
-	if (jry_add_def(ctx->names, lexeme, lexsz, value, JY_K_MODULE) != 0)
+	if (jry_add_def(ctx->names, lexeme, value, JY_K_MODULE) != 0)
 		goto PANIC;
 
 	if (write_constant(value, JY_K_MODULE, &ctx->vals, &ctx->types,
@@ -1198,25 +1198,41 @@ void jry_compile(const struct jy_asts *asts,
 	_root(asts, tkns, ctx, errs, root);
 }
 
-void *jry_fetchobj(const struct allocator obj, jy_val_t v)
+int jry_set_event(const char	       *event,
+		  const char	       *field,
+		  jy_val_t		value,
+		  const void	       *buf,
+		  const struct jy_defs *names)
 {
-	long ofs = jry_v2long(v);
-	return (char *) obj.buf + ofs;
+	uint32_t id;
+
+	if (!jry_find_def(names, event, &id))
+		return 1;
+
+	struct jy_defs *ev = memory_fetch(buf, jry_v2long(names->vals[id]));
+
+	if (!jry_find_def(ev, field, &id))
+		return 2;
+
+	ev->vals[id] = value;
+
+	return 0;
 }
 
 void jry_free_jay(struct jy_jay ctx)
 {
 	for (uint32_t i = 0; i < ctx.valsz; ++i) {
-		jy_val_t v = ctx.vals[i];
+		jy_val_t v   = ctx.vals[i];
+		uint32_t ofs = jry_v2long(v);
 
 		switch (ctx.types[i]) {
 		case JY_K_MODULE: {
-			struct jy_defs *module = jry_fetchobj(ctx.obj, v);
+			struct jy_defs *module = memory_fetch(ctx.obj.buf, ofs);
 			jry_module_unload(module);
 			break;
 		}
 		case JY_K_EVENT: {
-			struct jy_defs *ev = jry_fetchobj(ctx.obj, v);
+			struct jy_defs *ev = memory_fetch(ctx.obj.buf, ofs);
 			jry_free_def(*ev);
 			break;
 		}

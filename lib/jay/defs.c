@@ -19,7 +19,9 @@ static uint64_t keyhash(uint64_t seed, const char *str, uint32_t length)
 	return hash;
 }
 
-static inline bool find_entry(struct jy_defs *tbl, uint64_t hash, uint32_t *id)
+static inline bool find_entry(const struct jy_defs *tbl,
+			      uint64_t		    hash,
+			      uint32_t		   *id)
 {
 	int	      capacity = tbl->capacity;
 	uint32_t      index    = hash & (capacity - 1);
@@ -35,29 +37,26 @@ __use_result static int regenerate(struct jy_defs *tbl,
 				   uint32_t	   capacity)
 {
 	uint32_t moff1 = sizeof(*(tbl->keys)) * capacity;
-	uint32_t moff2 = moff1 + sizeof(*(tbl->keysz)) * capacity;
-	uint32_t moff3 = moff2 + sizeof(*(tbl->vals)) * capacity;
-	uint32_t moff4 = moff3 + sizeof(*(tbl->types)) * capacity;
+	uint32_t moff2 = moff1 + sizeof(*(tbl->vals)) * capacity;
+	uint32_t moff3 = moff2 + sizeof(*(tbl->types)) * capacity;
 
-	char *mem      = jry_alloc(moff4);
+	char *mem      = jry_alloc(moff3);
 
 	if (mem == NULL)
 		return ERROR_NOMEM;
 
 	void *keys	      = mem;
-	void *keysz	      = mem + moff1;
-	void *vals	      = mem + moff2;
-	void *types	      = mem + moff3;
+	void *vals	      = mem + moff1;
+	void *types	      = mem + moff2;
 
 	struct jy_defs newtbl = { .keys	    = keys,
-				  .keysz    = keysz,
 				  .vals	    = vals,
 				  .types    = types,
 				  .seed	    = seed,
 				  .capacity = capacity,
 				  .size	    = 0 };
 
-	memset(mem, 0, moff4);
+	memset(mem, 0, moff3);
 
 	for (unsigned int i = 0; i < tbl->size; ++i) {
 		enum jy_ktype type = tbl->types[i];
@@ -65,11 +64,10 @@ __use_result static int regenerate(struct jy_defs *tbl,
 		if (type != JY_K_UNKNOWN)
 			continue;
 
-		char	*key   = tbl->keys[i];
-		uint32_t keysz = tbl->keysz[i];
-		jy_val_t val   = tbl->vals[i];
+		char	*key = tbl->keys[i];
+		jy_val_t val = tbl->vals[i];
 
-		int status     = jry_add_def(&newtbl, key, keysz, val, type);
+		int status   = jry_add_def(&newtbl, key, val, type);
 
 		if (status != ERROR_SUCCESS) {
 			jry_free_def(newtbl);
@@ -84,23 +82,19 @@ __use_result static int regenerate(struct jy_defs *tbl,
 	return ERROR_SUCCESS;
 }
 
-bool jry_find_def(struct jy_defs *tbl,
-		  const char	 *key,
-		  uint32_t	  length,
-		  uint32_t	 *id)
+bool jry_find_def(const struct jy_defs *tbl, const char *key, uint32_t *id)
 {
 	if (tbl->size == 0)
 		return false;
 
 	uint32_t entryid;
-	uint64_t hash  = keyhash(tbl->seed, key, length);
+	uint64_t hash  = keyhash(tbl->seed, key, strlen(key));
 	bool	 found = find_entry(tbl, hash, &entryid);
 
 	if (!found)
 		return false;
 
-	const char *ekey   = tbl->keys[entryid];
-	uint32_t    ekeysz = tbl->keysz[entryid];
+	const char *ekey = tbl->keys[entryid];
 
 	if (id != NULL)
 		*id = entryid;
@@ -108,15 +102,11 @@ bool jry_find_def(struct jy_defs *tbl,
 	if (*key != *ekey)
 		return false;
 
-	if (length != ekeysz)
-		return false;
-
-	return memcmp(key, ekey, ekeysz) == 0;
+	return *key == *ekey && strcmp(key, ekey) == 0;
 }
 
 int jry_add_def(struct jy_defs *tbl,
 		const char     *key,
-		uint32_t	length,
 		jy_val_t	value,
 		enum jy_ktype	type)
 {
@@ -131,6 +121,8 @@ int jry_add_def(struct jy_defs *tbl,
 		goto FINISH;
 
 	uint32_t id;
+
+	size_t length = strlen(key);
 
 	for (;;) {
 		uint64_t hash  = keyhash(tbl->seed, key, length);
@@ -149,7 +141,6 @@ int jry_add_def(struct jy_defs *tbl,
 	tbl->keys[id] = jry_alloc(length + 1);
 	memcpy(tbl->keys[id], key, length);
 	tbl->keys[id][length]  = '\0';
-	tbl->keysz[id]	       = length;
 	tbl->vals[id]	       = value;
 	tbl->types[id]	       = type;
 	tbl->size	      += 1;

@@ -3,7 +3,10 @@
 
 #include "jary/object.h"
 
-extern int define_function(const char	       *key,
+struct jy_module;
+
+extern int define_function(struct jy_module    *ctx,
+			   const char	       *key,
 			   enum jy_ktype	return_type,
 			   uint8_t		param_size,
 			   const enum jy_ktype *param_types,

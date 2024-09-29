@@ -135,14 +135,46 @@ static inline int interpret(const jy_val_t	*vals,
 		pc += 5;
 		break;
 	}
+	case JY_OP_CALL: {
+		uint16_t k_id		= arg.u16[1];
+		uint8_t	 paramsz	= arg.u8[2];
 
+		long		    ofs = jry_v2long(vals[k_id]);
+		struct jy_obj_func *ofn = memory_fetch(obj, ofs);
+
+		jy_val_t args[paramsz];
+
+		for (size_t i = 0; i < paramsz; ++i)
+			args[i] = pop(stack);
+
+		jy_val_t retval;
+		ofn->func(paramsz, args, &retval);
+
+		switch (ofn->return_type) {
+		case JY_K_LONG:
+		case JY_K_STR:
+		case JY_K_BOOL:
+			push(stack, retval);
+			break;
+		default:
+			break;
+		}
+
+		pc += 4;
+
+		break;
+	}
 	case JY_OP_JMPF:
 		if (!flag->bits.b8)
 			pc += *arg.i16;
+		else
+			pc += 3;
 		break;
 	case JY_OP_JMPT:
 		if (flag->bits.b8)
 			pc += *arg.i16;
+		else
+			pc += 3;
 		break;
 	case JY_OP_NOT:
 		flag->bits.b8  = !flag->bits.b8;

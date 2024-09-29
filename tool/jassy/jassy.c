@@ -669,64 +669,45 @@ static void print_kpool(const void	    *obj,
 
 static void print_chunks(uint8_t *codes, uint32_t codesz)
 {
-	for (uint32_t i = 0; i < codesz; ++i) {
-		printf("%5d | ", i);
+	for (uint32_t pc = 0; pc < codesz;) {
+		printf("%5d | ", pc);
 
-		enum jy_opcode code = codes[i];
-		const char    *op   = codestring(code);
+		enum jy_opcode opcode = codes[pc];
+		const char    *op     = codestring(opcode);
 
 		printf("%s", op);
 
-		switch (code) {
+		union {
+			const uint8_t  *bytes;
+			const uint8_t  *u8;
+			const int16_t  *i16;
+			const uint16_t *u16;
+			const uint32_t *u32;
+		} arg = { .bytes = codes + pc + 1 };
+
+		switch (opcode) {
 		case JY_OP_PUSH8:
-			printf(" %d", codes[++i]);
+			printf(" %d", *arg.u8);
+			pc += 2;
 			break;
 		case JY_OP_JMPF:
 		case JY_OP_JMPT: {
-			union {
-				short	*num;
-				uint8_t *code;
-			} ofs;
-
-			ofs.code  = &codes[i + 1];
-			i	 += 2;
-			printf(" %d", *ofs.num);
+			printf(" %d", *arg.i16);
+			pc += 3;
 			break;
 		}
 		case JY_OP_EVENT: {
-			union {
-				uint16_t *field;
-				uint8_t	 *code;
-			} arg1;
-
-			union {
-				short	*k_id;
-				uint8_t *code;
-			} arg2;
-
-			arg1.code = codes + i + 1;
-
-			arg2.code = codes + i + 3;
-
-			printf(" %u %u", *arg1.field, *arg2.k_id);
-
-			i += 4;
+			printf(" %u %u", arg.u16[0], arg.u16[1]);
+			pc += 5;
 			break;
 		}
 		case JY_OP_CALL: {
-			union {
-				short	*num;
-				uint8_t *code;
-			} ofs;
-
-			uint8_t paramsz	 = codes[++i];
-			ofs.code	 = &codes[i + 1];
-			i		+= 2;
-
-			printf(" %u %u", paramsz, *ofs.num);
+			printf(" %u %u", arg.u16[0], arg.u8[2]);
+			pc += 4;
 			break;
 		}
 		default:
+			pc += 1;
 			break;
 		}
 
@@ -903,7 +884,7 @@ static void run_file(const char *path, const char *dirpath)
 		printf("\n");
 	}
 
-	struct jy_obj_str str = { .str = "hello world!", .size = 12 };
+	struct jy_obj_str str = { .str = "\"hello\"", .size = 7 };
 	jry_set_event("data", "yes", jry_str2v(&str), jay.obj.buf, &names);
 	jry_exec(jay.vals, jay.types, jay.obj.buf, jay.codes, jay.codesz);
 

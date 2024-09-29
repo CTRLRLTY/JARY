@@ -185,11 +185,11 @@ static bool _long_expr(const struct jy_asts *asts,
 
 	jy_val_t val = jry_long2v(num);
 
+	expr->id     = ctx->valsz;
+
 	if (write_constant(val, JY_K_LONG, &ctx->vals, &ctx->types,
 			   &ctx->valsz) != 0)
 		goto PANIC;
-
-	expr->id = ctx->valsz;
 
 DONE:
 	if (write_push(expr->id, &ctx->codes, &ctx->codesz) != 0)
@@ -450,11 +450,11 @@ static bool _call_expr(const struct jy_asts *asts,
 
 	if (write_byte(JY_OP_CALL, &ctx->codes, &ctx->codesz) != 0)
 		goto PANIC;
-	if (write_byte(ofunc->param_size, &ctx->codes, &ctx->codesz) != 0)
-		goto PANIC;
 	if (write_byte(call_id & 0x00FF, &ctx->codes, &ctx->codesz) != 0)
 		goto PANIC;
 	if (write_byte(call_id & 0xFF00, &ctx->codes, &ctx->codesz) != 0)
+		goto PANIC;
+	if (write_byte(ofunc->param_size, &ctx->codes, &ctx->codesz) != 0)
 		goto PANIC;
 
 	expr->type = ofunc->return_type;

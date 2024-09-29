@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef jy_val_t (*jy_funcptr_t)(jy_val_t *, int);
+typedef int (*jy_funcptr_t)(int, jy_val_t *, jy_val_t *);
 
 struct jy_obj_str {
 	char	*str;

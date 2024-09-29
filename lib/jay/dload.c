@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MODULE_COUNT_LIMIT    1000
 #define ERROR_MSG_COUNT_LIMIT 128
 
 #define TO_INDEX(__status)    ((0x7F000000 & (__status)) >> 24)

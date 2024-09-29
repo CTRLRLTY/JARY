@@ -11,7 +11,6 @@ struct jy_defs {
 	char	     **keys;
 	jy_val_t      *vals;
 	enum jy_ktype *types;
-	uint32_t       seed;
 	unsigned short capacity;
 	unsigned short size;
 };

@@ -6,3 +6,4 @@ BNF
 .cache/
 *.gdb
 Testing/
+.gdb_history

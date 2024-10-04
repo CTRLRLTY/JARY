@@ -126,7 +126,8 @@ static int mark(int argc, jy_val_t *argv, jy_val_t *result)
 			return -1;
 
 		memcpy(tbl->keys[id], key, keysz);
-		tbl->keys[id][keysz] = '\0';
+		tbl->keys[id][keysz]  = '\0';
+		tbl->size	     += 1;
 	}
 
 	tbl->num[id] += 1;
@@ -149,8 +150,9 @@ static int unmark(int argc, jy_val_t *argv, jy_val_t *result)
 
 	free(tbl->keys[id]);
 
-	tbl->keys[id] = NULL;
-	tbl->num[id]  = tombstone;
+	tbl->keys[id]  = NULL;
+	tbl->num[id]   = tombstone;
+	tbl->size     -= 1;
 
 	return 0;
 }

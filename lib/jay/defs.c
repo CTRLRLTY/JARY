@@ -28,7 +28,7 @@ static inline bool find_entry(const struct jy_defs *tbl,
 	int	 capacity = tbl->capacity;
 	uint32_t index	  = hash & (capacity - 1);
 
-	for (;; index = index + 1 & (capacity - 1)) {
+	for (;; index = (index + 1) & (capacity - 1)) {
 		const char *ekey = tbl->keys[index];
 
 		if (ekey == NULL) {

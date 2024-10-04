@@ -7,8 +7,8 @@ option( SANITIZE "Use asan" OFF )
 option( BUILD_TEST "Build tests" OFF )
 option( BUILD_TOOLS "Build Tools" OFF )
 
-set( CMAKE_C_STANDARD 17 )
-set( CMAKE_C_STANDARD_REQUIRED on )
+set( CMAKE_C_STANDARD 17 CACHE STRING "Just a baseline I chose on a whim" FORCE )
+set( CMAKE_C_STANDARD_REQUIRED on CACHE STRING "Just a baseline I chose on a whim" FORCE )
 set( CMAKE_EXPORT_COMPILE_COMMANDS on )
 
 if( CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$" )

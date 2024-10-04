@@ -86,6 +86,5 @@ TEST(CompilerTest, Basic)
 
 	jry_free_asts(asts);
 	jry_free_tkns(tkns);
-	jry_free_errs(errs);
 	jry_free_jay(ctx);
 }

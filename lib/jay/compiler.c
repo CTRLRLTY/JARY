@@ -220,8 +220,7 @@ static bool _string_expr(const struct jy_asts *asts,
 		struct jy_obj_str *v = jry_v2str(ctx->vals[i]);
 
 		if (t != JY_K_STR || v->size != lexsz ||
-		    v->str[1] != lexeme[1] ||
-		    memcmp(v->str + 1, lexeme + 1, v->size - 1) != 0)
+		    memcmp(v->str, lexeme, lexsz) != 0)
 			continue;
 
 		expr->id = i;

@@ -205,23 +205,48 @@ static inline void next(struct jy_tkns *tkns,
 
 	const char *start = *src;
 	const char *end	  = jry_scan(start, *srcsz, &type);
+	uint32_t    read  = end - start;
 
-	uint32_t lexsz	  = end - start;
-	char	*lex	  = jry_alloc(lexsz + 1);
 	*src		  = end;
-	*srcsz		  = (*srcsz > lexsz) ? *srcsz - lexsz : 0;
+	*srcsz		  = (*srcsz > read) ? *srcsz - read : 0;
 
-	if (type == TKN_NEWLINE)
-		line += lexsz - 1;
+	uint32_t lexsz;
+	char	*lex;
 
-	// you are screwed.
-	if (lex == NULL)
-		goto PANIC;
+	switch (type) {
+	case TKN_STRING:
+		// -2 to not include  \"\"
+		lexsz = read - 2;
+		lex   = jry_alloc(lexsz + 1);
 
-	memcpy(lex, start, lexsz);
+		// you are screwed.
+		if (lex == NULL)
+			goto PANIC;
 
-	lex[lexsz] = '\0';
-	*tkn	   = tkns->size;
+		// +1 to skip \" prefix
+		memcpy(lex, start + 1, lexsz);
+
+		lex[lexsz] = '\0';
+		*tkn	   = tkns->size;
+
+		break;
+	case TKN_NEWLINE:
+		line += read - 1;
+		// INTENTIONAL FALLTHROUGH
+	default:
+		lexsz = read;
+		lex   = jry_alloc(lexsz + 1);
+
+		// you are screwed.
+		if (lex == NULL)
+			goto PANIC;
+
+		memcpy(lex, start, lexsz);
+
+		lex[lexsz] = '\0';
+		*tkn	   = tkns->size;
+		break;
+	}
 
 	if (push_tkn(tkns, type, line, ofs, lex, lexsz) != 0)
 		goto PANIC;

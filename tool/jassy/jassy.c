@@ -1,6 +1,5 @@
 #include "compiler.h"
 #include "dload.h"
-#include "exec.h"
 
 #include "jary/memory.h"
 #include "jary/object.h"
@@ -8,14 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define find_data(__list, __length, __val, __id)                               \
-	for (uint32_t i = 0; i < (__length); ++i) {                            \
-		if ((void *) (__val) == &(__list[i])) {                        \
-			(__id) = i;                                            \
-			break;                                                 \
-		}                                                              \
-	}
 
 static const char *tkn2string(enum jy_tkn type)
 {
@@ -281,19 +272,6 @@ static const char *codestring(enum jy_opcode code)
 	default:
 		return "OP_UNKNOWN";
 	}
-}
-
-static inline uint32_t count_constant(const enum jy_ktype *types,
-				      uint16_t		   length,
-				      enum jy_ktype	   type)
-{
-	uint32_t count = 0;
-
-	for (uint32_t i = 0; i < length; ++i)
-		if (types[i] == type)
-			count += 1;
-
-	return count;
 }
 
 static inline uint32_t findmaxdepth(const struct jy_asts *asts,
@@ -790,6 +768,7 @@ static void run_file(const char *path, const char *dirpath)
 	       "\n"
 	       "===================================="
 	       "\n\n");
+
 	uint32_t maxdepth = findmaxdepth(&asts, 0, 0);
 
 	printf("File Path     : %s\n", path);
@@ -813,9 +792,25 @@ static void run_file(const char *path, const char *dirpath)
 
 	jry_compile(&asts, &tkns, &jay, &errs);
 
-	uint32_t modulesz = count_constant(jay.types, jay.valsz, JY_K_MODULE);
-	uint32_t eventsz  = count_constant(jay.types, jay.valsz, JY_K_EVENT);
-	uint32_t callsz	  = count_constant(jay.types, jay.valsz, JY_K_FUNC);
+	uint32_t modulesz = 0;
+	uint32_t eventsz  = 0;
+	uint32_t callsz	  = 0;
+
+	for (uint32_t i = 0; i < jay.valsz; ++i) {
+		switch (jay.types[i]) {
+		case JY_K_MODULE:
+			modulesz += 1;
+			break;
+		case JY_K_EVENT:
+			eventsz += 1;
+			break;
+		case JY_K_FUNC:
+			callsz += 1;
+			break;
+		default:
+			continue;
+		}
+	}
 
 	printf("Total Modules : %u\n", modulesz);
 	printf("Constant Pool : %u\n", jay.valsz);
@@ -883,10 +878,6 @@ static void run_file(const char *path, const char *dirpath)
 		print_errors(&errs, &tkns, path);
 		printf("\n");
 	}
-
-	struct jy_obj_str str = { .str = "\"hello\"", .size = 7 };
-	jry_set_event("data", "yes", jry_str2v(&str), jay.obj.buf, &names);
-	jry_exec(jay.vals, jay.types, jay.obj.buf, jay.codes, jay.codesz);
 
 END:
 	jry_free_asts(asts);

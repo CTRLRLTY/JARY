@@ -1,5 +1,8 @@
 #include "jary/modules.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 static const float table_load_factor = 0.75;
 static const int   tombstone	     = -1;
 

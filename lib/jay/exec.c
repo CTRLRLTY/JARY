@@ -270,8 +270,7 @@ static inline int interpret(const union jy_value    *vals,
 		if (result.str == NULL)
 			goto FATAL;
 
-		result.str->cstr = (void *) (result.str + 1);
-		result.str->size = strsz - 1;
+		result.str->size = strsz;
 		memcpy(result.str->cstr, buf, strsz);
 
 		push(stack, result);

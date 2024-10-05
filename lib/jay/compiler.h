@@ -4,7 +4,7 @@
 #include "parser.h"
 
 #include "jary/defs.h"
-#include "jary/object.h"
+#include "jary/memory.h"
 
 #include <stdint.h>
 

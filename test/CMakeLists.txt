@@ -20,10 +20,10 @@ add_executable( parser_test parser_test.cc )
 add_executable( compiler_test compiler_test.cc )
 add_executable( exec_test exec_test.cc )
 
-target_compile_options( scanner_test PRIVATE -Wno-write-strings -fpermissive )
-target_compile_options( parser_test PRIVATE -Wno-write-strings -fpermissive )
-target_compile_options( compiler_test PRIVATE -Wno-write-strings -fpermissive )
-target_compile_options( exec_test PRIVATE -Wno-write-strings -fpermissive )
+target_compile_options( scanner_test PRIVATE -Wno-write-strings -Wno-pedantic -fpermissive )
+target_compile_options( parser_test PRIVATE -Wno-write-strings -Wno-pedantic -fpermissive )
+target_compile_options( compiler_test PRIVATE -Wno-write-strings -Wno-pedantic -fpermissive )
+target_compile_options( exec_test PRIVATE -Wno-write-strings -Wno-pedantic -fpermissive )
 
 target_link_libraries( scanner_test
         PRIVATE

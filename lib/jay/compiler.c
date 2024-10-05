@@ -4,27 +4,26 @@
 
 #include "jary/error.h"
 #include "jary/memory.h"
+#include "jary/object.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
-static const char msg_no_definition[]	    = "undefined";
-static const char msg_missing_match_sect[]  = "missing match section";
-static const char msg_missing_target_sect[] = "missing target section";
-static const char msg_inv_type[]	    = "invalid type";
-static const char msg_inv_signature[]	    = "invalid signature";
-static const char msg_inv_rule_sect[]	    = "invalid rule section";
-static const char msg_inv_match_expr[]	    = "invalid match expression";
-static const char msg_inv_cond_expr[]	    = "invalid condition expression";
-static const char msg_inv_target_expr[]	    = "invalid target expression";
-static const char msg_inv_operation[]	    = "invalid operation";
-static const char msg_inv_expression[]	    = "invalid expression";
-static const char msg_inv_predicate[]	    = "invalid predicate";
-static const char msg_operation_mismatch[]  = "invalid operation type mismatch";
-static const char msg_argument_mismatch[]   = "bad argument type mismatch";
-static const char msg_type_mismatch[]	    = "type mismatch";
-static const char msg_redefinition[]	    = "redefinition of";
+static const char msg_no_definition[]	   = "undefined";
+static const char msg_inv_type[]	   = "invalid type";
+static const char msg_inv_signature[]	   = "invalid signature";
+static const char msg_inv_rule_sect[]	   = "invalid rule section";
+static const char msg_inv_match_expr[]	   = "invalid match expression";
+static const char msg_inv_cond_expr[]	   = "invalid condition expression";
+static const char msg_inv_target_expr[]	   = "invalid target expression";
+static const char msg_inv_operation[]	   = "invalid operation";
+static const char msg_inv_expression[]	   = "invalid expression";
+static const char msg_inv_predicate[]	   = "invalid predicate";
+static const char msg_operation_mismatch[] = "invalid operation type mismatch";
+static const char msg_argument_mismatch[]  = "bad argument type mismatch";
+static const char msg_type_mismatch[]	   = "type mismatch";
+static const char msg_redefinition[]	   = "redefinition of";
 
 struct kexpr {
 	// This id can be any id.
@@ -61,7 +60,6 @@ static struct jy_obj_str *stringobj(const char		    *str,
 	struct jy_obj_str *ostr = alloc_obj(allocsz, allocsz, alloc);
 
 	if (ostr) {
-		ostr->cstr = (void *) (ostr + 1);
 		ostr->size = len;
 		memcpy(ostr->cstr, str, len);
 		ostr->cstr[len] = '\0';
@@ -214,8 +212,9 @@ static bool _string_expr(const struct jy_asts *asts,
 	expr->type	= JY_K_STR;
 
 	for (uint32_t i = 0; i < ctx->valsz; ++i) {
-		enum jy_ktype	   t = ctx->types[i];
-		struct jy_obj_str *v = ctx->vals[i].str;
+		enum jy_ktype	   t   = ctx->types[i];
+		long		   ofs = ctx->vals[i].ofs;
+		struct jy_obj_str *v   = memory_fetch(ctx->obj.buf, ofs);
 
 		if (t != JY_K_STR || v->size != lexsz ||
 		    memcmp(v->cstr, lexeme, lexsz) != 0)
@@ -395,22 +394,25 @@ static bool _call_expr(const struct jy_asts *asts,
 		jry_push_error(errs, msg_type_mismatch, tkn, tkn);
 		goto PANIC;
 	}
+	struct jy_obj_func ofunc;
+	union jy_value	   value = scope->vals[nid];
+	long		   ofs	 = value.ofs;
 
-	union jy_value	    value = scope->vals[nid];
-	long		    ofs	  = value.ofs;
-	struct jy_obj_func *ofunc = memory_fetch(ctx->obj.buf, ofs);
+	// we use a copy cuz the function pointer will be stale when compiling
+	// the function arguments
+	ofunc = *(struct jy_obj_func *) memory_fetch(ctx->obj.buf, ofs);
 
-	uint32_t *child		  = asts->child[ast];
-	uint32_t  childsz	  = asts->childsz[ast];
+	uint32_t *child	  = asts->child[ast];
+	uint32_t  childsz = asts->childsz[ast];
 
-	if (childsz != ofunc->param_size) {
+	if (childsz != ofunc.param_size) {
 		jry_push_error(errs, msg_inv_signature, tkn, tkn);
 		goto PANIC;
 	}
 
 	for (uint32_t i = 0; i < childsz; ++i) {
 		uint32_t      chid   = child[i];
-		enum jy_ktype expect = ofunc->param_types[i];
+		enum jy_ktype expect = ofunc.param_types[i];
 		struct kexpr  pexpr  = { 0 };
 
 		if (_expr(asts, tkns, ctx, errs, scope, chid, &pexpr))
@@ -431,7 +433,7 @@ static bool _call_expr(const struct jy_asts *asts,
 
 		struct jy_obj_func *f = ctx->vals[i].func;
 
-		if (f == ofunc) {
+		if (f->func == ofunc.func) {
 			call_id = i;
 			break;
 		}
@@ -450,10 +452,10 @@ static bool _call_expr(const struct jy_asts *asts,
 		goto PANIC;
 	if (write_byte(call_id & 0xFF00, &ctx->codes, &ctx->codesz) != 0)
 		goto PANIC;
-	if (write_byte(ofunc->param_size, &ctx->codes, &ctx->codesz) != 0)
+	if (write_byte(ofunc.param_size, &ctx->codes, &ctx->codesz) != 0)
 		goto PANIC;
 
-	expr->type = ofunc->return_type;
+	expr->type = ofunc.return_type;
 
 	return false;
 PANIC:
@@ -942,8 +944,6 @@ static inline bool _rule_decl(const struct jy_asts *asts,
 			      struct jy_errs	   *errs,
 			      uint32_t		    rule)
 {
-	bool panic	   = false;
-
 	uint32_t  ruletkn  = asts->tkns[rule];
 	uint32_t *child	   = asts->child[rule];
 	uint32_t  childsz  = asts->childsz[rule];
@@ -983,16 +983,6 @@ static inline bool _rule_decl(const struct jy_asts *asts,
 		}
 	}
 
-	if (matchsz == 0) {
-		jry_push_error(errs, msg_missing_match_sect, ruletkn, ruletkn);
-		goto PANIC;
-	}
-
-	if (targetsz == 0) {
-		jry_push_error(errs, msg_missing_target_sect, ruletkn, ruletkn);
-		goto PANIC;
-	}
-
 	for (uint32_t i = 0; i < matchsz; ++i) {
 		uint32_t id = matchs[i];
 		_match_sect(asts, tkns, id, ctx, errs, &patchofs, &patchsz);
@@ -1015,13 +1005,8 @@ static inline bool _rule_decl(const struct jy_asts *asts,
 		memcpy(ctx->codes + ofs, &jmp, sizeof(jmp));
 	}
 
-	goto END;
-
-PANIC:
-	panic = true;
-END:
 	jry_free(patchofs);
-	return panic;
+	return false;
 }
 
 static inline bool _ingress_decl(const struct jy_asts *asts,
@@ -1184,6 +1169,7 @@ void jry_compile(const struct jy_asts *asts,
 		 struct jy_errs	      *errs)
 {
 	jry_assert(ctx->names != NULL);
+	jry_assert(ctx->mdir != NULL);
 
 	uint32_t    root = 0;
 	enum jy_ast type = asts->types[root];

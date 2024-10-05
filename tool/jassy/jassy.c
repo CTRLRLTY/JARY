@@ -630,7 +630,7 @@ static void print_kpool(const void	     *obj,
 			break;
 		case JY_K_STR: {
 			struct jy_obj_str *s = memory_fetch(obj, val.ofs);
-			printf("%s", s->str);
+			printf("%s", s->cstr);
 			break;
 		}
 		default:

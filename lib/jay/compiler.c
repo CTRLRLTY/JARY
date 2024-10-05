@@ -61,10 +61,10 @@ static struct jy_obj_str *stringobj(const char		    *str,
 	struct jy_obj_str *ostr = alloc_obj(allocsz, allocsz, alloc);
 
 	if (ostr) {
-		ostr->str  = (void *) (ostr + 1);
+		ostr->cstr = (void *) (ostr + 1);
 		ostr->size = len;
-		memcpy(ostr->str, str, len);
-		ostr->str[len] = '\0';
+		memcpy(ostr->cstr, str, len);
+		ostr->cstr[len] = '\0';
 	}
 
 	return ostr;
@@ -218,7 +218,7 @@ static bool _string_expr(const struct jy_asts *asts,
 		struct jy_obj_str *v = ctx->vals[i].str;
 
 		if (t != JY_K_STR || v->size != lexsz ||
-		    memcmp(v->str, lexeme, lexsz) != 0)
+		    memcmp(v->cstr, lexeme, lexsz) != 0)
 			continue;
 
 		expr->id = i;

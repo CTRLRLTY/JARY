@@ -52,8 +52,8 @@ TEST(ExecTest, MarkModule)
 
 	struct jy_obj_str str;
 
-	str.str	  = "hello";
-	str.size  = strlen(str.str);
+	str.cstr  = "hello";
+	str.size  = strlen(str.cstr);
 	key.str	  = &str;
 
 	jay.names = &names;

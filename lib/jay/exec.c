@@ -63,60 +63,55 @@ static inline union jy_value pop(struct stack *s)
 	return s->values[--s->size];
 }
 
-static inline int interpret(const union jy_value *vals,
-			    const enum jy_ktype	 *types,
-			    const void		 *obj,
-			    struct stack	 *stack,
-			    union flag8		 *flag,
-			    const uint8_t	**code)
+static inline int interpret(const union jy_value    *vals,
+			    const enum jy_ktype	    *types,
+			    const void		    *obj,
+			    struct stack	    *stack,
+			    union flag8		    *flag,
+			    const uint8_t	   **code,
+			    struct jy_obj_allocator *rbuf)
 {
 	const uint8_t *pc     = *code;
 	enum jy_opcode opcode = *pc;
 
 	union {
 		const uint8_t  *bytes;
-		const uint8_t  *u8;
 		const int16_t  *i16;
+		const uint8_t  *u8;
 		const uint16_t *u16;
 		const uint32_t *u32;
 	} arg = { .bytes = pc + 1 };
 
 	switch (opcode) {
 	case JY_OP_PUSH8: {
-		union {
-			union jy_value val;
-			void	      *ptr;
-		} v = { .val = vals[*arg.u8] };
+		union jy_value v = vals[*arg.u8];
 
 		switch (types[*arg.u8]) {
 		case JY_K_OBJECT:
-			v.ptr = memory_fetch(obj, v.val.ofs);
+			v.obj = memory_fetch(obj, v.ofs);
 			break;
 		default:
 			break;
 		}
 
-		if (push(stack, v.val))
+		if (push(stack, v))
 			goto FATAL;
 
 		pc += 2;
 		break;
 	}
 	case JY_OP_PUSH16: {
-		union {
-			union jy_value val;
-			void	      *ptr;
-		} v = { .val = vals[*arg.u16] };
+		union jy_value v = vals[*arg.u16];
 
-		switch (types[*arg.u8]) {
+		switch (types[*arg.u16]) {
 		case JY_K_OBJECT:
-			v.ptr = memory_fetch(obj, v.val.ofs);
+			v.obj = memory_fetch(obj, v.ofs);
 			break;
 		default:
 			break;
 		}
 
-		if (push(stack, v.val))
+		if (push(stack, v))
 			goto FATAL;
 
 		pc += 3;
@@ -184,8 +179,8 @@ static inline int interpret(const union jy_value *vals,
 		struct jy_obj_str *v2 = pop(stack).str;
 		struct jy_obj_str *v1 = pop(stack).str;
 
-		flag->bits.b8	      = *v1->str == *v2->str &&
-				memcmp(v1->str, v2->str, v1->size) == 0;
+		flag->bits.b8	      = *v1->cstr == *v2->cstr &&
+				memcmp(v1->cstr, v2->cstr, v1->size) == 0;
 
 		pc += 1;
 		break;
@@ -217,13 +212,69 @@ static inline int interpret(const union jy_value *vals,
 		pc	      += 1;
 		break;
 	}
-
 	case JY_OP_ADD: {
 		union jy_value v2  = pop(stack);
 		union jy_value v1  = pop(stack);
 		v1.i64		  += v2.i64;
 
 		push(stack, v1);
+
+		pc += 1;
+		break;
+	}
+	case JY_OP_SUB: {
+		union jy_value v2  = pop(stack);
+		union jy_value v1  = pop(stack);
+		v1.i64		  -= v2.i64;
+
+		push(stack, v1);
+
+		pc += 1;
+		break;
+	}
+	case JY_OP_MUL: {
+		union jy_value v2  = pop(stack);
+		union jy_value v1  = pop(stack);
+		v1.i64		  *= v2.i64;
+
+		push(stack, v1);
+
+		pc += 1;
+		break;
+	}
+	case JY_OP_DIV: {
+		union jy_value v2  = pop(stack);
+		union jy_value v1  = pop(stack);
+		v1.i64		  /= v2.i64;
+
+		push(stack, v1);
+
+		pc += 1;
+		break;
+	}
+	case JY_OP_CONCAT: {
+		union jy_value result;
+
+		struct jy_obj_str *v2 = pop(stack).str;
+		struct jy_obj_str *v1 = pop(stack).str;
+
+		size_t strsz	      = v2->size + v1->size;
+		char   buf[strsz + 1];
+
+		strcpy(buf, v1->cstr);
+		strcat(buf, v2->cstr);
+
+		uint32_t allocsz = sizeof(struct jy_obj_str) + strsz + 1;
+		result.str	 = alloc_obj(allocsz, allocsz, rbuf);
+
+		if (result.str == NULL)
+			goto FATAL;
+
+		result.str->cstr = (void *) (result.str + 1);
+		result.str->size = strsz - 1;
+		memcpy(result.str->cstr, buf, strsz);
+
+		push(stack, result);
 
 		pc += 1;
 		break;
@@ -244,19 +295,23 @@ int jry_exec(const union jy_value *vals,
 	     const uint8_t	  *codes,
 	     uint32_t		   codesz)
 {
-	struct stack   stack = { .values = NULL };
-	union flag8    flag  = { .flag = 0 };
-	int	       res   = 0;
-	const uint8_t *pc    = codes;
-	const uint8_t *end   = &codes[codesz - 1];
+	struct stack   stack	     = { .values = NULL };
+	union flag8    flag	     = { .flag = 0 };
+	int	       res	     = 0;
+	const uint8_t *pc	     = codes;
+	const uint8_t *end	     = &codes[codesz - 1];
+
+	// runtime object buffer
+	struct jy_obj_allocator rbuf = { .buf = NULL };
 
 	for (; end - pc > 0;) {
-		res = interpret(vals, types, obj, &stack, &flag, &pc);
+		res = interpret(vals, types, obj, &stack, &flag, &pc, &rbuf);
 
 		if (res != 0)
 			break;
 	}
 
+	jry_free(rbuf.buf);
 	jry_free(stack.values);
 
 	return res;

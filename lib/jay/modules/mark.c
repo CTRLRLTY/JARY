@@ -105,7 +105,7 @@ static int mark(int argc, union jy_value *argv, union jy_value *result)
 
 	struct jy_obj_str *str	   = argv[0].str;
 	struct table *restrict tbl = &marked;
-	const char *key		   = str->str;
+	const char *key		   = str->cstr;
 	size_t	    keysz	   = str->size;
 
 	if (tbl->size + 1 > tbl->capacity * table_load_factor) {
@@ -145,7 +145,7 @@ static int unmark(int argc, union jy_value *argv, union jy_value *result)
 
 	int id;
 
-	if (!find_entry(tbl, str->str, str->size, &id))
+	if (!find_entry(tbl, str->cstr, str->size, &id))
 		return 0;
 
 	free(tbl->keys[id]);
@@ -166,7 +166,7 @@ static int count(int argc, union jy_value *argv, union jy_value *result)
 
 	int id;
 
-	if (find_entry(tbl, str->str, str->size, &id))
+	if (find_entry(tbl, str->cstr, str->size, &id))
 		result->i64 = tbl->num[id];
 	else
 		result->i64 = 0;

@@ -9,7 +9,9 @@
 #include <string.h>
 
 struct jy_obj_str {
-	char	*str;
+	// null terminated string
+	char	*cstr;
+	// size does not include '\0'
 	uint32_t size;
 };
 

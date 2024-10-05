@@ -132,6 +132,7 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 		goto FINISH;
 	}
 
+	case '0':
 	case '1':
 	case '2':
 	case '3':

@@ -30,6 +30,11 @@ static bool find_entry(const struct table *tbl,
 		       size_t		   keysz,
 		       int		  *id)
 {
+	if (tbl->capacity == 0) {
+		*id = 0;
+		return false;
+	}
+
 	uint64_t hash	  = keyhash(key, keysz);
 	int	 capacity = tbl->capacity;
 	int	 index	  = hash & (capacity - 1);

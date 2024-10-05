@@ -513,51 +513,49 @@ static inline void print_defs(const struct jy_defs *names, int indent)
 
 		printf(" ");
 		if (type == JY_K_HANDLE) {
-			void *handle = (void *) names->vals[i];
+			void *handle = names->vals[i].handle;
 			printf("%p\n", handle);
 		} else {
-			long ofs = jry_v2long(names->vals[i]);
+			long ofs = names->vals[i].ofs;
 			printf("%ld\n", ofs);
 		}
 	}
 }
 
-static inline void print_events(const void	    *obj,
-				const jy_val_t	    *vals,
-				const enum jy_ktype *types,
-				uint16_t	     valsz)
+static inline void print_events(const void	     *obj,
+				const union jy_value *vals,
+				const enum jy_ktype  *types,
+				uint16_t	      valsz)
 {
 	for (uint32_t i = 0; i < valsz; ++i) {
 		if (types[i] != JY_K_EVENT)
 			continue;
 
 		printf("%5u [EVENT] \n", i);
-		long		ofs = jry_v2long(vals[i]);
-		struct jy_defs *m   = memory_fetch(obj, ofs);
+		struct jy_defs *m = memory_fetch(obj, vals[i].ofs);
 		print_defs(m, 1);
 	}
 }
 
-static inline void print_modules(const void	     *obj,
-				 const jy_val_t	     *vals,
-				 const enum jy_ktype *types,
-				 uint16_t	      valsz)
+static inline void print_modules(const void	      *obj,
+				 const union jy_value *vals,
+				 const enum jy_ktype  *types,
+				 uint16_t	       valsz)
 {
 	for (uint32_t i = 0; i < valsz; ++i) {
 		if (types[i] != JY_K_MODULE)
 			continue;
 
 		printf("%5u [MODULE] \n", i);
-		long		ofs = jry_v2long(vals[i]);
-		struct jy_defs *m   = memory_fetch(obj, ofs);
+		struct jy_defs *m = memory_fetch(obj, vals[i].ofs);
 		print_defs(m, 1);
 	}
 }
 
-static inline void print_calls(const void	   *obj,
-			       const enum jy_ktype *types,
-			       const jy_val_t	   *vals,
-			       uint16_t		    valsz)
+static inline void print_calls(const void	    *obj,
+			       const enum jy_ktype  *types,
+			       const union jy_value *vals,
+			       uint16_t		     valsz)
 {
 	int		    maxtypesz = 0;
 	int		    fnsz      = 0;
@@ -567,8 +565,7 @@ static inline void print_calls(const void	   *obj,
 		if (types[i] != JY_K_FUNC)
 			continue;
 
-		long		    ofs	   = jry_v2long(vals[i]);
-		struct jy_obj_func *ofunc  = memory_fetch(obj, ofs);
+		struct jy_obj_func *ofunc  = memory_fetch(obj, vals[i].ofs);
 		const char	   *ts	   = k2string(ofunc->return_type);
 		int		    sz	   = strlen(ts);
 		maxtypesz		   = sz > maxtypesz ? sz : maxtypesz;
@@ -597,10 +594,10 @@ static inline void print_calls(const void	   *obj,
 	}
 }
 
-static void print_kpool(const void	    *obj,
-			const enum jy_ktype *types,
-			const jy_val_t	    *vals,
-			uint16_t	     valsz)
+static void print_kpool(const void	     *obj,
+			const enum jy_ktype  *types,
+			const union jy_value *vals,
+			uint16_t	      valsz)
 {
 	int maxtypesz = 0;
 
@@ -611,9 +608,9 @@ static void print_kpool(const void	    *obj,
 	}
 
 	for (uint32_t i = 0; i < valsz; ++i) {
-		jy_val_t      val     = vals[i];
-		enum jy_ktype type    = types[i];
-		const char   *typestr = k2string(type);
+		union jy_value val     = vals[i];
+		enum jy_ktype  type    = types[i];
+		const char    *typestr = k2string(type);
 
 		printf("%5d | ", i);
 
@@ -629,11 +626,10 @@ static void print_kpool(const void	    *obj,
 		case JY_K_MODULE:
 		case JY_K_FUNC:
 		case JY_K_LONG:
-			printf("%ld", jry_v2long(val));
+			printf("%ld", val.i64);
 			break;
 		case JY_K_STR: {
-			long		   ofs = jry_v2long(val);
-			struct jy_obj_str *s   = memory_fetch(obj, ofs);
+			struct jy_obj_str *s = memory_fetch(obj, val.ofs);
 			printf("%s", s->str);
 			break;
 		}

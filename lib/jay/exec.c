@@ -30,12 +30,12 @@ union flag8 {
 };
 
 struct stack {
-	jy_val_t *values;
-	uint32_t  size;
-	uint32_t  capacity;
+	union jy_value *values;
+	uint32_t	size;
+	uint32_t	capacity;
 };
 
-static inline bool push(struct stack *s, jy_val_t value)
+static inline bool push(struct stack *s, union jy_value value)
 {
 	const int growth = 10;
 
@@ -56,19 +56,19 @@ static inline bool push(struct stack *s, jy_val_t value)
 	return false;
 }
 
-static inline jy_val_t pop(struct stack *s)
+static inline union jy_value pop(struct stack *s)
 {
 	jry_assert(s->size > 0);
 
 	return s->values[--s->size];
 }
 
-static inline int interpret(const jy_val_t	*vals,
-			    const enum jy_ktype *types,
-			    const void		*obj,
-			    struct stack	*stack,
-			    union flag8		*flag,
-			    const uint8_t      **code)
+static inline int interpret(const union jy_value *vals,
+			    const enum jy_ktype	 *types,
+			    const void		 *obj,
+			    struct stack	 *stack,
+			    union flag8		 *flag,
+			    const uint8_t	**code)
 {
 	const uint8_t *pc     = *code;
 	enum jy_opcode opcode = *pc;
@@ -84,13 +84,13 @@ static inline int interpret(const jy_val_t	*vals,
 	switch (opcode) {
 	case JY_OP_PUSH8: {
 		union {
-			jy_val_t val;
-			void	*ptr;
+			union jy_value val;
+			void	      *ptr;
 		} v = { .val = vals[*arg.u8] };
 
 		switch (types[*arg.u8]) {
 		case JY_K_OBJECT:
-			v.ptr = memory_fetch(obj, jry_v2long(v.val));
+			v.ptr = memory_fetch(obj, v.val.ofs);
 			break;
 		default:
 			break;
@@ -104,13 +104,13 @@ static inline int interpret(const jy_val_t	*vals,
 	}
 	case JY_OP_PUSH16: {
 		union {
-			jy_val_t val;
-			void	*ptr;
+			union jy_value val;
+			void	      *ptr;
 		} v = { .val = vals[*arg.u16] };
 
 		switch (types[*arg.u8]) {
 		case JY_K_OBJECT:
-			v.ptr = memory_fetch(obj, jry_v2long(v.val));
+			v.ptr = memory_fetch(obj, v.val.ofs);
 			break;
 		default:
 			break;
@@ -126,7 +126,7 @@ static inline int interpret(const jy_val_t	*vals,
 		uint16_t field	    = arg.u16[0];
 		uint16_t k_id	    = arg.u16[1];
 
-		long		ofs = jry_v2long(vals[k_id]);
+		long		ofs = vals[k_id].ofs;
 		struct jy_defs *ev  = memory_fetch(obj, ofs);
 
 		if (push(stack, ev->vals[field]))
@@ -139,15 +139,15 @@ static inline int interpret(const jy_val_t	*vals,
 		uint16_t k_id		= arg.u16[1];
 		uint8_t	 paramsz	= arg.u8[2];
 
-		long		    ofs = jry_v2long(vals[k_id]);
+		long		    ofs = vals[k_id].ofs;
 		struct jy_obj_func *ofn = memory_fetch(obj, ofs);
 
-		jy_val_t args[paramsz];
+		union jy_value args[paramsz];
 
 		for (size_t i = 0; i < paramsz; ++i)
 			args[i] = pop(stack);
 
-		jy_val_t retval;
+		union jy_value retval;
 		ofn->func(paramsz, args, &retval);
 
 		switch (ofn->return_type) {
@@ -181,8 +181,8 @@ static inline int interpret(const jy_val_t	*vals,
 		pc	      += 1;
 		break;
 	case JY_OP_CMPSTR: {
-		struct jy_obj_str *v2 = jry_v2str(pop(stack));
-		struct jy_obj_str *v1 = jry_v2str(pop(stack));
+		struct jy_obj_str *v2 = pop(stack).str;
+		struct jy_obj_str *v1 = pop(stack).str;
 
 		flag->bits.b8	      = *v1->str == *v2->str &&
 				memcmp(v1->str, v2->str, v1->size) == 0;
@@ -191,8 +191,8 @@ static inline int interpret(const jy_val_t	*vals,
 		break;
 	}
 	case JY_OP_CMP: {
-		long v2	       = jry_v2long(pop(stack));
-		long v1	       = jry_v2long(pop(stack));
+		long v2	       = pop(stack).i64;
+		long v1	       = pop(stack).i64;
 
 		flag->bits.b8  = v1 == v2;
 
@@ -200,8 +200,8 @@ static inline int interpret(const jy_val_t	*vals,
 		break;
 	}
 	case JY_OP_LT: {
-		long v2	       = jry_v2long(pop(stack));
-		long v1	       = jry_v2long(pop(stack));
+		long v2	       = pop(stack).i64;
+		long v1	       = pop(stack).i64;
 
 		flag->bits.b8  = v1 < v2;
 
@@ -209,8 +209,8 @@ static inline int interpret(const jy_val_t	*vals,
 		break;
 	}
 	case JY_OP_GT: {
-		long v2	       = jry_v2long(pop(stack));
-		long v1	       = jry_v2long(pop(stack));
+		long v2	       = pop(stack).i64;
+		long v1	       = pop(stack).i64;
 
 		flag->bits.b8  = v1 > v2;
 
@@ -219,10 +219,11 @@ static inline int interpret(const jy_val_t	*vals,
 	}
 
 	case JY_OP_ADD: {
-		long v2 = jry_v2long(pop(stack));
-		long v1 = jry_v2long(pop(stack));
+		union jy_value v2  = pop(stack);
+		union jy_value v1  = pop(stack);
+		v1.i64		  += v2.i64;
 
-		push(stack, jry_long2v(v1 + v2));
+		push(stack, v1);
 
 		pc += 1;
 		break;
@@ -237,11 +238,11 @@ FATAL:
 	return 1;
 }
 
-int jry_exec(const jy_val_t	 *vals,
-	     const enum jy_ktype *types,
-	     const void		 *obj,
-	     const uint8_t	 *codes,
-	     uint32_t		  codesz)
+int jry_exec(const union jy_value *vals,
+	     const enum jy_ktype  *types,
+	     const void		  *obj,
+	     const uint8_t	  *codes,
+	     uint32_t		   codesz)
 {
 	struct stack   stack = { .values = NULL };
 	union flag8    flag  = { .flag = 0 };

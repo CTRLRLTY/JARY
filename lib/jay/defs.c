@@ -72,11 +72,11 @@ __use_result static int regenerate(struct jy_defs *tbl, uint32_t capacity)
 		if (ekey == NULL)
 			continue;
 
-		enum jy_ktype type = tbl->types[i];
-		char	     *key  = tbl->keys[i];
-		jy_val_t      val  = tbl->vals[i];
+		enum jy_ktype  type = tbl->types[i];
+		char	      *key  = tbl->keys[i];
+		union jy_value val  = tbl->vals[i];
 
-		int status	   = jry_add_def(&newtbl, key, val, type);
+		int status	    = jry_add_def(&newtbl, key, val, type);
 
 		if (status != ERROR_SUCCESS) {
 			jry_free_def(newtbl);
@@ -116,7 +116,7 @@ bool jry_find_def(const struct jy_defs *tbl, const char *key, uint32_t *id)
 
 int jry_add_def(struct jy_defs *tbl,
 		const char     *key,
-		jy_val_t	value,
+		union jy_value	value,
 		enum jy_ktype	type)
 {
 	int status = ERROR_SUCCESS;

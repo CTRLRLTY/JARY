@@ -34,18 +34,18 @@ enum jy_opcode {
 
 struct jy_jay {
 	// module dirpath
-	const char		  *mdir;
+	const char	       *mdir;
 	// global names
-	struct jy_defs		  *names;
+	struct jy_defs	       *names;
 	// code chunk array
-	uint8_t			  *codes;
+	uint8_t		       *codes;
 	// constant table
-	jy_val_t		  *vals;
-	enum jy_ktype		  *types;
+	union jy_value	       *vals;
+	enum jy_ktype	       *types;
 	// object linear memory buffer
-	struct jy_object_allocator obj;
-	uint32_t		   codesz;
-	uint16_t		   valsz;
+	struct jy_obj_allocator obj;
+	uint32_t		codesz;
+	uint16_t		valsz;
 };
 
 void jry_compile(const struct jy_asts *asts,
@@ -55,7 +55,7 @@ void jry_compile(const struct jy_asts *asts,
 
 int jry_set_event(const char	       *event,
 		  const char	       *field,
-		  jy_val_t		value,
+		  union jy_value	value,
 		  const void	       *buf,
 		  const struct jy_defs *names);
 

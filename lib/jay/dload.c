@@ -29,8 +29,8 @@ static const char *error_reason[ERROR_MSG_COUNT_LIMIT] = {
 };
 
 struct jy_module {
-	struct jy_defs		   *def;
-	struct jy_object_allocator *obj;
+	struct jy_defs		*def;
+	struct jy_obj_allocator *obj;
 };
 
 typedef int (*loadfn_t)(struct jy_module *);
@@ -39,9 +39,9 @@ typedef int (*unloadfn_t)(struct jy_module *);
 #ifdef __unix__
 #	include <dlfcn.h>
 
-int jry_module_load(const char		       *path,
-		    struct jy_defs	       *def,
-		    struct jy_object_allocator *object)
+int jry_module_load(const char		    *path,
+		    struct jy_defs	    *def,
+		    struct jy_obj_allocator *object)
 {
 	loadfn_t load;
 
@@ -52,24 +52,21 @@ int jry_module_load(const char		       *path,
 	strcpy(modulepath, path);
 	strcat(modulepath, suffix);
 
-	union {
-		jy_val_t value;
-		void	*ptr;
-	} handle;
+	union jy_value handle;
 
-	handle.ptr = dlopen(modulepath, RTLD_LAZY);
+	handle.handle = dlopen(modulepath, RTLD_LAZY);
 
-	if (handle.ptr == NULL)
+	if (handle.handle == NULL)
 		goto DLOAD_ERROR;
 
-	load = (loadfn_t) (uintptr_t) dlsym(handle.ptr, "module_load");
+	load = (loadfn_t) (uintptr_t) dlsym(handle.handle, "module_load");
 
 	if (load == NULL)
 		goto DLOAD_ERROR;
 
 	const char k[] = "__handle__";
 
-	if (jry_add_def(def, k, handle.value, JY_K_HANDLE) != 0)
+	if (jry_add_def(def, k, handle, JY_K_HANDLE) != 0)
 		goto DLOAD_ERROR;
 
 	struct jy_module ctx	= { .def = def, .obj = object };
@@ -89,24 +86,21 @@ int jry_module_unload(struct jy_defs *def)
 {
 	int status = 0;
 
-	union {
-		jy_val_t value;
-		void	*ptr;
-	} handle;
+	union jy_value handle;
 
 	const char k[] = "__handle__";
 	uint32_t   nid;
 
 	assert(jry_find_def(def, k, &nid));
 
-	handle.value = def->vals[nid];
+	handle = def->vals[nid];
 
-	if (handle.ptr == NULL)
+	if (handle.handle == NULL)
 		goto FINISH;
 
 	unloadfn_t unload;
 
-	unload = (unloadfn_t) (uintptr_t) dlsym(handle.ptr, "module_unload");
+	unload = (unloadfn_t) (uintptr_t) dlsym(handle.handle, "module_unload");
 
 	if (unload == NULL)
 		goto CLOSE;
@@ -115,7 +109,7 @@ int jry_module_unload(struct jy_defs *def)
 	status		     = unload(&ctx);
 
 CLOSE: {
-	dlclose(handle.ptr);
+	dlclose(handle.handle);
 	jry_free_def(*def);
 }
 FINISH:
@@ -145,7 +139,7 @@ int define_function(struct jy_module	*ctx,
 {
 	struct jy_obj_func *ofunc = NULL;
 	uint32_t allocsz = sizeof(*ofunc) + sizeof(*param_types) * param_size;
-	ofunc		 = jry_allocobj(allocsz, allocsz, ctx->obj);
+	ofunc		 = alloc_obj(allocsz, allocsz, ctx->obj);
 
 	if (ofunc == NULL)
 		return TO_ERROR(MSG_UNKNOWN);
@@ -158,9 +152,9 @@ int define_function(struct jy_module	*ctx,
 	memcpy(ofunc->param_types, param_types,
 	       sizeof(*param_types) * param_size);
 
-	jy_val_t value = jry_long2v(memory_offset(ctx->obj->buf, ofunc));
+	union jy_value ofs = { .ofs = memory_offset(ctx->obj->buf, ofunc) };
 
-	if (jry_add_def(ctx->def, key, value, JY_K_FUNC) != 0)
+	if (jry_add_def(ctx->def, key, ofs, JY_K_FUNC) != 0)
 		return TO_ERROR(MSG_UNKNOWN);
 
 	return 0;

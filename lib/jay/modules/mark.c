@@ -98,12 +98,12 @@ OUT_OF_MEMORY:
 	return -1;
 }
 
-static int mark(int argc, jy_val_t *argv, jy_val_t *result)
+static int mark(int argc, union jy_value *argv, union jy_value *result)
 {
 	(void) argc;
 	(void) result;
 
-	struct jy_obj_str *str	   = jry_v2str(argv[0]);
+	struct jy_obj_str *str	   = argv[0].str;
 	struct table *restrict tbl = &marked;
 	const char *key		   = str->str;
 	size_t	    keysz	   = str->size;
@@ -135,12 +135,12 @@ static int mark(int argc, jy_val_t *argv, jy_val_t *result)
 	return 0;
 }
 
-static int unmark(int argc, jy_val_t *argv, jy_val_t *result)
+static int unmark(int argc, union jy_value *argv, union jy_value *result)
 {
 	(void) argc;
 	(void) result;
 
-	struct jy_obj_str *str	   = jry_v2str(argv[0]);
+	struct jy_obj_str *str	   = argv[0].str;
 	struct table *restrict tbl = &marked;
 
 	int id;
@@ -157,19 +157,19 @@ static int unmark(int argc, jy_val_t *argv, jy_val_t *result)
 	return 0;
 }
 
-static int count(int argc, jy_val_t *argv, jy_val_t *result)
+static int count(int argc, union jy_value *argv, union jy_value *result)
 {
 	(void) argc;
 
-	struct jy_obj_str *str	   = jry_v2str(argv[0]);
+	struct jy_obj_str *str	   = argv[0].str;
 	struct table *restrict tbl = &marked;
 
 	int id;
 
 	if (find_entry(tbl, str->str, str->size, &id))
-		*result = jry_long2v(tbl->num[id]);
+		result->i64 = tbl->num[id];
 	else
-		*result = jry_long2v(0);
+		result->i64 = 0;
 
 	return 0;
 }

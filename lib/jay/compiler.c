@@ -43,22 +43,22 @@ typedef bool (*cmplfn_t)(const struct jy_asts *,
 
 static inline cmplfn_t rule_expression(enum jy_ast type);
 
-static inline struct jy_defs *defobj(struct jy_object_allocator *alloc)
+static inline struct jy_defs *defobj(struct jy_obj_allocator *alloc)
 {
 	uint32_t nmemb = sizeof(struct jy_defs);
-	void	*ptr   = jry_allocobj(nmemb, nmemb, alloc);
+	void	*ptr   = alloc_obj(nmemb, nmemb, alloc);
 
 	return memset(ptr, 0, sizeof(struct jy_defs));
 }
 
-static struct jy_obj_str *stringobj(const char		       *str,
-				    uint32_t			len,
-				    struct jy_object_allocator *alloc)
+static struct jy_obj_str *stringobj(const char		    *str,
+				    uint32_t		     len,
+				    struct jy_obj_allocator *alloc)
 {
 	// + 1 to include '\0'
 	uint32_t allocsz	= sizeof(struct jy_obj_str) + len + 1;
 
-	struct jy_obj_str *ostr = jry_allocobj(allocsz, allocsz, alloc);
+	struct jy_obj_str *ostr = alloc_obj(allocsz, allocsz, alloc);
 
 	if (ostr) {
 		ostr->str  = (void *) (ostr + 1);
@@ -125,11 +125,11 @@ __use_result static int write_push(uint32_t  constant,
 	return res;
 }
 
-__use_result static int write_constant(jy_val_t	       constant,
-				       enum jy_ktype   type,
-				       jy_val_t	     **vals,
-				       enum jy_ktype **types,
-				       uint16_t	      *length)
+__use_result static int write_constant(union jy_value	constant,
+				       enum jy_ktype	type,
+				       union jy_value **vals,
+				       enum jy_ktype  **types,
+				       uint16_t	       *length)
 {
 	jry_mem_push(*vals, *length, constant);
 	jry_mem_push(*types, *length, type);
@@ -165,17 +165,17 @@ static bool _long_expr(const struct jy_asts *asts,
 		       struct jy_defs	    *__unused(scope),
 		       struct kexpr	    *expr)
 {
-	uint32_t tkn	= asts->tkns[id];
-	char	*lexeme = tkns->lexemes[tkn];
+	uint32_t tkn	   = asts->tkns[id];
+	char	*lexeme	   = tkns->lexemes[tkn];
 
-	long num	= strtol(lexeme, NULL, 10);
-	expr->type	= JY_K_LONG;
+	union jy_value num = { .i64 = strtol(lexeme, NULL, 10) };
+	expr->type	   = JY_K_LONG;
 
 	for (uint32_t i = 0; i < ctx->valsz; ++i) {
 		enum jy_ktype t = ctx->types[i];
-		long	      v = jry_v2long(ctx->vals[i]);
+		long	      v = ctx->vals[i].i64;
 
-		if (t != JY_K_LONG || v != num)
+		if (t != JY_K_LONG || v != num.i64)
 			continue;
 
 		expr->id = i;
@@ -183,11 +183,9 @@ static bool _long_expr(const struct jy_asts *asts,
 		goto DONE;
 	}
 
-	jy_val_t val = jry_long2v(num);
+	expr->id = ctx->valsz;
 
-	expr->id     = ctx->valsz;
-
-	if (write_constant(val, JY_K_LONG, &ctx->vals, &ctx->types,
+	if (write_constant(num, JY_K_LONG, &ctx->vals, &ctx->types,
 			   &ctx->valsz) != 0)
 		goto PANIC;
 
@@ -217,7 +215,7 @@ static bool _string_expr(const struct jy_asts *asts,
 
 	for (uint32_t i = 0; i < ctx->valsz; ++i) {
 		enum jy_ktype	   t = ctx->types[i];
-		struct jy_obj_str *v = jry_v2str(ctx->vals[i]);
+		struct jy_obj_str *v = ctx->vals[i].str;
 
 		if (t != JY_K_STR || v->size != lexsz ||
 		    memcmp(v->str, lexeme, lexsz) != 0)
@@ -233,12 +231,12 @@ static bool _string_expr(const struct jy_asts *asts,
 	if (ostr == NULL)
 		goto PANIC;
 
-	jy_val_t v = jry_long2v(memory_offset(ctx->obj.buf, ostr));
+	union jy_value ofs = { .ofs = memory_offset(ctx->obj.buf, ostr) };
 
-	expr->id   = ctx->valsz;
+	expr->id	   = ctx->valsz;
 
-	if (write_constant(v, JY_K_STR, &ctx->vals, &ctx->types, &ctx->valsz) !=
-	    0)
+	if (write_constant(ofs, JY_K_STR, &ctx->vals, &ctx->types,
+			   &ctx->valsz) != 0)
 		goto PANIC;
 DONE:
 	if (write_push(expr->id, &ctx->codes, &ctx->codesz) != 0)
@@ -292,13 +290,12 @@ static bool _name_expr(const struct jy_asts *asts,
 		goto PANIC;
 	}
 
-	jy_val_t	value = scope->vals[nid];
-	struct jy_defs *def   = NULL;
+	union jy_value	ofs = scope->vals[nid];
+	struct jy_defs *def = NULL;
 
-	long ofs	      = jry_v2long(value);
-	def		      = memory_fetch(ctx->obj.buf, ofs);
-	uint32_t *child	      = asts->child[id];
-	uint32_t  childsz     = asts->childsz[id];
+	def		    = memory_fetch(ctx->obj.buf, ofs.ofs);
+	uint32_t *child	    = asts->child[id];
+	uint32_t  childsz   = asts->childsz[id];
 
 	for (uint32_t i = 0; i < childsz; ++i) {
 		uint32_t chid = child[i];
@@ -330,7 +327,7 @@ static bool _event_expr(const struct jy_asts *asts,
 		goto PANIC;
 	}
 
-	long		ofs   = jry_v2long(ctx->names->vals[nid]);
+	long		ofs   = ctx->names->vals[nid].ofs;
 	struct jy_defs *def   = memory_fetch(ctx->obj.buf, ofs);
 	uint32_t       *child = asts->child[id];
 
@@ -347,7 +344,7 @@ static bool _event_expr(const struct jy_asts *asts,
 		if (ctx->types[i] != JY_K_EVENT)
 			continue;
 
-		long		ofs  = jry_v2long(ctx->vals[i]);
+		long		ofs  = ctx->vals[i].ofs;
 		struct jy_defs *temp = memory_fetch(ctx->obj.buf, ofs);
 
 		if (def == temp) {
@@ -399,8 +396,8 @@ static bool _call_expr(const struct jy_asts *asts,
 		goto PANIC;
 	}
 
-	jy_val_t	    value = scope->vals[nid];
-	long		    ofs	  = jry_v2long(value);
+	union jy_value	    value = scope->vals[nid];
+	long		    ofs	  = value.ofs;
 	struct jy_obj_func *ofunc = memory_fetch(ctx->obj.buf, ofs);
 
 	uint32_t *child		  = asts->child[ast];
@@ -432,7 +429,7 @@ static bool _call_expr(const struct jy_asts *asts,
 		if (ctx->types[i] != JY_K_FUNC)
 			continue;
 
-		struct jy_obj_func *f = jry_v2func(ctx->vals[i]);
+		struct jy_obj_func *f = ctx->vals[i].func;
 
 		if (f == ofunc) {
 			call_id = i;
@@ -928,9 +925,9 @@ static inline bool _field_sect(const struct jy_asts *asts,
 		}
 		}
 
-		int e = jry_add_def(def, name, (jy_val_t) NULL, ktype);
+		union jy_value null = { .obj = NULL };
 
-		if (e != ERROR_SUCCESS)
+		if (jry_add_def(def, name, null, ktype) != ERROR_SUCCESS)
 			goto PANIC;
 	}
 
@@ -1069,7 +1066,7 @@ static inline bool _ingress_decl(const struct jy_asts *asts,
 		if (_field_sect(asts, tkns, errs, fields[i], def))
 			goto PANIC;
 
-	jy_val_t offset = jry_long2v(memory_offset(ctx->obj.buf, def));
+	union jy_value offset = { .ofs = memory_offset(ctx->obj.buf, def) };
 
 	if (write_constant(offset, JY_K_EVENT, &ctx->vals, &ctx->types,
 			   &ctx->valsz) != 0)
@@ -1113,12 +1110,12 @@ static inline bool _import_stmt(const struct jy_asts *asts,
 
 	struct jy_defs *module = defobj(&ctx->obj);
 	*module		       = def;
-	jy_val_t value = jry_long2v(memory_offset(ctx->obj.buf, module));
+	union jy_value ofs     = { .ofs = memory_offset(ctx->obj.buf, module) };
 
-	if (jry_add_def(ctx->names, lexeme, value, JY_K_MODULE) != 0)
+	if (jry_add_def(ctx->names, lexeme, ofs, JY_K_MODULE) != 0)
 		goto PANIC;
 
-	if (write_constant(value, JY_K_MODULE, &ctx->vals, &ctx->types,
+	if (write_constant(ofs, JY_K_MODULE, &ctx->vals, &ctx->types,
 			   &ctx->valsz) != 0)
 		goto PANIC;
 
@@ -1199,7 +1196,7 @@ void jry_compile(const struct jy_asts *asts,
 
 int jry_set_event(const char	       *event,
 		  const char	       *field,
-		  jy_val_t		value,
+		  union jy_value	value,
 		  const void	       *buf,
 		  const struct jy_defs *names)
 {
@@ -1208,7 +1205,7 @@ int jry_set_event(const char	       *event,
 	if (!jry_find_def(names, event, &id))
 		return 1;
 
-	struct jy_defs *ev = memory_fetch(buf, jry_v2long(names->vals[id]));
+	struct jy_defs *ev = memory_fetch(buf, names->vals[id].i64);
 
 	if (!jry_find_def(ev, field, &id))
 		return 2;
@@ -1221,8 +1218,7 @@ int jry_set_event(const char	       *event,
 void jry_free_jay(struct jy_jay ctx)
 {
 	for (uint32_t i = 0; i < ctx.valsz; ++i) {
-		jy_val_t v   = ctx.vals[i];
-		uint32_t ofs = jry_v2long(v);
+		uint32_t ofs = ctx.vals[i].ofs;
 
 		switch (ctx.types[i]) {
 		case JY_K_MODULE: {

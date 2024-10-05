@@ -19,22 +19,23 @@ enum jy_ktype {
 	JY_K_HANDLE,
 };
 
-typedef unsigned long jy_val_t;
-
 // generic view for all qualified Jary values
 union jy_value {
 	void		   *obj;
+	void		   *handle;
 	struct jy_obj_func *func;
 	struct jy_obj_str  *str;
 	struct jy_defs	   *def;
 	struct jy_defs	   *module;
 	long		    i64;
-	jy_val_t	    value;
+	long		    ofs;
 };
+
+typedef int (*jy_funcptr_t)(int, union jy_value *, union jy_value *);
 
 #ifndef __cplusplus
 // Just for clarity
-_Static_assert(sizeof(jy_val_t) == 8, "Values must be 8 bytes");
+_Static_assert(sizeof(union jy_value) == 8, "Values must be 8 bytes");
 #endif // __cplusplus
 
 #endif // JAYVM_TYPES_H

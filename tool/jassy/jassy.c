@@ -136,14 +136,14 @@ static const char *ast2string(enum jy_ast type)
 		return "INCLUDE_STMT";
 	case AST_INGRESS_DECL:
 		return "INGRESS_DECL";
-	case AST_NAME_DECL:
+	case AST_EVENT_MEMBER_DECL:
 		return "NAME_DECL";
 	case AST_LONG_TYPE:
 		return "LONG_TYPE";
 	case AST_STR_TYPE:
 		return "STR_TYPE";
-	case AST_FIELD_NAME:
-		return "FIELD_NAME";
+	case AST_BOOL_TYPE:
+		return "BOOL_TYPE";
 	case AST_JUMP_SECT:
 		return "JUMP_SECT";
 	case AST_INPUT_SECT:
@@ -170,6 +170,10 @@ static const char *ast2string(enum jy_ast type)
 		return "DIVIDE";
 	case AST_REGMATCH:
 		return "REGMATCH";
+	case AST_JOINX:
+		return "JOINX";
+	case AST_EXACT:
+		return "EXACT";
 	case AST_NOT:
 		return "NOT";
 	case AST_AND:
@@ -180,6 +184,8 @@ static const char *ast2string(enum jy_ast type)
 		return "REGEXP";
 	case AST_STRING:
 		return "STRING";
+	case AST_CONCAT:
+		return "CONCAT";
 	case AST_LONG:
 		return "LONG";
 	case AST_FALSE:
@@ -188,21 +194,23 @@ static const char *ast2string(enum jy_ast type)
 		return "TRUE";
 	case AST_ALIAS:
 		return "ALIAS";
-	case AST_FIELD:
-		return "FIELD";
 	case AST_CALL:
 		return "CALL";
 	case AST_EVENT:
 		return "EVENT";
+	case AST_EVENT_MEMBER_NAME:
+		return "EVENT_MEMBER_NAME";
 	case AST_NAME:
 		return "NAME";
 	case AST_PATH:
 		return "PATH";
+	case AST_ACCESS:
+		return "ACCESS";
 	case TOTAL_AST_TYPES:
 		break;
 	}
 
-	return "UNKOWN";
+	return "UNKNOWN";
 }
 
 static const char *k2string(enum jy_ktype type)
@@ -220,6 +228,12 @@ static const char *k2string(enum jy_ktype type)
 		return "[FUNC]";
 	case JY_K_EVENT:
 		return "[EVENT]";
+	case JY_K_LONG_FIELD:
+		return "[LONG_FIELD]";
+	case JY_K_STR_FIELD:
+		return "[STR_FIELD]";
+	case JY_K_BOOL_FIELD:
+		return "[BOOL_FIELD]";
 	case JY_K_BOOL:
 		return "[BOOL]";
 	case JY_K_INGRESS:
@@ -228,9 +242,8 @@ static const char *k2string(enum jy_ktype type)
 		return "[RULE]";
 	case JY_K_HANDLE:
 		return "[HANDLE]";
-	case JY_K_UNKNOWN:
-	default:
-		return "[UNKNOWN]";
+	case JY_K_DESCRIPTOR:
+		return "[DESCRIPTOR]";
 	}
 }
 
@@ -265,12 +278,16 @@ static const char *codestring(enum jy_opcode code)
 		return "OP_JMPT";
 	case JY_OP_CALL:
 		return "OP_CALL";
-	case JY_OP_EVENT:
-		return "OP_EVENT";
+	case JY_OP_JOIN:
+		return "OP_JOIN";
+	case JY_OP_EXACT:
+		return "OP_EXACT";
+	case JY_OP_CONCAT:
+		return "OP_CONCAT";
+	case JY_OP_QUERY:
+		return "OP_QUERY";
 	case JY_OP_END:
 		return "OP_END";
-	default:
-		return "OP_UNKNOWN";
 	}
 }
 
@@ -392,7 +409,7 @@ static void print_asts(struct jy_asts *asts,
 		       uint32_t	       length,
 		       uint32_t	       maxdepth)
 {
-	uint32_t midpoint = 2 * maxdepth + 15;
+	uint32_t midpoint = 2 * maxdepth + 20;
 	int	 col1sz	  = midpoint - 4;
 	int	 idsz	  = snprintf(NULL, 0, "%d", asts->size);
 
@@ -412,7 +429,8 @@ static inline int print_line(char    **lexemes,
 			     uint32_t  line)
 {
 	int printed = 0;
-	for (uint32_t i = 0; i < size; ++i) {
+	// start from 1 to ignore ..root
+	for (uint32_t i = 1; i < size; ++i) {
 		uint32_t l = lines[i];
 
 		if (line < l)
@@ -422,6 +440,9 @@ static inline int print_line(char    **lexemes,
 			continue;
 
 		const char *lexeme = lexemes[i];
+
+		if (lexeme == NULL)
+			continue;
 
 		if (*lexeme == '\n')
 			continue;
@@ -469,6 +490,32 @@ NEXT_TKN:
 	}
 }
 
+static inline void print_value(enum jy_ktype type, const union jy_value value)
+{
+	switch (type) {
+	case JY_K_HANDLE:
+	case JY_K_FUNC:
+	case JY_K_EVENT:
+	case JY_K_MODULE:
+		printf("[PTR:%p]", value.handle);
+		return;
+	case JY_K_LONG:
+		printf("%ld", value.i64);
+		return;
+	case JY_K_STR:
+		printf("%s", value.str->cstr);
+		return;
+	case JY_K_DESCRIPTOR:
+		printf("%u %u", value.dscptr.name, value.dscptr.member);
+		return;
+	case JY_K_LONG_FIELD:
+	case JY_K_STR_FIELD:
+	case JY_K_BOOL_FIELD:
+		printf("UNBOUND");
+		return;
+	}
+}
+
 static inline void print_defs(const struct jy_defs *names, int indent)
 {
 	int maxtypesz = 0;
@@ -512,18 +559,12 @@ static inline void print_defs(const struct jy_defs *names, int indent)
 			printf("%*c", maxkeysz - printed, ' ');
 
 		printf(" ");
-		if (type == JY_K_HANDLE) {
-			void *handle = names->vals[i].handle;
-			printf("%p\n", handle);
-		} else {
-			long ofs = names->vals[i].ofs;
-			printf("%ld\n", ofs);
-		}
+		print_value(type, names->vals[i]);
+		printf("\n");
 	}
 }
 
-static inline void print_events(const void	     *obj,
-				const union jy_value *vals,
+static inline void print_events(const union jy_value *vals,
 				const enum jy_ktype  *types,
 				uint16_t	      valsz)
 {
@@ -531,14 +572,13 @@ static inline void print_events(const void	     *obj,
 		if (types[i] != JY_K_EVENT)
 			continue;
 
-		printf("%5u [EVENT] \n", i);
-		struct jy_defs *m = memory_fetch(obj, vals[i].ofs);
-		print_defs(m, 1);
+		union jy_value m = vals[i];
+		printf("%5u [EVENT] (%p) \n", i, m.handle);
+		print_defs(m.def, 1);
 	}
 }
 
-static inline void print_modules(const void	      *obj,
-				 const union jy_value *vals,
+static inline void print_modules(const union jy_value *vals,
 				 const enum jy_ktype  *types,
 				 uint16_t	       valsz)
 {
@@ -546,56 +586,13 @@ static inline void print_modules(const void	      *obj,
 		if (types[i] != JY_K_MODULE)
 			continue;
 
-		printf("%5u [MODULE] \n", i);
-		struct jy_defs *m = memory_fetch(obj, vals[i].ofs);
-		print_defs(m, 1);
+		union jy_value m = vals[i];
+		printf("%5u [MODULE] (%p) \n", i, m.handle);
+		print_defs(m.module, 1);
 	}
 }
 
-static inline void print_calls(const void	    *obj,
-			       const enum jy_ktype  *types,
-			       const union jy_value *vals,
-			       uint16_t		     valsz)
-{
-	int		    maxtypesz = 0;
-	int		    fnsz      = 0;
-	struct jy_obj_func *fns[valsz];
-
-	for (uint16_t i = 0; i < valsz; ++i) {
-		if (types[i] != JY_K_FUNC)
-			continue;
-
-		struct jy_obj_func *ofunc  = memory_fetch(obj, vals[i].ofs);
-		const char	   *ts	   = k2string(ofunc->return_type);
-		int		    sz	   = strlen(ts);
-		maxtypesz		   = sz > maxtypesz ? sz : maxtypesz;
-		fns[fnsz]		   = ofunc;
-		fnsz			  += 1;
-	}
-
-	for (uint16_t i = 0; i < fnsz; ++i) {
-		struct jy_obj_func *ofunc   = fns[i];
-		enum jy_ktype	    type    = ofunc->return_type;
-		const char	   *typestr = k2string(type);
-
-		printf("%5d | ", i);
-
-		int printed = printf("%s", typestr);
-
-		if (printed < maxtypesz)
-			printf("%*c", maxtypesz - printed, ' ');
-
-		for (uint8_t j = 0; j < ofunc->param_size; ++j) {
-			const char *ts = k2string(ofunc->param_types[j]);
-			printf(" %s", ts);
-		}
-
-		printf("\n");
-	}
-}
-
-static void print_kpool(const void	     *obj,
-			const enum jy_ktype  *types,
+static void print_kpool(const enum jy_ktype  *types,
 			const union jy_value *vals,
 			uint16_t	      valsz)
 {
@@ -620,23 +617,7 @@ static void print_kpool(const void	     *obj,
 			printf("%*c", maxtypesz - printed, ' ');
 
 		printf(" ");
-
-		switch (type) {
-		case JY_K_EVENT:
-		case JY_K_MODULE:
-		case JY_K_FUNC:
-		case JY_K_LONG:
-			printf("%ld", val.i64);
-			break;
-		case JY_K_STR: {
-			struct jy_obj_str *s = memory_fetch(obj, val.ofs);
-			printf("%s", s->cstr);
-			break;
-		}
-		default:
-			break;
-		}
-
+		print_value(type, val);
 		printf("\n");
 	}
 }
@@ -670,14 +651,9 @@ static void print_chunks(uint8_t *codes, uint32_t codesz)
 			pc += 3;
 			break;
 		}
-		case JY_OP_EVENT: {
-			printf(" %u %u", arg.u16[0], arg.u16[1]);
-			pc += 5;
-			break;
-		}
 		case JY_OP_CALL: {
-			printf(" %u %u", arg.u16[0], arg.u8[2]);
-			pc += 4;
+			printf(" %u", arg.u8[0]);
+			pc += 2;
 			break;
 		}
 		default:
@@ -719,23 +695,21 @@ static uint32_t read_file(const char *path, char **dst)
 
 static void run_file(const char *path, const char *dirpath)
 {
-	char	*src	     = NULL;
-	uint32_t length	     = read_file(path, &src);
+	char	*src	    = NULL;
+	uint32_t length	    = read_file(path, &src);
 
-	struct jy_asts asts  = { .types = NULL };
-	struct jy_tkns tkns  = { .types = NULL };
-	struct jy_errs errs  = { .msgs = NULL };
-	struct jy_defs names = { .keys = NULL };
+	struct jy_asts asts = { .types = NULL };
+	struct jy_tkns tkns = { .types = NULL };
+	struct jy_errs errs = { .msgs = NULL };
 
-	char dirname[]	     = "/modules/";
+	char dirname[]	    = "/modules/";
 	char buf[strlen(dirpath) + sizeof(dirname)];
 
 	strcpy(buf, dirpath);
 	strcat(buf, dirname);
 
 	struct jy_jay jay = {
-		.names = &names,
-		.mdir  = buf,
+		.mdir = buf,
 	};
 
 	jry_parse(src, length, &asts, &tkns, &errs);
@@ -790,7 +764,6 @@ static void run_file(const char *path, const char *dirpath)
 
 	uint32_t modulesz = 0;
 	uint32_t eventsz  = 0;
-	uint32_t callsz	  = 0;
 
 	for (uint32_t i = 0; i < jay.valsz; ++i) {
 		switch (jay.types[i]) {
@@ -800,9 +773,6 @@ static void run_file(const char *path, const char *dirpath)
 		case JY_K_EVENT:
 			eventsz += 1;
 			break;
-		case JY_K_FUNC:
-			callsz += 1;
-			break;
 		default:
 			continue;
 		}
@@ -810,27 +780,18 @@ static void run_file(const char *path, const char *dirpath)
 
 	printf("Total Modules : %u\n", modulesz);
 	printf("Constant Pool : %u\n", jay.valsz);
-	printf("Total Names   : %u\n", names.size);
+	printf("Total Names   : %u\n", jay.names->size);
 	printf("Total Events  : %u\n", eventsz);
 	printf("Total Chunk   : %u\n", jay.codesz);
 
 	printf("\n");
-
-	printf("GLOBAL NAMES"
-	       "\n"
-	       "__________________\n\n");
-
-	if (names.size) {
-		print_defs(&names, 0);
-		printf("\n");
-	}
 
 	printf("MODULE TABLE"
 	       "\n"
 	       "__________________\n\n");
 
 	if (modulesz) {
-		print_modules(jay.obj.buf, jay.vals, jay.types, jay.valsz);
+		print_modules(jay.vals, jay.types, jay.valsz);
 		printf("\n");
 	}
 
@@ -839,16 +800,7 @@ static void run_file(const char *path, const char *dirpath)
 	       "__________________\n\n");
 
 	if (eventsz) {
-		print_events(jay.obj.buf, jay.vals, jay.types, jay.valsz);
-		printf("\n");
-	}
-
-	printf("CALL TABLE"
-	       "\n"
-	       "__________________\n\n");
-
-	if (callsz) {
-		print_calls(jay.obj.buf, jay.types, jay.vals, jay.valsz);
+		print_events(jay.vals, jay.types, jay.valsz);
 		printf("\n");
 	}
 
@@ -857,7 +809,7 @@ static void run_file(const char *path, const char *dirpath)
 	       "__________________\n\n");
 
 	if (jay.valsz) {
-		print_kpool(jay.obj.buf, jay.types, jay.vals, jay.valsz);
+		print_kpool(jay.types, jay.vals, jay.valsz);
 		printf("\n");
 	}
 

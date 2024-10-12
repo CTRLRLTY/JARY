@@ -509,24 +509,31 @@ static bool _call(struct parser	 *p,
 		  struct jy_errs *errs,
 		  uint32_t	 *root)
 {
-	enum jy_ast type    = asts->types[*root];
+	uint32_t    left    = *root;
+	enum jy_ast type    = asts->types[left];
 	uint32_t    nametkn = p->tkn;
-	if (type != AST_NAME) {
+	if (type != AST_ACCESS) {
 		jry_push_error(errs, msg_inv_invoc, p->tkn, p->tkn);
 		goto PANIC;
 	}
 
+	// set root to (
+	if (push_ast(asts, AST_CALL, p->tkn, root) != 0)
+		goto PANIC;
+
+	if (push_child(asts, *root, left) != 0)
+		goto PANIC;
+
 	// consume (
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
-	asts->types[*root] = AST_CALL;
-
-	enum jy_tkn param  = tkns->types[p->tkn];
+	enum jy_tkn param = tkns->types[p->tkn];
 
 	while (param != TKN_RIGHT_PAREN) {
-		uint32_t paramsz = asts->childsz[*root];
+		uint32_t paramsz = asts->childsz[*root] - 1;
 		uint32_t topast	 = *root;
 
+		// > 2 bytes
 		if ((paramsz + 1) & 0x10000) {
 			jry_push_error(errs, msg_args_limit, nametkn, p->tkn);
 			goto PANIC;
@@ -568,21 +575,23 @@ static bool _dot(struct parser	*p,
 		 struct jy_errs *errs,
 		 uint32_t	*root)
 {
-	enum jy_ast prevtype = asts->types[*root];
-	enum jy_ast member_type;
+	uint32_t    right;
+	uint32_t    left  = *root;
+	enum jy_ast rtype = asts->types[left];
 
-	switch (prevtype) {
+	switch (asts->types[left]) {
 	case AST_NAME:
-		member_type = AST_NAME;
-		break;
 	case AST_EVENT:
-		member_type = AST_FIELD;
 		break;
 	default: {
 		jry_push_error(errs, msg_inv_access, p->tkn, p->tkn);
 		goto PANIC;
 	}
 	}
+
+	// set root to .
+	if (push_ast(asts, AST_ACCESS, p->tkn, root) != 0)
+		goto PANIC;
 
 	// consume .
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
@@ -595,12 +604,13 @@ static bool _dot(struct parser	*p,
 		goto PANIC;
 	}
 
-	uint32_t member;
-
-	if (push_ast(asts, member_type, p->tkn, &member) != 0)
+	if (push_ast(asts, rtype, p->tkn, &right) != 0)
 		goto PANIC;
 
-	if (push_child(asts, *root, member) != 0)
+	if (push_child(asts, *root, left) != 0)
+		goto PANIC;
+
+	if (push_child(asts, *root, right) != 0)
 		goto PANIC;
 
 	// consume identifier
@@ -609,14 +619,9 @@ static bool _dot(struct parser	*p,
 	type = tkns->types[p->tkn];
 
 	switch (type) {
-	case TKN_DOT:
-		if (_dot(p, asts, tkns, errs, &member))
-			goto PANIC;
-		break;
 	case TKN_LEFT_PAREN:
-		if (_call(p, asts, tkns, errs, &member))
+		if (_call(p, asts, tkns, errs, root))
 			goto PANIC;
-		break;
 	default:
 		break;
 	}
@@ -704,6 +709,9 @@ static bool _binary(struct parser  *p,
 	case TKN_PLUS:
 		root_type = AST_ADDITION;
 		break;
+	case TKN_CONCAT:
+		root_type = AST_CONCAT;
+		break;
 	case TKN_MINUS:
 		root_type = AST_SUBTRACT;
 		break;
@@ -727,6 +735,12 @@ static bool _binary(struct parser  *p,
 		break;
 	case TKN_OR:
 		root_type = AST_OR;
+		break;
+	case TKN_JOINX:
+		root_type = AST_JOINX;
+		break;
+	case TKN_EXACT:
+		root_type = AST_EXACT;
 		break;
 
 	default:
@@ -830,7 +844,7 @@ static bool _types(struct parser  *p,
 
 	uint32_t left;
 
-	if (push_ast(asts, AST_FIELD_NAME, nametkn, &left) != 0)
+	if (push_ast(asts, AST_EVENT_MEMBER_NAME, nametkn, &left) != 0)
 		goto PANIC;
 
 	// consume name
@@ -843,7 +857,7 @@ static bool _types(struct parser  *p,
 		goto PANIC;
 	}
 
-	if (push_ast(asts, AST_NAME_DECL, eqtkn, root) != 0)
+	if (push_ast(asts, AST_EVENT_MEMBER_DECL, eqtkn, root) != 0)
 		goto PANIC;
 
 	// consume =
@@ -1229,9 +1243,13 @@ static struct rule rules[TOTAL_TKN_TYPES] = {
 	[TKN_TILDE]	  = { NULL, _tilde, PREC_LAST },
 
 	[TKN_PLUS]	  = { NULL, _binary, PREC_TERM },
+	[TKN_CONCAT]	  = { NULL, _binary, PREC_TERM },
 	[TKN_MINUS]	  = { NULL, _binary, PREC_TERM },
 	[TKN_SLASH]	  = { NULL, _binary, PREC_FACTOR },
 	[TKN_STAR]	  = { NULL, _binary, PREC_FACTOR },
+
+	[TKN_JOINX]	  = { NULL, _binary, PREC_CALL - 1 },
+	[TKN_EXACT]	  = { NULL, _binary, PREC_EQUALITY },
 
 	[TKN_EQUAL]	  = { NULL, _binary, PREC_EQUALITY },
 	[TKN_LESSTHAN]	  = { NULL, _binary, PREC_COMPARISON },

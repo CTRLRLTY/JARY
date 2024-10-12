@@ -7,3 +7,4 @@ BNF
 *.gdb
 Testing/
 .gdb_history
+!test/*.jary

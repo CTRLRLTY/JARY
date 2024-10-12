@@ -44,9 +44,9 @@ TEST(ParserTest, IngressDeclaration)
 			   "\n"
 			   "      field:"
 			   "\n"
-			   "            yes = string"
+			   "            yes == string"
 			   "\n"
-			   "            no = long"
+			   "            no == long"
 			   "\n"
 			   "}";
 
@@ -62,14 +62,14 @@ TEST(ParserTest, IngressDeclaration)
 
 	enum jy_ast a[] = {
 		AST_ROOT,
-		AST_INGRESS_DECL, // ingress data {
-		AST_FIELD_SECT,	  //            field:
-		AST_FIELD_NAME,	  //                    yes
-		AST_NAME_DECL,	  //                    =
-		AST_STR_TYPE,	  //                    string
-		AST_FIELD_NAME,	  //                    no
-		AST_NAME_DECL,	  //                    =
-		AST_LONG_TYPE,	  //                    long
+		AST_INGRESS_DECL,
+		AST_FIELD_SECT,
+		AST_EVENT_MEMBER_NAME,
+		AST_EVENT_MEMBER_DECL,
+		AST_STR_TYPE,
+		AST_EVENT_MEMBER_NAME,
+		AST_EVENT_MEMBER_DECL,
+		AST_LONG_TYPE,
 	};
 
 	ASSERT_EQ(errs.size, 0);
@@ -87,15 +87,15 @@ TEST(ParserTest, RuleDeclaration)
 			   "\n"
 			   "      match:"
 			   "\n"
-			   "              $data.yes = \"hello\" "
+			   "              $data.yes <=> \"hello\" "
 			   "\n"
-			   "              $data.num = 3 "
+			   "              $data.num <=> 3 "
 			   "\n"
 			   "      condition:"
 			   "\n"
-			   "              1 = 2 or 1 > 3"
+			   "              1 == 2 or 1 > 3"
 			   "\n"
-			   "              1 < 2 and \"a\" = \"a\""
+			   "              1 < 2 and \"a\" == \"a\""
 			   "\n"
 			   "      target:"
 			   "\n"
@@ -114,44 +114,22 @@ TEST(ParserTest, RuleDeclaration)
 	jry_parse(src, sizeof(src), &asts, &tkns, &errs);
 
 	enum jy_ast expect[] = {
-		AST_ROOT,
-		AST_RULE_DECL,	    // rule something
-		AST_MATCH_SECT,	    //           match:
-		AST_EVENT,	    //                  $data
-		AST_FIELD,	    //                  .yes
-		AST_EQUALITY,	    //                  =
-		AST_STRING,	    //                  "hello"
-				    //
-		AST_EVENT,	    //                  $data
-		AST_FIELD,	    //                  .num
-		AST_EQUALITY,	    //                  =
-		AST_LONG,	    //                  3
-				    //
-		AST_CONDITION_SECT, //           cond:
-		AST_LONG,	    //                  1
-		AST_EQUALITY,	    //                  =
-		AST_LONG,	    //                  2
-		AST_OR,		    //                  or
-		AST_LONG,	    //                  1
-		AST_GREATER,	    //                  >
-		AST_LONG,	    //                  3
-				    //
-		AST_LONG,	    //                  1
-		AST_LESSER,	    //                  <
-		AST_LONG,	    //                  2
-		AST_AND,	    //                  and
-		AST_STRING,	    //                  "a"
-		AST_EQUALITY,	    //                  =
-		AST_STRING,	    //                  "a"
-				    //
-		AST_JUMP_SECT,	    //           target:
-		AST_NAME,	    //                  mark
-		AST_CALL,	    //                  .mark()
-		AST_EVENT,	    //                  $data
-		AST_FIELD,	    //                  .yes
+		AST_ROOT,     AST_RULE_DECL,	  AST_MATCH_SECT,
+		AST_EVENT,    AST_ACCESS,	  AST_EVENT,
+		AST_EXACT,    AST_STRING,	  AST_EVENT,
+		AST_ACCESS,   AST_EVENT,	  AST_EXACT,
+		AST_LONG,     AST_CONDITION_SECT, AST_LONG,
+		AST_EQUALITY, AST_LONG,		  AST_OR,
+		AST_LONG,     AST_GREATER,	  AST_LONG,
+		AST_LONG,     AST_LESSER,	  AST_LONG,
+		AST_AND,      AST_STRING,	  AST_EQUALITY,
+		AST_STRING,   AST_JUMP_SECT,	  AST_NAME,
+		AST_ACCESS,   AST_NAME,		  AST_CALL,
+		AST_EVENT,    AST_ACCESS,	  AST_EVENT
 	};
 
 	ASSERT_EQ(errs.size, 0);
+
 	ASSERT_EQ(asts.size, sizeof(expect) / sizeof(expect[0]));
 	ASSERT_EQ(memcmp(asts.types, expect, asts.size * sizeof(expect[0])), 0);
 

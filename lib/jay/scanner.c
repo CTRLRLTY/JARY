@@ -45,7 +45,10 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 		*type = TKN_RIGHT_PAREN;
 		goto FINISH;
 	case '=':
-		*type = TKN_EQUAL;
+		if (*current != '=')
+			break;
+		current += 1;
+		*type	 = TKN_EQUAL;
 		goto FINISH;
 	case '{':
 		*type = TKN_LEFT_BRACE;
@@ -54,7 +57,15 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 		*type = TKN_RIGHT_BRACE;
 		goto FINISH;
 	case '<':
-		*type = TKN_LESSTHAN;
+		if (memcmp(current, "=>", 2) == 0) {
+			*type	 = TKN_EXACT;
+			current += 2;
+		} else if (memcmp(current, "->", 2) == 0) {
+			*type	 = TKN_JOINX;
+			current += 2;
+		} else {
+			*type = TKN_LESSTHAN;
+		}
 		goto FINISH;
 	case '>':
 		*type = TKN_GREATERTHAN;
@@ -75,7 +86,13 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 		*type = TKN_STAR;
 		goto FINISH;
 	case '.':
-		*type = TKN_DOT;
+		if (*current == '.') {
+			*type	 = TKN_CONCAT;
+			current += 1;
+		} else {
+			*type = TKN_DOT;
+		}
+
 		goto FINISH;
 	case ',':
 		*type = TKN_COMMA;

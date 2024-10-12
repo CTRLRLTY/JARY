@@ -44,7 +44,7 @@ TEST(ScannerTest, ScanWhitespace)
 
 TEST(ScannerTest, ScanSymbol)
 {
-	char str[]	    = "(){}=~<>:,$";
+	char str[]	    = "(){}==~<>:,$";
 
 	enum jy_tkn types[] = {
 		// group
@@ -63,15 +63,14 @@ TEST(ScannerTest, ScanSymbol)
 		TKN_DOLLAR,
 	};
 
-	ASSERT_EQ(sizeof(str) - 1, sizeof(types) / sizeof(types[0]));
+	uint32_t length	  = sizeof(types) / sizeof(types[0]);
 
-	for (uint32_t i = 0; i < sizeof(str) - 1; ++i) {
+	const char *start = str;
+	for (uint32_t i = 0; i < length; ++i) {
 		enum jy_tkn type;
-		const char *start = str + i, *end = NULL;
-		end = jry_scan(start, sizeof(str) - i, &type);
+		start = jry_scan(start, sizeof(str), &type);
 
-		ASSERT_EQ(type, types[i]);
-		ASSERT_EQ(end - start, 1) << "i: " << i;
+		ASSERT_EQ(type, types[i]) << "i: " << i << " lexeme: " << start;
 	}
 }
 

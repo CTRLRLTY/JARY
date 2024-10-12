@@ -29,8 +29,7 @@ static const char *error_reason[ERROR_MSG_COUNT_LIMIT] = {
 };
 
 struct jy_module {
-	struct jy_defs		*def;
-	struct jy_obj_allocator *obj;
+	struct jy_defs *def;
 };
 
 typedef int (*loadfn_t)(struct jy_module *);
@@ -39,9 +38,7 @@ typedef int (*unloadfn_t)(struct jy_module *);
 #ifdef __unix__
 #	include <dlfcn.h>
 
-int jry_module_load(const char		    *path,
-		    struct jy_defs	    *def,
-		    struct jy_obj_allocator *object)
+int jry_module_load(const char *path, struct jy_defs *def)
 {
 	loadfn_t load;
 
@@ -69,7 +66,7 @@ int jry_module_load(const char		    *path,
 	if (jry_add_def(def, k, handle, JY_K_HANDLE) != 0)
 		goto DLOAD_ERROR;
 
-	struct jy_module ctx	= { .def = def, .obj = object };
+	struct jy_module ctx	= { .def = def };
 	int		 status = load(&ctx);
 
 	if (status != 0)
@@ -91,7 +88,8 @@ int jry_module_unload(struct jy_defs *def)
 	const char k[] = "__handle__";
 	uint32_t   nid;
 
-	assert(jry_find_def(def, k, &nid));
+	if (!jry_find_def(def, k, &nid))
+		goto FINISH;
 
 	handle = def->vals[nid];
 
@@ -105,7 +103,7 @@ int jry_module_unload(struct jy_defs *def)
 	if (unload == NULL)
 		goto CLOSE;
 
-	struct jy_module ctx = { .def = def, .obj = NULL };
+	struct jy_module ctx = { .def = def };
 	status		     = unload(&ctx);
 
 CLOSE: {
@@ -130,32 +128,45 @@ const char *jry_module_error(int errcode)
 #endif // __unix__
 
 // > user modules API
-int define_function(struct jy_module	*ctx,
-		    const char		*key,
-		    enum jy_ktype	 return_type,
-		    uint8_t		 param_size,
-		    const enum jy_ktype *param_types,
-		    jy_funcptr_t	 func)
+int def_func(struct jy_module	 *ctx,
+	     const char		 *key,
+	     enum jy_ktype	  return_type,
+	     uint8_t		  param_size,
+	     const enum jy_ktype *param_types,
+	     jy_funcptr_t	  func)
 {
-	struct jy_obj_func *ofunc = NULL;
-	uint32_t allocsz = sizeof(*ofunc) + sizeof(*param_types) * param_size;
-	ofunc		 = alloc_obj(allocsz, allocsz, ctx->obj);
+	union jy_value v;
 
-	if (ofunc == NULL)
+	size_t parambytes = sizeof(*param_types) * param_size;
+	size_t bytes	  = sizeof(*v.func) + parambytes;
+	v.func		  = jry_alloc(bytes);
+
+	if (v.func == NULL)
 		return TO_ERROR(MSG_UNKNOWN);
 
-	ofunc->return_type = return_type;
-	ofunc->param_size  = param_size;
-	ofunc->param_types = (void *) (ofunc + 1);
-	ofunc->func	   = func;
+	v.func->return_type = return_type;
+	v.func->param_size  = param_size;
+	v.func->func	    = func;
 
-	memcpy(ofunc->param_types, param_types,
-	       sizeof(*param_types) * param_size);
+	memcpy(v.func->param_types, param_types, parambytes);
 
-	union jy_value ofs = { .ofs = memory_offset(ctx->obj->buf, ofunc) };
-
-	if (jry_add_def(ctx->def, key, ofs, JY_K_FUNC) != 0)
+	if (jry_add_def(ctx->def, key, v, JY_K_FUNC) != 0)
 		return TO_ERROR(MSG_UNKNOWN);
+
+	return 0;
+}
+
+int del_func(struct jy_module *ctx, const char *key)
+{
+	uint32_t id;
+
+	if (!jry_find_def(ctx->def, key, &id))
+		return TO_ERROR(MSG_UNKNOWN);
+
+	if (ctx->def->types[id] != JY_K_FUNC)
+		return TO_ERROR(MSG_UNKNOWN);
+
+	jry_free(ctx->def->vals[id].func);
 
 	return 0;
 }

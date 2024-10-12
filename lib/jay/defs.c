@@ -133,6 +133,7 @@ int jry_add_def(struct jy_defs *tbl,
 
 	size_t length = strlen(key);
 
+	// TODO: return error if readding the same definition
 	find_entry(tbl, key, length, &id);
 
 	tbl->keys[id] = jry_alloc(length + 1);

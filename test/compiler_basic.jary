@@ -1,0 +1,16 @@
+import mark
+
+ingress data {
+       field:
+               yes == string
+               no == string
+}
+
+rule bye {
+       match:
+                $data.yes <=> "hello"
+       condition:
+               1 == 2 and 1 > 3
+       target:
+               mark.mark("hello")
+}

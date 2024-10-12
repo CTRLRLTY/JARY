@@ -1,5 +1,7 @@
 #include "jary/modules.h"
+#include "jary/object.h"
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -186,19 +188,20 @@ int module_load(struct jy_module *ctx)
 {
 	enum jy_ktype params = JY_K_STR;
 
-	define_function(ctx, "mark", JY_K_TARGET, 1, &params,
-			(jy_funcptr_t) mark);
-
-	define_function(ctx, "unmark", JY_K_TARGET, 1, &params,
-			(jy_funcptr_t) unmark);
-
-	define_function(ctx, "count", JY_K_LONG, 1, &params,
-			(jy_funcptr_t) count);
+	def_func(ctx, "mark", JY_K_TARGET, 1, &params, (jy_funcptr_t) mark);
+	def_func(ctx, "unmark", JY_K_TARGET, 1, &params, (jy_funcptr_t) unmark);
+	def_func(ctx, "count", JY_K_LONG, 1, &params, (jy_funcptr_t) count);
 
 	return 0;
 }
 
-int module_unload(void)
+int module_unload(struct jy_module *ctx)
 {
+	del_func(ctx, "mark");
+	del_func(ctx, "unmark");
+	del_func(ctx, "count");
+
+	free_table(marked);
+
 	return 0;
 }

@@ -1,10 +1,11 @@
+
 #include <gtest/gtest.h>
 
 extern "C" {
 #include "compiler.h"
 #include "exec.h"
 
-#include "jary/object.h"
+#include "jary/memory.h"
 }
 
 static size_t read_file(const char *path, char **dst)
@@ -37,33 +38,33 @@ static size_t read_file(const char *path, char **dst)
 
 TEST(ExecTest, MarkModule)
 {
-	union jy_value	key;
-	struct jy_asts	asts;
-	struct jy_tkns	tkns;
-	struct jy_errs	errs;
-	struct jy_jay	jay;
-	struct jy_defs *mark;
+	union jy_value	   key;
+	struct jy_obj_str *str;
 
-	memset(&asts, 0, sizeof(asts));
-	memset(&tkns, 0, sizeof(tkns));
-	memset(&errs, 0, sizeof(errs));
-	memset(&jay, 0, sizeof(jay));
+	struct jy_asts	asts  = { .tkns = NULL };
+	struct jy_tkns	tkns  = { .lexemes = NULL };
+	struct jy_errs	errs  = { .from = NULL };
+	struct jy_jay	jay   = { .codes = NULL };
+	struct sc_mem	alloc = { .buf = NULL };
+	struct jy_defs *mark  = NULL;
+	char	       *src   = NULL;
+	size_t		srcsz = read_file(MARK_MODULE_JARY_PATH, &src);
 
-	char  *src;
-	size_t srcsz	       = read_file(MARK_MODULE_JARY_PATH, &src);
+	str = (jy_obj_str *) sc_alloc(&alloc, sizeof(*str) + 6);
+	sc_reap(&alloc, src, free);
 
-	struct jy_obj_str *str = (jy_obj_str *) malloc(sizeof(*str) + 6);
-	str->size	       = 5;
+	str->size = 5;
+
 	strcpy(str->cstr, "hello");
-	key.str	 = str;
 
+	key.str	 = str;
 	jay.mdir = "../modules/";
 
-	jry_parse(src, srcsz, &asts, &tkns, &errs);
+	jry_parse(&alloc, &asts, &tkns, &errs, src, srcsz);
 
 	ASSERT_EQ(errs.size, 0);
 
-	jry_compile(&asts, &tkns, &jay, &errs);
+	jry_compile(&alloc, &jay, &errs, &asts, &tkns);
 
 	ASSERT_EQ(errs.size, 0);
 
@@ -113,7 +114,7 @@ TEST(ExecTest, MarkModule)
 		ASSERT_EQ(ofunc->func(1, &key, NULL), 0);
 	}
 
-	jry_exec(jay.vals, jay.codes, jay.codesz);
+	ASSERT_EQ(jry_exec(NULL, jay.vals, jay.codes, jay.codesz), 0);
 
 	{
 		uint32_t	    id;
@@ -129,9 +130,5 @@ TEST(ExecTest, MarkModule)
 		ASSERT_EQ(result.i64, 1);
 	}
 
-	jry_free_asts(asts);
-	jry_free_tkns(tkns);
-	jry_free_jay(jay);
-	free(src);
-	free(str);
+	sc_free(&alloc);
 }

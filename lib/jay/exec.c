@@ -1,11 +1,11 @@
 #include "exec.h"
 
 #include "compiler.h"
+#include "storage.h"
 
-#include "jary/error.h"
 #include "jary/memory.h"
-#include "jary/object.h"
 
+#include <assert.h>
 #include <sqlite3.h>
 #include <stdio.h>
 #include <string.h>
@@ -25,191 +25,55 @@ union flag8 {
 	} bits;
 };
 
-struct query {
-	const char *table;
-	const char *column;
-
-	union {
-		const char   *str;
-		struct query *Q;
-	} as;
-
-	enum {
-		Q_EXACT,
-		Q_JOIN,
-	} type;
-};
-
 struct stack {
 	union jy_value *values;
-	uint32_t	size;
-	uint32_t	capacity;
+	struct sb_mem	m;
+};
+
+// TODO: This is so ugly.... but im in a hurry.
+struct runtime {
+	struct sqlite3	     *db;
+	const union jy_value *vals;
+	struct stack	     *stack;
+	union flag8	     *flag;
+	const uint8_t	    **pc;
+	// runtime memory scratch
+	struct sc_mem	     *buf;
 };
 
 static inline bool push(struct stack *s, union jy_value value)
 {
-	const int growth = 10;
+	uint32_t idx = s->m.size / sizeof(value);
+	void	*mem = sb_alloc(&s->m, sizeof(value));
 
-	if (s->size + 1 >= s->capacity) {
-		int   newcap = (s->capacity + growth);
-		void *mem = jry_realloc(s->values, sizeof(*s->values) * newcap);
+	if (mem == NULL)
+		return true;
 
-		if (mem == NULL)
-			return true;
-
-		s->capacity = newcap;
-		s->values   = mem;
-	}
-
-	s->values[s->size]  = value;
-	s->size		   += 1;
+	s->values      = mem;
+	s->values[idx] = value;
 
 	return false;
-}
-
-static inline bool exists(const struct query *qs, int len, const struct query Q)
-{
-	for (int i = 0; i < len; ++i) {
-		if (strcmp(qs[i].table, Q.table))
-			continue;
-
-		if (strcmp(qs[i].column, Q.column) == 0)
-			return true;
-	}
-
-	return false;
-}
-
-static inline void querystr(char **sql, const struct query *qs, int qlen)
-{
-	struct sc_mem buf = { .buf = NULL };
-
-	struct query joins[qlen];
-	struct query exacts[qlen];
-	struct query uniq[qlen * 2];
-
-	int uniqsz  = 0;
-	int joinsz  = 0;
-	int exactsz = 0;
-
-	memset(joins, 0, sizeof(joins));
-	memset(exacts, 0, sizeof(exacts));
-	memset(uniq, 0, sizeof(uniq));
-
-	for (int i = 0; i < qlen; ++i) {
-		struct query Q = qs[i];
-
-		if (!exists(uniq, uniqsz, Q)) {
-			uniq[i]	 = Q;
-			uniqsz	+= 1;
-		}
-
-		switch (Q.type) {
-		case Q_EXACT:
-			exacts[i]  = Q;
-			exactsz	  += 1;
-			break;
-		case Q_JOIN:
-			joins[i]  = Q;
-			joinsz	 += 1;
-			break;
-		}
-	}
-
-	sc_strfmt(&buf, sql, "SELECT");
-
-	if (*sql == NULL)
-		goto OUT_OF_MEMORY;
-
-	for (int i = 0; i < uniqsz - 1; ++i) {
-		const char *t = uniq[i].table;
-		const char *c = uniq[i].column;
-
-		sc_strfmt(&buf, sql, "%s %s.%s,", *sql, t, c);
-
-		if (*sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	struct query Q = uniq[uniqsz - 1];
-
-	sc_strfmt(&buf, sql, "%s %s.%s", *sql, Q.table, Q.column);
-
-	if (*sql == NULL)
-		goto OUT_OF_MEMORY;
-
-	sc_strfmt(&buf, sql, "%s FROM", *sql);
-
-	if (*sql == NULL)
-		goto OUT_OF_MEMORY;
-
-	for (int i = 0; i < uniqsz - 1; ++i) {
-		const char *t = uniq[i].table;
-
-		sc_strfmt(&buf, sql, "%s %s,", *sql, t);
-
-		if (*sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	sc_strfmt(&buf, sql, "%s %s", *sql, Q.table, Q.column);
-
-	if (*sql == NULL)
-		goto OUT_OF_MEMORY;
-
-	sc_strfmt(&buf, sql, "%s WHERE", *sql);
-
-	if (*sql == NULL)
-		goto OUT_OF_MEMORY;
-
-	for (int i = 0; i < joinsz; ++i) {
-		struct query Q	= joins[i];
-		const char  *lt = Q.table;
-		const char  *lc = Q.column;
-		const char  *rt = Q.as.Q->table;
-		const char  *rc = Q.as.Q->column;
-
-		sc_strfmt(&buf, sql, "%s %s.%s = %s.%s,", *sql, lt, lc, rt, rc);
-
-		if (*sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	for (int i = 0; i < exactsz; ++i) {
-		struct query Q	= exacts[i];
-		const char  *lt = Q.table;
-		const char  *lc = Q.column;
-		const char  *r	= Q.as.str;
-
-		sc_strfmt(&buf, sql, "%s %s.%s = %s,", *sql, lt, lc, r);
-
-		if (*sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	int len		= strlen(*sql);
-	(*sql)[len - 1] = ';';
-	buf.back->buf	= NULL;
-	sc_free(buf);
-	return;
-OUT_OF_MEMORY:
-	*sql = NULL;
-	sc_free(buf);
 }
 
 static inline union jy_value pop(struct stack *s)
 {
-	jry_assert(s->size > 0);
+	uint32_t idx = s->m.size / sizeof(*s->values);
+	assert(idx > 0);
 
-	return s->values[--s->size];
+	s->m.size -= sizeof(*s->values);
+
+	return s->values[--idx];
 }
 
-static inline int interpret(const union jy_value *vals,
-			    struct stack	 *stack,
-			    union flag8		 *flag,
-			    const uint8_t	**code,
-			    struct sc_mem	 *rbuf)
+static inline int interpret(struct runtime ctx)
 {
+	struct sqlite3	     *db    = ctx.db;
+	const union jy_value *vals  = ctx.vals;
+	struct stack	     *stack = ctx.stack;
+	union flag8	     *flag  = ctx.flag;
+	const uint8_t	    **code  = ctx.pc;
+	struct sc_mem	     *rbuf  = ctx.buf;
+
 	const uint8_t *pc     = *code;
 	enum jy_opcode opcode = *pc;
 
@@ -286,20 +150,55 @@ static inline int interpret(const union jy_value *vals,
 		flag->bits.b8  = !flag->bits.b8;
 		pc	      += 1;
 		break;
+	case JY_OP_JOIN: {
+		struct jy_descriptor d2	    = pop(stack).dscptr;
+		struct jy_descriptor d1	    = pop(stack).dscptr;
+		struct jy_defs	    *event2 = vals[d2.name].def;
+		struct jy_defs	    *event1 = vals[d1.name].def;
+
+		uint32_t field2;
+		uint32_t field1;
+
+		assert(jry_find_def(event1, "__name__", &field1));
+		assert(jry_find_def(event2, "__name__", &field2));
+
+		struct QMjoin *Q = sc_alloc(rbuf, sizeof *Q);
+
+		if (Q == NULL)
+			goto OUT_OF_MEMORY;
+
+		Q->type	     = QM_JOIN;
+		Q->tbl_left  = event2->vals[field2].str->cstr;
+		Q->col_left  = event2->keys[d2.member];
+		Q->tbl_right = event1->vals[field1].str->cstr;
+		Q->col_right = event1->keys[d1.member];
+
+		union jy_value sql = { .handle = Q };
+
+		if (push(stack, sql))
+			goto OUT_OF_MEMORY;
+
+		pc += 1;
+		break;
+	}
 	case JY_OP_EXACT: {
 		struct jy_obj_str   *str    = pop(stack).str;
 		struct jy_descriptor dscptr = pop(stack).dscptr;
+		struct jy_defs	    *event  = vals[dscptr.name].def;
 
-		uint32_t	id;
-		struct jy_defs *event = vals[dscptr.name].def;
+		uint32_t field;
 
-		jry_assert(jry_find_def(event, "__name__", &id));
+		assert(jry_find_def(event, "__name__", &field));
 
-		struct query *Q	   = sc_alloc(rbuf, sizeof *Q);
-		Q->table	   = event->vals[id].str->cstr;
+		struct QMexact *Q = sc_alloc(rbuf, sizeof *Q);
+
+		if (Q == NULL)
+			goto OUT_OF_MEMORY;
+
+		Q->type		   = QM_EXACT;
+		Q->table	   = event->vals[field].str->cstr;
 		Q->column	   = event->keys[dscptr.member];
-		Q->type		   = Q_EXACT;
-		Q->as.str	   = str->cstr;
+		Q->value	   = str->cstr;
 		union jy_value sql = { .handle = Q };
 
 		if (push(stack, sql))
@@ -309,22 +208,20 @@ static inline int interpret(const union jy_value *vals,
 		break;
 	}
 	case JY_OP_QUERY: {
-		long	     qlen = pop(stack).i64;
-		struct query qs[qlen];
+		long	       qlen = pop(stack).i64;
+		struct QMbase *qs[qlen];
 
-		for (int i = 0; i < qlen; ++i) {
-			struct query *Q = pop(stack).handle;
-			qs[i]		= *Q;
+		for (int i = 0; i < qlen; ++i)
+			qs[i] = pop(stack).handle;
+
+		struct Qmatch Q = { .qlen = qlen, .qlist = qs };
+
+		switch (q_match(db, Q)) {
+		case -1:
+			goto OUT_OF_MEMORY;
+		case -2:
+			goto QUERY_FAILED;
 		}
-
-		char *sql;
-		querystr(&sql, qs, qlen);
-
-		if (sql == NULL)
-			goto OUT_OF_MEMORY;
-
-		if (sc_move(rbuf, (void **) &sql) == NULL)
-			goto OUT_OF_MEMORY;
 
 		pc += 1;
 		break;
@@ -332,36 +229,37 @@ static inline int interpret(const union jy_value *vals,
 	case JY_OP_CMPSTR: {
 		struct jy_obj_str *v2 = pop(stack).str;
 		struct jy_obj_str *v1 = pop(stack).str;
-		flag->bits.b8	      = *v1->cstr == *v2->cstr &&
-				memcmp(v1->cstr, v2->cstr, v1->size) == 0;
+		const char	  *s2 = v2->cstr;
+		const char	  *s1 = v1->cstr;
+
+		flag->bits.b8  = *s1 == *s2 && memcmp(s1, s2, v1->size) == 0;
+		pc	      += 1;
+		break;
+	}
+	case JY_OP_CMP: {
+		long v2	      = pop(stack).i64;
+		long v1	      = pop(stack).i64;
+		flag->bits.b8 = v1 == v2;
 
 		pc += 1;
 		break;
 	}
-	case JY_OP_CMP: {
-		long v2	       = pop(stack).i64;
-		long v1	       = pop(stack).i64;
-		flag->bits.b8  = v1 == v2;
-
-		pc	      += 1;
-		break;
-	}
 	case JY_OP_LT: {
-		long v2	       = pop(stack).i64;
-		long v1	       = pop(stack).i64;
+		long v2 = pop(stack).i64;
+		long v1 = pop(stack).i64;
 
-		flag->bits.b8  = v1 < v2;
+		flag->bits.b8 = v1 < v2;
 
-		pc	      += 1;
+		pc += 1;
 		break;
 	}
 	case JY_OP_GT: {
-		long v2	       = pop(stack).i64;
-		long v1	       = pop(stack).i64;
+		long v2 = pop(stack).i64;
+		long v1 = pop(stack).i64;
 
-		flag->bits.b8  = v1 > v2;
+		flag->bits.b8 = v1 > v2;
 
-		pc	      += 1;
+		pc += 1;
 		break;
 	}
 	case JY_OP_ADD: {
@@ -410,7 +308,7 @@ static inline int interpret(const union jy_value *vals,
 		struct jy_obj_str *v2 = pop(stack).str;
 		struct jy_obj_str *v1 = pop(stack).str;
 
-		size_t strsz	      = v2->size + v1->size;
+		size_t strsz = v2->size + v1->size;
 		char   buf[strsz + 1];
 
 		strcpy(buf, v1->cstr);
@@ -433,34 +331,54 @@ static inline int interpret(const union jy_value *vals,
 	}
 
 	// PC is not moving...
-	jry_assert(pc != *code);
+	assert(pc != *code);
 	*code = pc;
 	return 0;
 
 OUT_OF_MEMORY:
-	return 1;
+	return -1;
+QUERY_FAILED:
+	return -2;
 }
 
-int jry_exec(const union jy_value *vals, const uint8_t *codes, uint32_t codesz)
+int jry_exec(struct sqlite3	  *db,
+	     const union jy_value *vals,
+	     const uint8_t	  *codes,
+	     uint32_t		   codesz)
 {
-	struct stack   stack = { .values = NULL };
-	union flag8    flag  = { .flag = 0 };
-	int	       res   = 0;
 	const uint8_t *pc    = codes;
 	const uint8_t *end   = &codes[codesz - 1];
+	struct stack   stack = { .values = NULL };
+	union flag8    flag  = { .flag = 0 };
+	struct sc_mem  rbuf  = { .buf = NULL };
+	struct runtime ctx   = { .db	= db,
+				 .vals	= vals,
+				 .stack = &stack,
+				 .flag	= &flag,
+				 .pc	= &pc,
+				 .buf	= &rbuf };
 
-	// runtime object buffer
-	struct sc_mem rbuf   = { .buf = NULL };
+	sc_reap(&rbuf, &stack.m, (free_t) sb_free);
 
 	for (; end - pc > 0;) {
-		res = interpret(vals, &stack, &flag, &pc, &rbuf);
-
-		if (res != 0)
-			break;
+		switch (interpret(ctx)) {
+		case 0:
+			continue;
+		case -1:
+			goto OUT_OF_MEMORY;
+		default:
+			goto EXEC_FAIL;
+		}
 	}
 
-	sc_free(rbuf);
-	jry_free(stack.values);
+	sc_free(&rbuf);
+	return 0;
 
-	return res;
+OUT_OF_MEMORY:
+	sc_free(&rbuf);
+	return -1;
+
+EXEC_FAIL:
+	sc_free(&rbuf);
+	return -2;
 }

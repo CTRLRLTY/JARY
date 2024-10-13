@@ -54,6 +54,20 @@ union jy_value {
 
 typedef int (*jy_funcptr_t)(int, union jy_value *, union jy_value *);
 
+struct jy_obj_str {
+	// size does not include '\0'
+	uint32_t size;
+	// null terminated string
+	char	 cstr[];
+};
+
+struct jy_obj_func {
+	enum jy_ktype return_type;
+	uint8_t	      param_size;
+	jy_funcptr_t  func;
+	enum jy_ktype param_types[];
+};
+
 #ifndef __cplusplus
 // Just for clarity
 _Static_assert(sizeof(union jy_value) == 8, "Values must be 8 bytes");

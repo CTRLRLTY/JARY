@@ -1,152 +1,252 @@
 #include "storage.h"
 
+#include "jary/memory.h"
+
+#include <assert.h>
+#include <sqlite3.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-int jry_sqlstr_crt_event(const char	     *name,
-			 unsigned short	      colsz,
-			 char *const	     *columns,
-			 const enum jy_ktype *types,
-			 char		    **sql)
+#define TYPE_MASK 0xf
+
+static inline bool exists(int			length,
+			  const struct QMbase **qlist,
+			  const struct QMbase  *Q)
 {
-	char *buf = NULL;
-	asprintf(sql, "CREATE TABLE IF NOT EXISTS %s (", name);
-
-	if (*sql == NULL)
-		goto OUT_OF_MEMORY;
-
-	buf = *sql;
-
-	for (unsigned short i = 0; i < colsz; ++i) {
-		const char *type = NULL;
-
-		switch (types[i]) {
-		case JY_K_LONG:
-			type = "INTEGER";
-			break;
-		case JY_K_STR:
-			type = "TEXT";
-			break;
-		default:
-			continue;
-		}
-
-		const char *key = columns[i];
-
-		if (strcmp(key, "__name__") == 0)
+	for (int i = 0; i < length; ++i) {
+		if (strcmp(qlist[i]->table, Q->table))
 			continue;
 
-		asprintf(sql, "%s%s %s,", buf, key, type);
-
-		if (*sql == NULL)
-			goto OUT_OF_MEMORY;
-
-		free(buf);
-		buf = *sql;
+		if (strcmp(qlist[i]->column, Q->column) == 0)
+			return true;
 	}
 
-	size_t len = strlen(buf);
-
-	if (buf[len - 1] != ',')
-		goto INVALID_TABLE;
-
-	buf[len - 1] = ')';
-
-	asprintf(sql, "%s;", buf);
-
-	if (sql == NULL)
-		goto OUT_OF_MEMORY;
-
-	free(buf);
-	return 0;
-
-OUT_OF_MEMORY:
-	free(buf);
-	return 1;
-
-INVALID_TABLE:
-	free(buf);
-	return 2;
+	return false;
 }
 
-int jry_sqlstr_ins_event(const char    *name,
-			 unsigned short colsz,
-			 char *const   *columns,
-			 char	      **sql)
+int q_match(struct sqlite3 *db, struct Qmatch Q)
 {
-	char *buf = NULL;
-	asprintf(sql, "INSERT INTO %s (", name);
+	struct sc_mem buf    = { .buf = NULL };
 
-	if (*sql == NULL)
-		goto OUT_OF_MEMORY;
+	int		qlen = Q.qlen;
+	struct QMbase **qs   = Q.qlist;
 
-	buf = *sql;
+	char		     *sql;
+	const struct QMjoin  *joins[qlen];
+	const struct QMexact *exacts[qlen];
+	const struct QMbase  *uniq[qlen];
 
-	for (unsigned short i = 0; i < colsz; ++i) {
-		const char *key = columns[i];
+	int uniqsz  = 0;
+	int joinsz  = 0;
+	int exactsz = 0;
 
-		if (key == NULL)
-			continue;
+	memset(joins, 0, sizeof(joins));
+	memset(exacts, 0, sizeof(exacts));
+	memset(uniq, 0, sizeof(uniq));
 
-		if (strcmp(key, "__name__") == 0)
-			continue;
+	for (int i = 0; i < qlen; ++i) {
+		const struct QMbase *Q = qs[i];
 
-		asprintf(sql, "%s%s,", buf, key);
+		if (!exists(uniqsz, uniq, Q)) {
+			uniq[i]	 = Q;
+			uniqsz	+= 1;
+		}
 
-		if (*sql == NULL)
-			goto OUT_OF_MEMORY;
-
-		free(buf);
-		buf = *sql;
+		switch (Q->type) {
+		case QM_EXACT:
+			exacts[i]  = (struct QMexact *) Q;
+			exactsz	  += 1;
+			break;
+		case QM_JOIN:
+			joins[i]  = (struct QMjoin *) Q;
+			joinsz	 += 1;
+			break;
+		}
 	}
 
-	size_t len = strlen(buf);
+	assert(joinsz > 0 || exactsz > 0);
 
-	if (buf[len - 1] != ',')
-		goto INVALID_TABLE;
-
-	buf[len - 1] = ')';
-
-	asprintf(sql, "%s VALUES (", buf);
+	sc_strfmt(&buf, &sql, "SELECT");
 
 	if (sql == NULL)
 		goto OUT_OF_MEMORY;
 
-	free(buf);
-	buf = *sql;
+	for (int i = 0; i < uniqsz; ++i) {
+		const char *t = uniq[i]->table;
+		const char *c = uniq[i]->column;
 
-	for (unsigned short i = 0; i < colsz; ++i) {
-		const char *key = columns[i];
+		if (i + 1 > uniqsz)
+			sc_strfmt(&buf, &sql, "%s %s.%s,", sql, t, c);
+		else
+			sc_strfmt(&buf, &sql, "%s %s.%s FROM", sql, t, c);
 
-		if (key == NULL)
-			continue;
-
-		asprintf(sql, "%s?,", buf);
-
-		if (*sql == NULL)
+		if (sql == NULL)
 			goto OUT_OF_MEMORY;
-
-		free(buf);
-		buf = *sql;
 	}
 
-	len	     = strlen(buf);
-	buf[len - 1] = ')';
+	for (int i = 0; i < uniqsz; ++i) {
+		const char *t = uniq[i]->table;
 
-	asprintf(sql, "%s;", buf);
+		if (i + 1 > uniqsz)
+			sc_strfmt(&buf, &sql, "%s %s,", sql, t);
+		else
+			sc_strfmt(&buf, &sql, "%s %s WHERE", sql, t);
 
-	if (sql == NULL)
-		goto OUT_OF_MEMORY;
+		if (sql == NULL)
+			goto OUT_OF_MEMORY;
+	}
 
-	free(buf);
+	for (int i = 0; i < joinsz; ++i) {
+		const struct QMjoin *Q	 = joins[i];
+		const char	    *lt	 = Q->tbl_left;
+		const char	    *lc	 = Q->col_left;
+		const char	    *rt	 = Q->tbl_right;
+		const char	    *rc	 = Q->col_right;
+		char		    *fmt = "%s %s.%s = %s.%s,";
+
+		sc_strfmt(&buf, &sql, fmt, sql, lt, lc, rt, rc);
+
+		if (sql == NULL)
+			goto OUT_OF_MEMORY;
+	}
+
+	if (exactsz == 0)
+		goto CLOSE;
+
+	for (int i = 0; i < exactsz; ++i) {
+		const struct QMexact *Q	 = exacts[i];
+		const char	     *lt = Q->table;
+		const char	     *lc = Q->column;
+		const char	     *r	 = Q->value;
+
+		// TODO: potential SQL injection? maybe later...
+		sc_strfmt(&buf, &sql, "%s %s.%s = \"%s\",", sql, lt, lc, r);
+
+		if (sql == NULL)
+			goto OUT_OF_MEMORY;
+	}
+
+CLOSE: {
+	uint32_t sz = strlen(sql);
+	sql[sz - 1] = ';';
+}
+
+	if (sqlite3_exec(db, sql, Q.callback, NULL, NULL) != SQLITE_OK)
+		goto TX_FAILED;
+
+	sc_free(&buf);
 	return 0;
-
 OUT_OF_MEMORY:
-	free(buf);
-	return 1;
+	sc_free(&buf);
+	return -1;
+TX_FAILED:
+	sc_free(&buf);
+	return -2;
+}
 
-INVALID_TABLE:
-	free(buf);
-	return 2;
+int q_create(struct sqlite3 *db, struct Qcreate Q)
+{
+	const char  *name    = Q.table;
+	int	     length  = Q.colsz;
+	const char **columns = Q.columns;
+	int	    *cflags  = Q.flags;
+
+	struct sc_mem buf    = { .buf = NULL };
+
+	char *sql;
+	sc_strfmt(&buf, &sql, "CREATE TABLE IF NOT EXISTS %s (", name);
+
+	if (sql == NULL)
+		goto OUT_OF_MEMORY;
+
+	for (int i = 0; i < length; ++i) {
+		const char *c	 = columns[i];
+		int	    f	 = cflags[i];
+		int	    type = f & TYPE_MASK;
+
+		char *tstr;
+
+		switch (type) {
+		case Q_COL_INT:
+			tstr = "INTEGER";
+			break;
+		case Q_COL_STR:
+		default:
+			tstr = "TEXT";
+		}
+
+		if (i + 1 > length)
+			sc_strfmt(&buf, &sql, "%s %s %s,", sql, c, tstr);
+		else
+			sc_strfmt(&buf, &sql, "%s %s %s);", sql, c, tstr);
+
+		if (sql == NULL)
+			goto OUT_OF_MEMORY;
+	}
+
+	if (sqlite3_exec(db, sql, NULL, NULL, NULL) != SQLITE_OK)
+		goto TX_FAILED;
+
+	sc_free(&buf);
+	return 0;
+OUT_OF_MEMORY:
+	sc_free(&buf);
+	return -1;
+TX_FAILED:
+	sc_free(&buf);
+	return -2;
+}
+
+int q_insert(struct sqlite3 *db, struct Qinsert Q)
+{
+	const char   *name    = Q.table;
+	int	      length  = Q.colsz;
+	const char  **columns = Q.columns;
+	const char  **values  = Q.values;
+	struct sc_mem buf     = { .buf = NULL };
+	char	     *sql     = NULL;
+
+	sc_strfmt(&buf, &sql, "INSERT INTO %s (", name);
+
+	if (sql == NULL)
+		goto OUT_OF_MEMORY;
+
+	for (int i = 0; i < length; ++i) {
+		if (i + 1 > length)
+			sc_strfmt(&buf, &sql, "%s %s,", sql, columns[i]);
+		else
+			sc_strfmt(&buf, &sql, "%s %s)", sql, columns[i]);
+
+		if (sql == NULL)
+			goto OUT_OF_MEMORY;
+	}
+
+	sc_strfmt(&buf, &sql, "%s VALUES(");
+
+	if (sql == NULL)
+		goto OUT_OF_MEMORY;
+
+	for (int i = 0; i < length; ++i) {
+		if (i + 1 > length)
+			sc_strfmt(&buf, &sql, "%s %s,", sql, values[i]);
+		else
+			sc_strfmt(&buf, &sql, "%s %s);", sql, values[i]);
+
+		if (sql == NULL)
+			goto OUT_OF_MEMORY;
+	}
+
+	if (sqlite3_exec(db, sql, NULL, NULL, NULL) != SQLITE_OK)
+		goto TX_FAILED;
+
+	sc_free(&buf);
+	return 0;
+OUT_OF_MEMORY:
+	sc_free(&buf);
+	return -1;
+TX_FAILED:
+	sc_free(&buf);
+	return -2;
 }

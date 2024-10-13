@@ -1,7 +1,10 @@
+
 #include <gtest/gtest.h>
 
 extern "C" {
 #include "compiler.h"
+
+#include "jary/memory.h"
 }
 
 static size_t read_file(const char *path, char **dst)
@@ -34,23 +37,21 @@ static size_t read_file(const char *path, char **dst)
 
 TEST(CompilerTest, Basic)
 {
-	char  *src;
-	size_t srcsz = read_file(BASIC_JARY_PATH, &src);
+	char *src	     = NULL;
 
-	struct jy_asts asts;
-	struct jy_tkns tkns;
-	struct jy_errs errs;
-	struct jy_jay  ctx;
+	struct jy_asts asts  = { .tkns = NULL };
+	struct jy_tkns tkns  = { .lexemes = NULL };
+	struct jy_errs errs  = { .msgs = NULL };
+	struct jy_jay  ctx   = { .codes = NULL };
+	struct sc_mem  alloc = { .buf = NULL };
+	size_t	       srcsz = read_file(BASIC_JARY_PATH, &src);
 
-	memset(&asts, 0, sizeof(asts));
-	memset(&tkns, 0, sizeof(tkns));
-	memset(&errs, 0, sizeof(errs));
-	memset(&ctx, 0, sizeof(ctx));
+	sc_reap(&alloc, src, free);
 
 	ctx.mdir = "../modules/";
 
-	jry_parse(src, srcsz, &asts, &tkns, &errs);
-	jry_compile(&asts, &tkns, &ctx, &errs);
+	jry_parse(&alloc, &asts, &tkns, &errs, src, srcsz);
+	jry_compile(&alloc, &ctx, &errs, &asts, &tkns);
 
 	// clang-format off
 	uint8_t codes[] = {
@@ -84,7 +85,5 @@ TEST(CompilerTest, Basic)
 	for (size_t i = 0; i < sizeof(codes); ++i)
 		ASSERT_EQ(ctx.codes[i], codes[i]) << "codes[" << i << "]";
 
-	jry_free_asts(asts);
-	jry_free_tkns(tkns);
-	jry_free_jay(ctx);
+	sc_free(&alloc);
 }

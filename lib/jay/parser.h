@@ -6,11 +6,14 @@
 
 #include <stdint.h>
 
+struct sc_mem;
+
 struct jy_errs {
-	const char **msgs;
-	uint32_t    *from;
-	uint32_t    *to;
-	uint32_t     size;
+	const char   **msgs;
+	uint32_t      *from;
+	uint32_t      *to;
+	struct su_mem *m;
+	uint32_t       size;
 };
 
 struct jy_asts {
@@ -35,19 +38,16 @@ struct jy_tkns {
 	uint32_t     size;
 };
 
-void jry_parse(const char     *src,
-	       uint32_t	       length,
+void jry_parse(struct sc_mem  *alloc,
 	       struct jy_asts *ast,
 	       struct jy_tkns *tkns,
-	       struct jy_errs *errs);
+	       struct jy_errs *errs,
+	       const char     *src,
+	       uint32_t	       length);
 
 int jry_push_error(struct jy_errs *errs,
 		   const char	  *msg,
 		   uint32_t	   from,
 		   uint32_t	   to);
-
-void jry_free_asts(struct jy_asts asts);
-void jry_free_tkns(struct jy_tkns tkns);
-void jry_free_errs(struct jy_errs errs);
 
 #endif // JAYVM_PARSER_H

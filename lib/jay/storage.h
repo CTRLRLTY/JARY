@@ -1,22 +1,61 @@
-#ifndef JAYVM_EXEC_H
-#define JAYVM_EXEC_H
+// THESE ARE SUCH A BAD IMPLEMENTATION, BUT IM STRAPPED FOR TIME!!!
 
-#include "jary/types.h"
+#ifndef JAYVM_Q_H
+#define JAYVM_Q_H
 
-#include <stdint.h>
+#define Q_COL_INT 0x1
+#define Q_COL_STR 0x2
 
-struct jy_asts;
-struct jy_tkns;
+struct sqlite3;
 
-int jry_sqlstr_crt_event(const char	     *name,
-			 unsigned short	      colsz,
-			 char *const	     *columns,
-			 const enum jy_ktype *types,
-			 char		    **sql);
+enum QMtag {
+	QM_EXACT,
+	QM_JOIN,
+};
 
-int jry_sqlstr_ins_event(const char    *name,
-			 unsigned short colsz,
-			 char *const   *columns,
-			 char	      **sql);
+struct QMbase {
+	enum QMtag  type;
+	const char *table;
+	const char *column;
+};
 
-#endif // JAYVM_EXEC_H
+struct QMexact {
+	enum QMtag  type;
+	const char *table;
+	const char *column;
+	const char *value;
+};
+
+struct QMjoin {
+	enum QMtag  type;
+	const char *tbl_left;
+	const char *col_left;
+	const char *tbl_right;
+	const char *col_right;
+};
+
+struct Qmatch {
+	int		qlen;
+	struct QMbase **qlist;
+	int (*callback)(void *, int, char **, char **);
+};
+
+struct Qcreate {
+	int	     colsz;
+	const char  *table;
+	const char **columns;
+	int	    *flags;
+};
+
+struct Qinsert {
+	int	     colsz;
+	const char  *table;
+	const char **columns;
+	const char **values;
+};
+
+int q_match(struct sqlite3 *db, struct Qmatch Q);
+int q_create(struct sqlite3 *db, struct Qcreate Q);
+int q_insert(struct sqlite3 *db, struct Qinsert Q);
+
+#endif // JAYVM_Q_H

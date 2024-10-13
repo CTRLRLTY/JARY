@@ -175,8 +175,8 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 		(void) NEXT();
 
 #define KEYWORD(__base, __target, __len)                                       \
-	(memcmp((__base), (__target), (__len)) == 0 &&                         \
-	 current == (__base) + (__len))
+	(memcmp((__base), (__target), (__len)) == 0                            \
+	 && current == (__base) + (__len))
 
 	switch (start[0]) {
 	case 'a':

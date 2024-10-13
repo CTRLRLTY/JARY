@@ -34,6 +34,8 @@ enum jy_opcode {
 	JY_OP_END
 };
 
+struct sc_mem;
+
 struct jy_jay {
 	// module dirpath
 	const char     *mdir;
@@ -48,11 +50,10 @@ struct jy_jay {
 	uint16_t	valsz;
 };
 
-void jry_compile(const struct jy_asts *asts,
-		 const struct jy_tkns *tkns,
+void jry_compile(struct sc_mem	      *alloc,
 		 struct jy_jay	      *ctx,
-		 struct jy_errs	      *errs);
-
-void jry_free_jay(struct jy_jay ctx);
+		 struct jy_errs	      *errs,
+		 const struct jy_asts *asts,
+		 const struct jy_tkns *tkns);
 
 #endif // JAYVM_COMPILER_H

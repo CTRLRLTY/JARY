@@ -3,9 +3,9 @@
 #include "scanner.h"
 
 #include "jary/common.h"
-#include "jary/error.h"
 #include "jary/memory.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -96,7 +96,7 @@ static bool _expression(struct parser  *p,
 			struct jy_errs *errs,
 			uint32_t       *topast);
 
-__use_result static inline int push_ast(struct jy_asts *asts,
+static inline __use_result int push_ast(struct jy_asts *asts,
 					enum jy_ast	type,
 					uint32_t	tkn,
 					uint32_t       *id)
@@ -107,36 +107,36 @@ __use_result static inline int push_ast(struct jy_asts *asts,
 	jry_mem_push(asts->childsz, asts->size, 0);
 
 	if (asts->childsz == NULL)
-		return ERROR_NOMEM;
+		return -1;
 
 	if (id != NULL)
 		*id = asts->size;
 
 	asts->size += 1;
 
-	return ERROR_SUCCESS;
+	return 0;
 }
 
 static inline void pop_ast(struct jy_asts *asts)
 {
-	jry_assert(asts->size > 0);
+	assert(asts->size > 0);
 
 	uint32_t   id	 = asts->size - 1;
 	uint32_t **child = &asts->child[id];
 
 	jry_free(*child);
 
-	*child	    = NULL;
+	*child = NULL;
 
 	asts->size -= 1;
 }
 
-__use_result static inline int push_child(struct jy_asts *asts,
+static inline __use_result int push_child(struct jy_asts *asts,
 					  uint32_t	  astid,
 					  uint32_t	  childid)
 {
-	jry_assert(asts->size > astid);
-	jry_assert(asts->size > childid);
+	assert(asts->size > astid);
+	assert(asts->size > childid);
 
 	uint32_t **child   = &asts->child[astid];
 	uint32_t  *childsz = &asts->childsz[astid];
@@ -145,23 +145,26 @@ __use_result static inline int push_child(struct jy_asts *asts,
 		*child = jry_alloc(sizeof(**child));
 
 		if (*child == NULL)
-			return ERROR_NOMEM;
+			goto OUT_OF_MEMORY;
 
 	} else {
 		uint32_t degree = *childsz + 1;
 		*child		= jry_realloc(*child, sizeof(**child) * degree);
 
 		if (*child == NULL)
-			return ERROR_NOMEM;
+			goto OUT_OF_MEMORY;
 	}
 
 	(*child)[*childsz]  = childid;
 	*childsz	   += 1;
 
-	return ERROR_SUCCESS;
+	return 0;
+
+OUT_OF_MEMORY:
+	return -1;
 }
 
-__use_result static inline int push_tkn(struct jy_tkns *tkns,
+static inline __use_result int push_tkn(struct jy_tkns *tkns,
 					enum jy_tkn	type,
 					uint32_t	line,
 					uint32_t	ofs,
@@ -175,11 +178,11 @@ __use_result static inline int push_tkn(struct jy_tkns *tkns,
 	jry_mem_push(tkns->lexsz, tkns->size, lexsz);
 
 	if (tkns->lexsz == NULL)
-		return ERROR_NOMEM;
+		return -1;
 
 	tkns->size += 1;
 
-	return ERROR_SUCCESS;
+	return 0;
 }
 
 static inline bool ended(const enum jy_tkn *types, uint32_t length)
@@ -207,8 +210,8 @@ static inline void next(struct jy_tkns *tkns,
 	const char *end	  = jry_scan(start, *srcsz, &type);
 	uint32_t    read  = end - start;
 
-	*src		  = end;
-	*srcsz		  = (*srcsz > read) ? *srcsz - read : 0;
+	*src   = end;
+	*srcsz = (*srcsz > read) ? *srcsz - read : 0;
 
 	uint32_t lexsz;
 	char	*lex;
@@ -697,9 +700,9 @@ static bool _binary(struct parser  *p,
 		    struct jy_errs *errs,
 		    uint32_t	   *root)
 {
-	uint32_t left	    = *root;
-	uint32_t right	    = 0;
-	uint32_t optkn	    = p->tkn;
+	uint32_t left  = *root;
+	uint32_t right = 0;
+	uint32_t optkn = p->tkn;
 
 	enum jy_tkn  optype = tkns->types[p->tkn];
 	struct rule *oprule = rule(optype);
@@ -1185,10 +1188,10 @@ PANIC:
 	return true;
 }
 
-__use_result static int _entry(struct parser  *p,
-			       struct jy_asts *asts,
-			       struct jy_tkns *tkns,
-			       struct jy_errs *errs)
+static int _entry(struct parser	 *p,
+		  struct jy_asts *asts,
+		  struct jy_tkns *tkns,
+		  struct jy_errs *errs)
 {
 	uint32_t roottkn = tkns->size;
 	int	 status	 = push_tkn(tkns, TKN_NONE, 0, 0, NULL, 0);
@@ -1230,43 +1233,43 @@ __use_result static int _entry(struct parser  *p,
 			next(tkns, &p->src, &p->srcsz, &p->tkn);
 	}
 
-	return ERROR_SUCCESS;
+	return 0;
 }
 
 static struct rule rules[TOTAL_TKN_TYPES] = {
-	[TKN_ERR]	  = { _err, NULL, PREC_NONE },
-	[TKN_ERR_STR]	  = { _err_str, NULL, PREC_NONE },
+	[TKN_ERR]     = { _err, NULL, PREC_NONE },
+	[TKN_ERR_STR] = { _err_str, NULL, PREC_NONE },
 
-	[TKN_LEFT_PAREN]  = { _grouping, _call, PREC_CALL },
-	[TKN_DOT]	  = { NULL, _dot, PREC_CALL },
+	[TKN_LEFT_PAREN] = { _grouping, _call, PREC_CALL },
+	[TKN_DOT]	 = { NULL, _dot, PREC_CALL },
 
-	[TKN_TILDE]	  = { NULL, _tilde, PREC_LAST },
+	[TKN_TILDE] = { NULL, _tilde, PREC_LAST },
 
-	[TKN_PLUS]	  = { NULL, _binary, PREC_TERM },
-	[TKN_CONCAT]	  = { NULL, _binary, PREC_TERM },
-	[TKN_MINUS]	  = { NULL, _binary, PREC_TERM },
-	[TKN_SLASH]	  = { NULL, _binary, PREC_FACTOR },
-	[TKN_STAR]	  = { NULL, _binary, PREC_FACTOR },
+	[TKN_PLUS]   = { NULL, _binary, PREC_TERM },
+	[TKN_CONCAT] = { NULL, _binary, PREC_TERM },
+	[TKN_MINUS]  = { NULL, _binary, PREC_TERM },
+	[TKN_SLASH]  = { NULL, _binary, PREC_FACTOR },
+	[TKN_STAR]   = { NULL, _binary, PREC_FACTOR },
 
-	[TKN_JOINX]	  = { NULL, _binary, PREC_CALL - 1 },
-	[TKN_EXACT]	  = { NULL, _binary, PREC_EQUALITY },
+	[TKN_JOINX] = { NULL, _binary, PREC_CALL - 1 },
+	[TKN_EXACT] = { NULL, _binary, PREC_EQUALITY },
 
 	[TKN_EQUAL]	  = { NULL, _binary, PREC_EQUALITY },
 	[TKN_LESSTHAN]	  = { NULL, _binary, PREC_COMPARISON },
 	[TKN_GREATERTHAN] = { NULL, _binary, PREC_COMPARISON },
 
-	[TKN_AND]	  = { NULL, _binary, PREC_AND },
-	[TKN_OR]	  = { NULL, _binary, PREC_OR },
+	[TKN_AND] = { NULL, _binary, PREC_AND },
+	[TKN_OR]  = { NULL, _binary, PREC_OR },
 
-	[TKN_NOT]	  = { _not, NULL, PREC_NONE },
+	[TKN_NOT] = { _not, NULL, PREC_NONE },
 
-	[TKN_STRING]	  = { _literal, NULL, PREC_NONE },
-	[TKN_NUMBER]	  = { _literal, NULL, PREC_NONE },
-	[TKN_FALSE]	  = { _literal, NULL, PREC_NONE },
-	[TKN_TRUE]	  = { _literal, NULL, PREC_NONE },
+	[TKN_STRING] = { _literal, NULL, PREC_NONE },
+	[TKN_NUMBER] = { _literal, NULL, PREC_NONE },
+	[TKN_FALSE]  = { _literal, NULL, PREC_NONE },
+	[TKN_TRUE]   = { _literal, NULL, PREC_NONE },
 
-	[TKN_IDENTIFIER]  = { _name, NULL, PREC_NONE },
-	[TKN_DOLLAR]	  = { _event, NULL, PREC_NONE },
+	[TKN_IDENTIFIER] = { _name, NULL, PREC_NONE },
+	[TKN_DOLLAR]	 = { _event, NULL, PREC_NONE },
 };
 
 static inline struct rule *rule(enum jy_tkn type)
@@ -1274,22 +1277,58 @@ static inline struct rule *rule(enum jy_tkn type)
 	return &rules[type];
 }
 
-void jry_parse(const char     *src,
-	       uint32_t	       length,
-	       struct jy_asts *asts,
+void free_asts(struct jy_asts *asts)
+{
+	jry_free(asts->types);
+	jry_free(asts->tkns);
+
+	for (uint32_t i = 0; i < asts->size; ++i)
+		jry_free(asts->child[i]);
+
+	jry_free(asts->child);
+	jry_free(asts->childsz);
+}
+
+void free_tkns(struct jy_tkns *tkns)
+{
+	jry_free(tkns->types);
+	jry_free(tkns->lines);
+	jry_free(tkns->ofs);
+
+	for (uint32_t i = 0; i < tkns->size; ++i)
+		jry_free(tkns->lexemes[i]);
+
+	jry_free(tkns->lexemes);
+	jry_free(tkns->lexsz);
+}
+
+void free_errs(struct jy_errs *errs)
+{
+	jry_free(errs->msgs);
+	jry_free(errs->from);
+	jry_free(errs->to);
+}
+
+void jry_parse(struct sc_mem  *alloc,
+	       struct jy_asts *ast,
 	       struct jy_tkns *tkns,
-	       struct jy_errs *errs)
+	       struct jy_errs *errs,
+	       const char     *src,
+	       uint32_t	       length)
 {
 	struct parser p = {
 		.src   = src,
 		.srcsz = length,
 	};
 
-	if (_entry(&p, asts, tkns, errs) != 0) {
-		jry_free_asts(*asts);
-		jry_free_tkns(*tkns);
-		jry_free_errs(*errs);
-	}
+	if (sc_reap(alloc, ast, (free_t) free_asts))
+		return;
+	if (sc_reap(alloc, tkns, (free_t) free_tkns))
+		return;
+	if (sc_reap(alloc, errs, (free_t) free_errs))
+		return;
+
+	_entry(&p, ast, tkns, errs);
 }
 
 int jry_push_error(struct jy_errs *errs,
@@ -1302,41 +1341,9 @@ int jry_push_error(struct jy_errs *errs,
 	jry_mem_push(errs->to, errs->size, to);
 
 	if (errs->from == NULL)
-		return ERROR_NOMEM;
+		return -1;
 
 	errs->size += 1;
 
-	return ERROR_SUCCESS;
-}
-
-void jry_free_asts(struct jy_asts asts)
-{
-	jry_free(asts.types);
-	jry_free(asts.tkns);
-
-	for (uint32_t i = 0; i < asts.size; ++i)
-		jry_free(asts.child[i]);
-
-	jry_free(asts.child);
-	jry_free(asts.childsz);
-}
-
-void jry_free_tkns(struct jy_tkns tkns)
-{
-	jry_free(tkns.types);
-	jry_free(tkns.lines);
-	jry_free(tkns.ofs);
-
-	for (uint32_t i = 0; i < tkns.size; ++i)
-		jry_free(tkns.lexemes[i]);
-
-	jry_free(tkns.lexemes);
-	jry_free(tkns.lexsz);
-}
-
-void jry_free_errs(struct jy_errs errs)
-{
-	jry_free(errs.msgs);
-	jry_free(errs.from);
-	jry_free(errs.to);
+	return 0;
 }

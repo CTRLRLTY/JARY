@@ -2,7 +2,6 @@
 #include "dload.h"
 
 #include "jary/memory.h"
-#include "jary/object.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,12 +30,10 @@ static const char *tkn2string(enum jy_tkn type)
 		return "TKN_COMMA";
 	case TKN_COLON:
 		return "TKN_COLON";
-
 	case TKN_SPACES:
 		return "TKN_SPACES";
 	case TKN_NEWLINE:
 		return "TKN_NEWLINE";
-
 	case TKN_IMPORT:
 		return "TKN_IMPORT";
 	case TKN_RULE:
@@ -45,7 +42,6 @@ static const char *tkn2string(enum jy_tkn type)
 		return "TKN_INCLUDE";
 	case TKN_INGRESS:
 		return "TKN_INGRESS";
-
 	case TKN_JUMP:
 		return "TKN_JUMP";
 	case TKN_INPUT:
@@ -56,15 +52,18 @@ static const char *tkn2string(enum jy_tkn type)
 		return "TKN_CONDITION";
 	case TKN_FIELD:
 		return "TKN_FIELD";
-
 	case TKN_LONG_TYPE:
 		return "TKN_LONG_TYPE";
 	case TKN_STRING_TYPE:
 		return "TKN_STRING_TYPE";
-
+	case TKN_EXACT:
+		return "TKN_EXACT";
+	case TKN_JOINX:
+		return "TKN_JOINX";
 	case TKN_TILDE:
 		return "TKN_TILDE";
-
+	case TKN_CONCAT:
+		return "TKN_CONCAT";
 	case TKN_PLUS:
 		return "TKN_PLUS";
 	case TKN_MINUS:
@@ -73,7 +72,6 @@ static const char *tkn2string(enum jy_tkn type)
 		return "TKN_STAR";
 	case TKN_SLASH:
 		return "TKN_SLASH";
-
 	case TKN_EQUAL:
 		return "TKN_EQUAL";
 	case TKN_LESSTHAN:
@@ -90,7 +88,6 @@ static const char *tkn2string(enum jy_tkn type)
 		return "TKN_ANY";
 	case TKN_ALL:
 		return "TKN_ALL";
-
 	case TKN_REGEXP:
 		return "TKN_REGEXP";
 	case TKN_STRING:
@@ -101,14 +98,12 @@ static const char *tkn2string(enum jy_tkn type)
 		return "TKN_FALSE";
 	case TKN_TRUE:
 		return "TKN_TRUE";
-
 	case TKN_IDENTIFIER:
 		return "TKN_IDENTIFIER";
 	case TKN_DOLLAR:
 		return "TKN_DOLLAR";
 	case TKN_ALIAS:
 		return "TKN_ALIAS";
-
 	case TKN_CUSTOM:
 		return "TKN_CUSTOM";
 	case TKN_EOF:
@@ -137,7 +132,7 @@ static const char *ast2string(enum jy_ast type)
 	case AST_INGRESS_DECL:
 		return "INGRESS_DECL";
 	case AST_EVENT_MEMBER_DECL:
-		return "NAME_DECL";
+		return "EVENT_MEMBER_DECL";
 	case AST_LONG_TYPE:
 		return "LONG_TYPE";
 	case AST_STR_TYPE:
@@ -665,7 +660,7 @@ static void print_chunks(uint8_t *codes, uint32_t codesz)
 	}
 }
 
-static uint32_t read_file(const char *path, char **dst)
+static uint32_t read_file(struct sc_mem *alloc, const char *path, char **dst)
 {
 	FILE *file = fopen(path, "rb");
 
@@ -678,7 +673,7 @@ static uint32_t read_file(const char *path, char **dst)
 	uint32_t file_size = ftell(file);
 	rewind(file);
 
-	char	*buffer	    = jry_alloc(file_size + 1);
+	char	*buffer	    = sc_alloc(alloc, file_size + 1);
 	uint32_t bytes_read = fread(buffer, sizeof(char), file_size, file);
 
 	if (bytes_read < file_size) {
@@ -695,14 +690,14 @@ static uint32_t read_file(const char *path, char **dst)
 
 static void run_file(const char *path, const char *dirpath)
 {
-	char	*src	    = NULL;
-	uint32_t length	    = read_file(path, &src);
+	struct sc_mem  alloc  = { .buf = NULL };
+	struct jy_asts asts   = { .types = NULL };
+	struct jy_tkns tkns   = { .types = NULL };
+	struct jy_errs errs   = { .msgs = NULL };
+	char	      *src    = NULL;
+	uint32_t       length = read_file(&alloc, path, &src);
 
-	struct jy_asts asts = { .types = NULL };
-	struct jy_tkns tkns = { .types = NULL };
-	struct jy_errs errs = { .msgs = NULL };
-
-	char dirname[]	    = "/modules/";
+	char dirname[]	      = "/modules/";
 	char buf[strlen(dirpath) + sizeof(dirname)];
 
 	strcpy(buf, dirpath);
@@ -712,8 +707,7 @@ static void run_file(const char *path, const char *dirpath)
 		.mdir = buf,
 	};
 
-	jry_parse(src, length, &asts, &tkns, &errs);
-	jry_free(src);
+	jry_parse(&alloc, &asts, &tkns, &errs, src, length);
 
 	printf("===================================="
 	       "\n"
@@ -760,7 +754,7 @@ static void run_file(const char *path, const char *dirpath)
 	       "===================================="
 	       "\n\n");
 
-	jry_compile(&asts, &tkns, &jay, &errs);
+	jry_compile(&alloc, &jay, &errs, &asts, &tkns);
 
 	uint32_t modulesz = 0;
 	uint32_t eventsz  = 0;
@@ -828,10 +822,7 @@ static void run_file(const char *path, const char *dirpath)
 	}
 
 END:
-	jry_free_asts(asts);
-	jry_free_tkns(tkns);
-	jry_free_errs(errs);
-	jry_free_jay(jay);
+	sc_free(&alloc);
 }
 
 int main(int argc, const char **argv)

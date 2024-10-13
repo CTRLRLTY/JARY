@@ -1,5 +1,4 @@
 #include "jary/modules.h"
-#include "jary/object.h"
 
 #include <stdbool.h>
 #include <stdlib.h>

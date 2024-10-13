@@ -1,22 +1,22 @@
+
 #include <gtest/gtest.h>
 
 extern "C" {
 #include "parser.h"
+
+#include "jary/memory.h"
 }
 
 TEST(ParserTest, ImportStatement)
 {
-	const char src[] = "import mark";
+	const char src[]     = "import mark";
 
-	struct jy_asts asts;
-	struct jy_tkns tkns;
-	struct jy_errs errs;
+	struct jy_asts asts  = { .tkns = NULL };
+	struct jy_tkns tkns  = { .lexemes = NULL };
+	struct jy_errs errs  = { .msgs = NULL };
+	struct sc_mem  alloc = { .buf = NULL };
 
-	memset(&asts, 0, sizeof(asts));
-	memset(&tkns, 0, sizeof(tkns));
-	memset(&errs, 0, sizeof(errs));
-
-	jry_parse(src, sizeof(src), &asts, &tkns, &errs);
+	jry_parse(&alloc, &asts, &tkns, &errs, src, sizeof(src));
 
 	enum jy_ast a[] = {
 		AST_ROOT,
@@ -33,32 +33,27 @@ TEST(ParserTest, ImportStatement)
 	ASSERT_EQ(memcmp(asts.types, a, asts.size * sizeof(a[0])), 0);
 	ASSERT_EQ(memcmp(tkns.types, t, tkns.size * sizeof(t[0])), 0);
 
-	jry_free_asts(asts);
-	jry_free_tkns(tkns);
-	jry_free_errs(errs);
+	sc_free(&alloc);
 }
 
 TEST(ParserTest, IngressDeclaration)
 {
-	const char src[] = "ingress data {"
-			   "\n"
-			   "      field:"
-			   "\n"
-			   "            yes == string"
-			   "\n"
-			   "            no == long"
-			   "\n"
-			   "}";
+	const char src[]     = "ingress data {"
+			       "\n"
+			       "      field:"
+			       "\n"
+			       "            yes == string"
+			       "\n"
+			       "            no == long"
+			       "\n"
+			       "}";
 
-	struct jy_asts asts;
-	struct jy_tkns tkns;
-	struct jy_errs errs;
+	struct jy_asts asts  = { .tkns = NULL };
+	struct jy_tkns tkns  = { .lexemes = NULL };
+	struct jy_errs errs  = { .msgs = NULL };
+	struct sc_mem  alloc = { .buf = NULL };
 
-	memset(&asts, 0, sizeof(asts));
-	memset(&tkns, 0, sizeof(tkns));
-	memset(&errs, 0, sizeof(errs));
-
-	jry_parse(src, sizeof(src), &asts, &tkns, &errs);
+	jry_parse(&alloc, &asts, &tkns, &errs, src, sizeof(src));
 
 	enum jy_ast a[] = {
 		AST_ROOT,
@@ -76,42 +71,37 @@ TEST(ParserTest, IngressDeclaration)
 	ASSERT_EQ(asts.size, sizeof(a) / sizeof(a[0]));
 	ASSERT_EQ(memcmp(asts.types, a, sizeof(a)), 0);
 
-	jry_free_asts(asts);
-	jry_free_tkns(tkns);
-	jry_free_errs(errs);
+	sc_free(&alloc);
 }
 
 TEST(ParserTest, RuleDeclaration)
 {
-	const char src[] = "rule something {"
-			   "\n"
-			   "      match:"
-			   "\n"
-			   "              $data.yes <=> \"hello\" "
-			   "\n"
-			   "              $data.num <=> 3 "
-			   "\n"
-			   "      condition:"
-			   "\n"
-			   "              1 == 2 or 1 > 3"
-			   "\n"
-			   "              1 < 2 and \"a\" == \"a\""
-			   "\n"
-			   "      target:"
-			   "\n"
-			   "              mark.mark($data.yes)"
-			   "\n"
-			   "}";
+	const char src[]     = "rule something {"
+			       "\n"
+			       "      match:"
+			       "\n"
+			       "              $data.yes <=> \"hello\" "
+			       "\n"
+			       "              $data.num <=> 3 "
+			       "\n"
+			       "      condition:"
+			       "\n"
+			       "              1 == 2 or 1 > 3"
+			       "\n"
+			       "              1 < 2 and \"a\" == \"a\""
+			       "\n"
+			       "      target:"
+			       "\n"
+			       "              mark.mark($data.yes)"
+			       "\n"
+			       "}";
 
-	struct jy_asts asts;
-	struct jy_tkns tkns;
-	struct jy_errs errs;
+	struct jy_asts asts  = { .tkns = NULL };
+	struct jy_tkns tkns  = { .lexemes = NULL };
+	struct jy_errs errs  = { .msgs = NULL };
+	struct sc_mem  alloc = { .buf = NULL };
 
-	memset(&asts, 0, sizeof(asts));
-	memset(&tkns, 0, sizeof(tkns));
-	memset(&errs, 0, sizeof(errs));
-
-	jry_parse(src, sizeof(src), &asts, &tkns, &errs);
+	jry_parse(&alloc, &asts, &tkns, &errs, src, sizeof(src));
 
 	enum jy_ast expect[] = {
 		AST_ROOT,     AST_RULE_DECL,	  AST_MATCH_SECT,
@@ -133,7 +123,5 @@ TEST(ParserTest, RuleDeclaration)
 	ASSERT_EQ(asts.size, sizeof(expect) / sizeof(expect[0]));
 	ASSERT_EQ(memcmp(asts.types, expect, asts.size * sizeof(expect[0])), 0);
 
-	jry_free_asts(asts);
-	jry_free_tkns(tkns);
-	jry_free_errs(errs);
+	sc_free(&alloc);
 }

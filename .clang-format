@@ -6,7 +6,7 @@ AlignAfterOpenBracket: Align
 AlignArrayOfStructures: None
 AlignConsecutiveAssignments:
   Enabled:         true
-  AcrossEmptyLines: true
+  AcrossEmptyLines: false
   AcrossComments:  true
   AlignCompound:   true
   AlignFunctionPointers: false
@@ -38,7 +38,7 @@ AlignConsecutiveShortCaseStatements:
   AcrossComments:  false
   AlignCaseColons: false
 AlignEscapedNewlines: Right
-AlignOperands:   Align
+AlignOperands:   AlignAfterOperator
 AlignTrailingComments:
   Kind:            Always
   OverEmptyLines:  0
@@ -86,14 +86,14 @@ BreakAdjacentStringLiterals: true
 BreakAfterAttributes: Always
 BreakAfterJavaFieldAnnotations: false
 BreakArrays:     true
-BreakBeforeBinaryOperators: None
+BreakBeforeBinaryOperators: NonAssignment
 BreakBeforeConceptDeclarations: Always
 BreakBeforeBraces: Linux
 BreakBeforeInlineASMColon: OnlyMultiline
 BreakBeforeTernaryOperators: true
 BreakConstructorInitializers: BeforeComma
 BreakInheritanceList: BeforeComma
-BreakStringLiterals: false
+BreakStringLiterals: true
 ColumnLimit:     80
 CommentPragmas:  '^ IWYU pragma:'
 CompactNamespaces: false
@@ -161,20 +161,21 @@ ObjCBreakBeforeNestedBlockParam: true
 ObjCSpaceAfterProperty: false
 ObjCSpaceBeforeProtocolList: true
 PackConstructorInitializers: Never
-PenaltyBreakAssignment: 10
+PenaltyBreakAssignment: 10000
 PenaltyBreakBeforeFirstCallParameter: 30
 PenaltyBreakComment: 10
 PenaltyBreakFirstLessLess: 0
-PenaltyBreakOpenParenthesis: 0
+PenaltyBreakOpenParenthesis: 1000000
 PenaltyBreakScopeResolution: 500
-PenaltyBreakString: 1000
+PenaltyBreakString: 20
 PenaltyBreakTemplateDeclaration: 10
-PenaltyExcessCharacter: 1000000
+PenaltyExcessCharacter: 5000
 PenaltyIndentedWhitespace: 0
 PenaltyReturnTypeOnItsOwnLine: 100000000
 PointerAlignment: Right
 PPIndentWidth:   -8
-QualifierAlignment: Leave
+QualifierAlignment: Custom
+QualifierOrder: ['static', 'inline', 'const', 'volatile', 'type' ]
 ReferenceAlignment: Pointer
 ReflowComments:  true
 RemoveBracesLLVM: true

@@ -3,11 +3,7 @@
 
 #include <stdarg.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-
-#define ERROR_NOMEM		   10
 
 #define jry_alloc(__size)	   malloc((__size))
 #define jry_realloc(__ptr, __size) realloc((__ptr), (__size))
@@ -29,92 +25,43 @@
 			(__ptr)[(__sz)] = (__data);                            \
 	} while (0)
 
-// pop data from array
-#define jry_mem_pop(__ptr, __sz, __data)                                       \
-	do {                                                                   \
-		*(__data) = (__ptr)[(__sz) - 1];                               \
-	} while (0)
+typedef void (*free_t)(void *);
 
+struct sb_mem {
+	void	*buf;
+	uint32_t capacity;
+	uint32_t size;
+};
+
+// shitty memory allocator...
 struct sc_mem {
 	void	      *buf;
 	struct sc_mem *back;
+	void (*expire)(void *);
 };
 
-static inline void *sc_alloc(struct sc_mem *alloc, uint16_t nmemb)
-{
-	void *block = calloc(nmemb, 1);
+struct su_mem {
+	struct su_w {
+		struct su_mem *self;
+		int	       ord;
+		int	       size;
+		char	       ptr[];
+	} **buf;
 
-	if (block == NULL)
-		return NULL;
+	int size;
+};
 
-	struct sc_mem *temp = alloc->back;
-	alloc->back	    = calloc(sizeof *alloc, 1);
+void *sb_alloc(struct sb_mem *sb, uint32_t nmemb);
+void *sb_reserve(struct sb_mem *sb, uint32_t nmemb);
+void  sb_free(struct sb_mem *sb);
 
-	if (alloc->back == NULL)
-		return NULL;
+void *su_alloc(struct su_mem *alloc, void *scptr, uint32_t nmemb);
+void  su_free(struct su_mem *alloc);
 
-	alloc->back->buf  = block;
-	alloc->back->back = temp;
-
-	return block;
-}
-
-static inline int sc_strfmt(struct sc_mem *alloc,
-			    char	 **str,
-			    const char	  *fmt,
-			    ...)
-{
-	va_list arg;
-
-	va_start(arg, fmt);
-
-	int sz		    = vasprintf(str, fmt, arg);
-
-	struct sc_mem *temp = alloc->back;
-	alloc->back	    = calloc(sizeof *alloc, 1);
-
-	if (alloc->back == NULL)
-		return -1;
-
-	alloc->back->buf  = *str;
-	alloc->back->back = temp;
-
-	return sz;
-}
-
-static inline void *sc_move(struct sc_mem *alloc, void **buf)
-{
-	struct sc_mem *temp = alloc->back;
-	alloc->back	    = calloc(sizeof *alloc, 1);
-
-	if (alloc->back == NULL)
-		return NULL;
-
-	alloc->back->buf  = *buf;
-	alloc->back->back = temp;
-	*buf		  = NULL;
-
-	return alloc->back->buf;
-}
-
-static inline void sc_free(struct sc_mem alloc)
-{
-	void	      *buf  = alloc.buf;
-	struct sc_mem *next = alloc.back;
-
-	for (;;) {
-		free(buf);
-
-		if (next == NULL)
-			break;
-
-		void *temp = next;
-
-		buf	   = next->buf;
-		next	   = next->back;
-
-		free(temp);
-	}
-}
+void *sc_alloc(struct sc_mem *alloc, uint32_t nmemb);
+void *sc_allocf(struct sc_mem *alloc, uint32_t nmemb, free_t expire);
+int   sc_strfmt(struct sc_mem *alloc, char **str, const char *fmt, ...);
+int   sc_reap(struct sc_mem *alloc, void *buf, free_t expire);
+void  sc_free(struct sc_mem *alloc);
 
 #endif // JAYVM_MEM_H

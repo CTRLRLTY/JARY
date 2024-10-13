@@ -2,7 +2,6 @@
 
 #include "jary/defs.h"
 #include "jary/memory.h"
-#include "jary/object.h"
 
 #include <assert.h>
 #include <stdint.h>

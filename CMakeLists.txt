@@ -22,12 +22,10 @@ if( CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$" )
         endif()
 endif()
 
-add_library( dload OBJECT )
 add_library( scanner OBJECT )
 add_library( parser STATIC )
 add_library( compiler STATIC )
 add_library( exec OBJECT )
-add_library( storage OBJECT )
 
 add_subdirectory( lib/jay )
 

@@ -1,7 +1,6 @@
 #include "jary/defs.h"
 
 #include "jary/common.h"
-#include "jary/error.h"
 #include "jary/memory.h"
 
 #include <stdint.h>
@@ -43,20 +42,20 @@ static inline bool find_entry(const struct jy_defs *tbl,
 	}
 }
 
-__use_result static int regenerate(struct jy_defs *tbl, uint32_t capacity)
+static __use_result int regenerate(struct jy_defs *tbl, uint32_t capacity)
 {
 	uint32_t moff1 = sizeof(*(tbl->keys)) * capacity;
 	uint32_t moff2 = moff1 + sizeof(*(tbl->vals)) * capacity;
 	uint32_t moff3 = moff2 + sizeof(*(tbl->types)) * capacity;
 
-	char *mem      = jry_alloc(moff3);
+	char *mem = jry_alloc(moff3);
 
 	if (mem == NULL)
-		return ERROR_NOMEM;
+		goto OUT_OF_MEMORY;
 
-	void *keys	      = mem;
-	void *vals	      = mem + moff1;
-	void *types	      = mem + moff2;
+	void *keys  = mem;
+	void *vals  = mem + moff1;
+	void *types = mem + moff2;
 
 	struct jy_defs newtbl = { .keys	    = keys,
 				  .vals	    = vals,
@@ -76,11 +75,9 @@ __use_result static int regenerate(struct jy_defs *tbl, uint32_t capacity)
 		char	      *key  = tbl->keys[i];
 		union jy_value val  = tbl->vals[i];
 
-		int status	    = jry_add_def(&newtbl, key, val, type);
-
-		if (status != ERROR_SUCCESS) {
+		if (jry_add_def(&newtbl, key, val, type)) {
 			jry_free_def(newtbl);
-			return status;
+			goto OUT_OF_MEMORY;
 		}
 	}
 
@@ -88,7 +85,10 @@ __use_result static int regenerate(struct jy_defs *tbl, uint32_t capacity)
 
 	*tbl = newtbl;
 
-	return ERROR_SUCCESS;
+	return 0;
+
+OUT_OF_MEMORY:
+	return -1;
 }
 
 bool jry_find_def(const struct jy_defs *tbl, const char *key, uint32_t *id)
@@ -119,15 +119,13 @@ int jry_add_def(struct jy_defs *tbl,
 		union jy_value	value,
 		enum jy_ktype	type)
 {
-	int status = ERROR_SUCCESS;
-
-	if (tbl->capacity == 0)
-		status = regenerate(tbl, 8);
-	else if (tbl->size + 1 >= tbl->capacity)
-		status = regenerate(tbl, tbl->capacity << 1);
-
-	if (status != ERROR_SUCCESS)
-		goto FINISH;
+	if (tbl->capacity == 0) {
+		if (regenerate(tbl, 8))
+			goto OUT_OF_MEMORY;
+	} else if (tbl->size + 1 >= tbl->capacity) {
+		if (regenerate(tbl, tbl->capacity << 1))
+			goto OUT_OF_MEMORY;
+	}
 
 	uint32_t id;
 
@@ -143,8 +141,10 @@ int jry_add_def(struct jy_defs *tbl,
 	tbl->types[id]	       = type;
 	tbl->size	      += 1;
 
-FINISH:
-	return status;
+	return 0;
+
+OUT_OF_MEMORY:
+	return -1;
 }
 
 void jry_free_def(struct jy_defs tbl)

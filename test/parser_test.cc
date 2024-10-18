@@ -9,7 +9,7 @@ extern "C" {
 
 TEST(ParserTest, ImportStatement)
 {
-	const char src[]     = "import mark";
+	const char src[] = "import mark";
 
 	struct jy_asts asts  = { .tkns = NULL };
 	struct jy_tkns tkns  = { .lexemes = NULL };
@@ -38,15 +38,15 @@ TEST(ParserTest, ImportStatement)
 
 TEST(ParserTest, IngressDeclaration)
 {
-	const char src[]     = "ingress data {"
-			       "\n"
-			       "      field:"
-			       "\n"
-			       "            yes == string"
-			       "\n"
-			       "            no == long"
-			       "\n"
-			       "}";
+	const char src[] = "ingress data {"
+			   "\n"
+			   "      field:"
+			   "\n"
+			   "            yes == string"
+			   "\n"
+			   "            no == long"
+			   "\n"
+			   "}";
 
 	struct jy_asts asts  = { .tkns = NULL };
 	struct jy_tkns tkns  = { .lexemes = NULL };
@@ -76,25 +76,25 @@ TEST(ParserTest, IngressDeclaration)
 
 TEST(ParserTest, RuleDeclaration)
 {
-	const char src[]     = "rule something {"
-			       "\n"
-			       "      match:"
-			       "\n"
-			       "              $data.yes <=> \"hello\" "
-			       "\n"
-			       "              $data.num <=> 3 "
-			       "\n"
-			       "      condition:"
-			       "\n"
-			       "              1 == 2 or 1 > 3"
-			       "\n"
-			       "              1 < 2 and \"a\" == \"a\""
-			       "\n"
-			       "      target:"
-			       "\n"
-			       "              mark.mark($data.yes)"
-			       "\n"
-			       "}";
+	const char src[] = "rule something {"
+			   "\n"
+			   "      match:"
+			   "\n"
+			   "              $data.yes exact \"hello\" "
+			   "\n"
+			   "              $data.num exact 3 "
+			   "\n"
+			   "      condition:"
+			   "\n"
+			   "              1 == 2 or 1 > 3"
+			   "\n"
+			   "              1 < 2 and \"a\" == \"a\""
+			   "\n"
+			   "      target:"
+			   "\n"
+			   "              mark.mark($data.yes)"
+			   "\n"
+			   "}";
 
 	struct jy_asts asts  = { .tkns = NULL };
 	struct jy_tkns tkns  = { .lexemes = NULL };

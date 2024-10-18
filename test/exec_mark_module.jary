@@ -3,13 +3,16 @@ import mark
 ingress data {
        field:
                yes == string
+               time == string
 }
 
 rule bye {
        match:
-                $data.yes <=> "hello"
+                $data.yes exact "hello"
+
        condition:
                 $data.yes == "hello"
+
        target:
                mark.mark("hello")
 }

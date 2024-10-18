@@ -131,8 +131,6 @@ static const char *ast2string(enum jy_ast type)
 		return "INCLUDE_STMT";
 	case AST_INGRESS_DECL:
 		return "INGRESS_DECL";
-	case AST_EVENT_MEMBER_DECL:
-		return "EVENT_MEMBER_DECL";
 	case AST_LONG_TYPE:
 		return "LONG_TYPE";
 	case AST_STR_TYPE:
@@ -193,8 +191,8 @@ static const char *ast2string(enum jy_ast type)
 		return "CALL";
 	case AST_EVENT:
 		return "EVENT";
-	case AST_EVENT_MEMBER_NAME:
-		return "EVENT_MEMBER_NAME";
+	case AST_EVENT_MEMBER:
+		return "EVENT_MEMBER";
 	case AST_NAME:
 		return "NAME";
 	case AST_PATH:

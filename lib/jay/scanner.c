@@ -184,6 +184,13 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 			goto IDENTIFIER;
 
 		goto FINISH;
+	case 'b':
+		if (KEYWORD(start + 1, "ool", 3))
+			*type = TKN_BOOL_TYPE;
+		else
+			goto IDENTIFIER;
+
+		goto FINISH;
 	case 'c':
 		if (KEYWORD(start + 1, "ondition", 8))
 			*type = TKN_CONDITION;

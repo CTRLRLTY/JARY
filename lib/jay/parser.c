@@ -38,7 +38,6 @@ static const char msg_inv_regex[]	     = "invalid regex match expression";
 static const char msg_expect_name_or_event[] = "not a name or event";
 static const char msg_expect_regex[]	     = "not a regex";
 static const char msg_expect_ident[]	     = "not an identifier";
-static const char msg_expect_eqsign[]	     = "expected '='";
 static const char msg_expect_type[]	     = "not a type";
 static const char msg_expect_semicolon[]     = "missing ':'";
 static const char msg_expect_newline[]	     = "missing newline '\\n'";
@@ -845,50 +844,34 @@ static bool _types(struct parser  *p,
 		goto PANIC;
 	}
 
-	uint32_t left;
-
-	if (push_ast(asts, AST_EVENT_MEMBER_NAME, nametkn, &left) != 0)
+	if (push_ast(asts, AST_EVENT_MEMBER, nametkn, root) != 0)
 		goto PANIC;
 
 	// consume name
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
-	type	       = tkns->types[p->tkn];
-	uint32_t eqtkn = p->tkn;
-
-	if (type != TKN_EQUAL) {
-		jry_push_error(errs, msg_expect_eqsign, sectkn, eqtkn);
-		goto PANIC;
-	}
-
-	if (push_ast(asts, AST_EVENT_MEMBER_DECL, eqtkn, root) != 0)
-		goto PANIC;
-
-	// consume =
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
 	type = tkns->types[p->tkn];
 
-	enum jy_ast right_type;
+	uint32_t    ntype;
+	enum jy_ast name_type;
 	switch (type) {
 	case TKN_LONG_TYPE:
-		right_type = AST_LONG_TYPE;
+		name_type = AST_LONG_TYPE;
 		break;
 	case TKN_STRING_TYPE:
-		right_type = AST_STR_TYPE;
+		name_type = AST_STR_TYPE;
 		break;
-	default: {
+	case TKN_BOOL_TYPE:
+		name_type = AST_BOOL_TYPE;
+		break;
+	default:
 		jry_push_error(errs, msg_expect_type, sectkn, p->tkn);
 		goto PANIC;
 	}
-	}
 
-	uint32_t right;
-	if (push_ast(asts, right_type, p->tkn, &right) != 0)
+	if (push_ast(asts, name_type, p->tkn, &ntype) != 0)
 		goto PANIC;
 
-	if (push_child(asts, *root, left) != 0)
-		goto PANIC;
-
-	if (push_child(asts, *root, right) != 0)
+	if (push_child(asts, *root, ntype) != 0)
 		goto PANIC;
 
 	// consume type
@@ -989,14 +972,15 @@ static bool _section(struct parser  *p,
 		}
 
 		uint32_t root;
+		bool	 panic = false;
 
-		if (listfn(p, asts, tkns, errs, &root)) {
-			if (synclist(tkns, &p->src, &p->srcsz, &p->tkn))
-				goto PANIC;
-		} else {
-			if (push_child(asts, sectast, root) != 0)
-				goto PANIC;
-		}
+		if (listfn(p, asts, tkns, errs, &root))
+			panic = synclist(tkns, &p->src, &p->srcsz, &p->tkn);
+		else
+			panic = push_child(asts, sectast, root) != 0;
+
+		if (panic)
+			goto PANIC;
 
 		if (tkns->types[p->tkn] != TKN_NEWLINE) {
 			jry_push_error(errs, msg_expect_newline, secttkn,

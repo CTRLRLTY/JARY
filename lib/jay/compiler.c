@@ -1011,14 +1011,13 @@ static inline bool _field_sect(struct sc_mem	    *alloc,
 	uint32_t  childsz = asts->childsz[id];
 
 	for (uint32_t i = 0; i < childsz; ++i) {
-		uint32_t op_id	 = child[i];
-		uint32_t name_id = asts->child[op_id][0];
-		uint32_t type_id = asts->child[op_id][1];
+		uint32_t name_id = child[i];
+		uint32_t type_id = asts->child[name_id][0];
 		char	*name	 = tkns->lexemes[asts->tkns[name_id]];
 
 		if (def_find(def, name, NULL)) {
 			uint32_t from = asts->tkns[id];
-			uint32_t to   = asts->tkns[op_id];
+			uint32_t to   = asts->tkns[type_id];
 			jry_push_error(errs, msg_redefinition, from, to);
 			continue;
 		}
@@ -1048,7 +1047,7 @@ static inline bool _field_sect(struct sc_mem	    *alloc,
 			break;
 		default: {
 			uint32_t from = asts->tkns[id];
-			uint32_t to   = asts->tkns[op_id];
+			uint32_t to   = asts->tkns[name_id];
 			jry_push_error(errs, msg_inv_type, from, to);
 			goto PANIC;
 		}

@@ -2,8 +2,8 @@ import mark
 
 ingress data {
        field:
-               yes == string
-               no == string
+               yes string
+               no string
 }
 
 rule bye {

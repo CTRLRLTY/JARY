@@ -42,9 +42,9 @@ TEST(ParserTest, IngressDeclaration)
 			   "\n"
 			   "      field:"
 			   "\n"
-			   "            yes == string"
+			   "            yes string"
 			   "\n"
-			   "            no == long"
+			   "            no long"
 			   "\n"
 			   "}";
 
@@ -56,14 +56,8 @@ TEST(ParserTest, IngressDeclaration)
 	jry_parse(&alloc, &asts, &tkns, &errs, src, sizeof(src));
 
 	enum jy_ast a[] = {
-		AST_ROOT,
-		AST_INGRESS_DECL,
-		AST_FIELD_SECT,
-		AST_EVENT_MEMBER_NAME,
-		AST_EVENT_MEMBER_DECL,
-		AST_STR_TYPE,
-		AST_EVENT_MEMBER_NAME,
-		AST_EVENT_MEMBER_DECL,
+		AST_ROOT,	  AST_INGRESS_DECL, AST_FIELD_SECT,
+		AST_EVENT_MEMBER, AST_STR_TYPE,	    AST_EVENT_MEMBER,
 		AST_LONG_TYPE,
 	};
 

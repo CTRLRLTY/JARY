@@ -2,6 +2,7 @@
 
 #include "dload.h"
 
+#include "jary/common.h"
 #include "jary/memory.h"
 
 #include <assert.h>
@@ -81,14 +82,35 @@ static __use_result int emit_cnst(union jy_value   value,
 				  uint16_t	  *length)
 {
 	jry_mem_push(*vals, *length, value);
+
+	if (*vals == NULL)
+		goto OUT_OF_MEMORY;
+
 	jry_mem_push(*types, *length, type);
 
-	if (*vals == NULL || *types == NULL)
-		return -1;
+	if (*types == NULL)
+		goto OUT_OF_MEMORY;
 
 	*length += 1;
 
 	return 0;
+
+OUT_OF_MEMORY:
+	return -1;
+}
+
+static inline bool field_cmp_valid(enum jy_ktype left, enum jy_ktype right)
+{
+	switch (left) {
+	case JY_K_STR_FIELD:
+		return right == JY_K_STR;
+	case JY_K_LONG_FIELD:
+		return right == JY_K_LONG;
+	case JY_K_BOOL_FIELD:
+		return right == JY_K_BOOL;
+	default:
+		return true;
+	}
 }
 
 static inline bool _expr(const struct jy_asts *asts,
@@ -212,7 +234,7 @@ static bool _descriptor_expr(const struct jy_asts *asts,
 
 	uint32_t nid;
 
-	if (!jry_find_def(scope, lexeme, &nid)) {
+	if (!def_find(scope, lexeme, &nid)) {
 		jry_push_error(errs, msg_no_definition, tkn, tkn);
 		goto PANIC;
 	}
@@ -627,6 +649,13 @@ static bool _equal_expr(const struct jy_asts *asts,
 	enum jy_opcode code;
 
 	switch (leftx.type) {
+	case JY_K_STR_FIELD:
+	case JY_K_LONG_FIELD:
+	case JY_K_BOOL_FIELD:
+		if (!field_cmp_valid(leftx.type, rightx.type))
+			goto INV_EXP;
+		code = JY_OP_CMPFIELD;
+		goto EMIT;
 	case JY_K_LONG:
 	case JY_K_BOOL:
 		code = JY_OP_CMP;
@@ -641,6 +670,7 @@ static bool _equal_expr(const struct jy_asts *asts,
 	if (leftx.type != rightx.type)
 		goto INV_EXP;
 
+EMIT:
 	expr->id   = -1u;
 	expr->type = JY_K_BOOL;
 
@@ -891,33 +921,7 @@ static inline bool _match_sect(const struct jy_asts *asts,
 		}
 	}
 
-	uint32_t       k_id = ctx->valsz;
-	union jy_value qlen = { .i64 = childsz };
-
-	for (uint32_t i = 0; i < ctx->valsz; ++i) {
-		enum jy_ktype t = ctx->types[i];
-		long	      v = ctx->vals[i].i64;
-
-		if (t != JY_K_LONG || v != qlen.i64)
-			continue;
-
-		k_id = i;
-		goto EMIT_QUERY;
-	}
-
-	if (emit_cnst(qlen, JY_K_LONG, &ctx->vals, &ctx->types, &ctx->valsz))
-		goto PANIC;
-
-EMIT_QUERY:
-	if (emit_push(k_id, &ctx->codes, &ctx->codesz) != 0)
-		goto PANIC;
-
-	if (emit_byte(JY_OP_QUERY, &ctx->codes, &ctx->codesz) != 0)
-		goto PANIC;
-
 	return false;
-PANIC:
-	return true;
 }
 
 static inline bool _condition_sect(const struct jy_asts *asts,
@@ -996,7 +1000,8 @@ PANIC:
 	return true;
 }
 
-static inline bool _field_sect(const struct jy_asts *asts,
+static inline bool _field_sect(struct sc_mem	    *alloc,
+			       const struct jy_asts *asts,
 			       const struct jy_tkns *tkns,
 			       struct jy_errs	    *errs,
 			       uint32_t		     id,
@@ -1011,25 +1016,35 @@ static inline bool _field_sect(const struct jy_asts *asts,
 		uint32_t type_id = asts->child[op_id][1];
 		char	*name	 = tkns->lexemes[asts->tkns[name_id]];
 
-		if (jry_find_def(def, name, NULL)) {
+		if (def_find(def, name, NULL)) {
 			uint32_t from = asts->tkns[id];
 			uint32_t to   = asts->tkns[op_id];
 			jry_push_error(errs, msg_redefinition, from, to);
 			continue;
 		}
 
-		enum jy_ast   type = asts->types[type_id];
-		enum jy_ktype ktype;
+		enum jy_ktype  ktype;
+		union jy_value f = {
+			.field = sc_alloc(alloc, sizeof(*f.field)),
+		};
+
+		if (f.field == NULL)
+			goto PANIC;
+
+		enum jy_ast type = asts->types[type_id];
 
 		switch (type) {
 		case AST_LONG_TYPE:
-			ktype = JY_K_LONG_FIELD;
+			ktype	      = JY_K_LONG_FIELD;
+			f.field->type = JY_K_LONG;
 			break;
 		case AST_STR_TYPE:
-			ktype = JY_K_STR_FIELD;
+			ktype	      = JY_K_STR_FIELD;
+			f.field->type = JY_K_STR;
 			break;
 		case AST_BOOL_TYPE:
-			ktype = JY_K_BOOL_FIELD;
+			ktype	      = JY_K_BOOL_FIELD;
+			f.field->type = JY_K_BOOL;
 			break;
 		default: {
 			uint32_t from = asts->tkns[id];
@@ -1039,9 +1054,7 @@ static inline bool _field_sect(const struct jy_asts *asts,
 		}
 		}
 
-		union jy_value null = { .obj = NULL };
-
-		if (jry_add_def(def, name, null, ktype))
+		if (def_add(def, name, f, ktype))
 			goto PANIC;
 	}
 
@@ -1050,15 +1063,53 @@ PANIC:
 	return true;
 }
 
+static inline int emit_query(uint16_t	     *valsz,
+			     union jy_value **vals,
+			     enum jy_ktype  **types,
+			     uint32_t	     *codesz,
+			     uint8_t	    **codes,
+			     long	      qlen)
+{
+	uint32_t id = *valsz;
+
+	for (uint32_t i = 0; i < *valsz; ++i) {
+		enum jy_ktype t = (*types)[i];
+		long	      v = (*vals)[i].i64;
+
+		if (t != JY_K_LONG || v != qlen)
+			continue;
+
+		id = i;
+		goto EMIT_QUERY;
+	}
+
+	union jy_value v = { .i64 = qlen };
+
+	if (emit_cnst(v, JY_K_LONG, vals, types, valsz))
+		goto OUT_OF_MEMORY;
+
+EMIT_QUERY:
+	if (emit_push(id, codes, codesz))
+		goto OUT_OF_MEMORY;
+
+	if (emit_byte(JY_OP_QUERY, codes, codesz))
+		goto OUT_OF_MEMORY;
+
+	return 0;
+OUT_OF_MEMORY:
+	return -1;
+}
+
 static inline bool _rule_decl(const struct jy_asts *asts,
 			      const struct jy_tkns *tkns,
 			      struct jy_jay	   *ctx,
 			      struct jy_errs	   *errs,
 			      uint32_t		    rule)
 {
-	uint32_t  ruletkn = asts->tkns[rule];
-	uint32_t *child	  = asts->child[rule];
-	uint32_t  childsz = asts->childsz[rule];
+	struct sc_mem scratch = { .buf = NULL };
+	uint32_t      ruletkn = asts->tkns[rule];
+	uint32_t     *child   = asts->child[rule];
+	uint32_t      childsz = asts->childsz[rule];
 
 	// Short jump patch offset
 	// this will jump to the end of the current rule
@@ -1072,6 +1123,9 @@ static inline bool _rule_decl(const struct jy_asts *asts,
 	uint32_t matchsz  = 0;
 	uint32_t targetsz = 0;
 	uint32_t condsz	  = 0;
+
+	if (sc_reap(&scratch, &patchofs, (free_t) ifree))
+		goto PANIC;
 
 	for (uint32_t i = 0; i < childsz; ++i) {
 		uint32_t    chid = child[i];
@@ -1095,9 +1149,36 @@ static inline bool _rule_decl(const struct jy_asts *asts,
 		}
 	}
 
+	long qlen = 0;
+
 	for (uint32_t i = 0; i < matchsz; ++i) {
-		uint32_t id = matchs[i];
+		uint32_t id  = matchs[i];
+		qlen	    += asts->childsz[id];
+
 		_match_sect(asts, tkns, id, ctx, errs);
+	}
+
+	if (matchsz) {
+		if (emit_query(&ctx->valsz, &ctx->vals, &ctx->types,
+			       &ctx->codesz, &ctx->codes, qlen))
+			goto PANIC;
+
+		if (emit_byte(JY_OP_JMPF, &ctx->codes, &ctx->codesz))
+			goto PANIC;
+
+		jry_mem_push(patchofs, patchsz, ctx->codesz);
+
+		if (patchofs == NULL)
+			goto PANIC;
+
+		patchsz += 1;
+
+		// Reserved 2 bytes for short jump
+		if (emit_byte(0, &ctx->codes, &ctx->codesz))
+			goto PANIC;
+
+		if (emit_byte(0, &ctx->codes, &ctx->codesz))
+			goto PANIC;
 	}
 
 	for (uint32_t i = 0; i < condsz; ++i) {
@@ -1117,11 +1198,16 @@ static inline bool _rule_decl(const struct jy_asts *asts,
 		memcpy(ctx->codes + ofs, &jmp, sizeof(jmp));
 	}
 
-	jry_free(patchofs);
+	sc_free(&scratch);
 	return false;
+
+PANIC:
+	sc_free(&scratch);
+	return true;
 }
 
-static inline bool _ingress_decl(const struct jy_asts *asts,
+static inline bool _ingress_decl(struct sc_mem	      *alloc,
+				 const struct jy_asts *asts,
 				 const struct jy_tkns *tkns,
 				 struct jy_jay	      *ctx,
 				 struct jy_errs	      *errs,
@@ -1137,7 +1223,7 @@ static inline bool _ingress_decl(const struct jy_asts *asts,
 	uint32_t fields[childsz];
 	uint32_t fieldsz = 0;
 
-	if (jry_find_def(ctx->names, lex, NULL)) {
+	if (def_find(ctx->names, lex, NULL)) {
 		jry_push_error(errs, msg_redefinition, tkn, tkn);
 		goto PANIC;
 	}
@@ -1155,13 +1241,17 @@ static inline bool _ingress_decl(const struct jy_asts *asts,
 		}
 	}
 
-	union jy_value v = { .def = calloc(1, sizeof *v.def) };
+	union jy_value v = { .def = sc_alloc(alloc, sizeof *v.def) };
 
 	if (v.def == NULL)
 		goto PANIC;
 
-	uint32_t       allocsz = sizeof(struct jy_obj_str) + lexsz + 1;
-	union jy_value _name_  = { .str = jry_alloc(allocsz) };
+	if (sc_reap(alloc, v.def, (free_t) def_free))
+		goto PANIC;
+
+	union jy_value _name_ = {
+		.str = sc_alloc(alloc, sizeof(struct jy_obj_str) + lexsz + 1)
+	};
 
 	if (_name_.str == NULL)
 		goto PANIC;
@@ -1170,17 +1260,17 @@ static inline bool _ingress_decl(const struct jy_asts *asts,
 	memcpy(_name_.str->cstr, lex, lexsz);
 	_name_.str->cstr[lexsz] = '\0';
 
-	if (jry_add_def(v.def, "__name__", _name_, JY_K_STR))
+	if (def_add(v.def, "__name__", _name_, JY_K_STR))
 		goto PANIC;
 
 	for (uint32_t i = 0; i < fieldsz; ++i)
-		if (_field_sect(asts, tkns, errs, fields[i], v.def))
+		if (_field_sect(alloc, asts, tkns, errs, fields[i], v.def))
 			goto PANIC;
 
 	if (emit_cnst(v, JY_K_EVENT, &ctx->vals, &ctx->types, &ctx->valsz))
 		goto PANIC;
 
-	if (jry_add_def(ctx->names, lex, v, JY_K_EVENT))
+	if (def_add(ctx->names, lex, v, JY_K_EVENT))
 		goto PANIC;
 
 	return false;
@@ -1189,7 +1279,8 @@ PANIC:
 	return true;
 }
 
-static inline bool _import_stmt(const struct jy_asts *asts,
+static inline bool _import_stmt(struct sc_mem	     *alloc,
+				const struct jy_asts *asts,
 				const struct jy_tkns *tkns,
 				struct jy_jay	     *ctx,
 				struct jy_errs	     *errs,
@@ -1216,15 +1307,21 @@ static inline bool _import_stmt(const struct jy_asts *asts,
 		goto PANIC;
 	}
 
-	union jy_value	    module = { .module = jry_alloc(sizeof(def)) };
-	const enum jy_ktype type   = JY_K_MODULE;
+	union jy_value module = {
+		.module = sc_alloc(alloc, sizeof(def)),
+	};
+
+	const enum jy_ktype type = JY_K_MODULE;
 
 	if (module.module == NULL)
 		goto PANIC;
 
 	*module.module = def;
 
-	if (jry_add_def(ctx->names, lexeme, module, type))
+	if (sc_reap(alloc, module.module, (free_t) def_free))
+		goto PANIC;
+
+	if (def_add(ctx->names, lexeme, module, type))
 		goto PANIC;
 
 	if (emit_cnst(module, type, &ctx->vals, &ctx->types, &ctx->valsz))
@@ -1235,7 +1332,8 @@ PANIC:
 	return true;
 }
 
-static inline bool _root(const struct jy_asts *asts,
+static inline bool _root(struct sc_mem	      *alloc,
+			 const struct jy_asts *asts,
 			 const struct jy_tkns *tkns,
 			 struct jy_jay	      *ctx,
 			 struct jy_errs	      *errs,
@@ -1275,10 +1373,10 @@ static inline bool _root(const struct jy_asts *asts,
 	}
 
 	for (uint32_t i = 0; i < imports_sz; ++i)
-		_import_stmt(asts, tkns, ctx, errs, imports[i]);
+		_import_stmt(alloc, asts, tkns, ctx, errs, imports[i]);
 
 	for (uint32_t i = 0; i < ingress_sz; ++i)
-		_ingress_decl(asts, tkns, ctx, errs, ingress[i]);
+		_ingress_decl(alloc, asts, tkns, ctx, errs, ingress[i]);
 
 	for (uint32_t i = 0; i < rules_sz; ++i)
 		_rule_decl(asts, tkns, ctx, errs, rules[i]);
@@ -1307,9 +1405,6 @@ static void free_jay(struct jy_jay *ctx)
 	jry_free(ctx->vals);
 	jry_free(ctx->types);
 
-	if (ctx->names == NULL)
-		return;
-
 	for (uint32_t i = 0; i < ctx->names->capacity; ++i) {
 		union jy_value v    = ctx->names->vals[i];
 		enum jy_ktype  type = ctx->names->types[i];
@@ -1317,27 +1412,11 @@ static void free_jay(struct jy_jay *ctx)
 		switch (type) {
 		case JY_K_MODULE:
 			jry_module_unload(v.module);
-			jry_free(v.def);
 			break;
-		case JY_K_EVENT: {
-			uint32_t id;
-			assert(jry_find_def(v.def, "__name__", NULL));
-
-			jry_find_def(v.def, "__name__", &id);
-
-			jry_free(v.def->vals[id].str);
-
-			jry_free_def(*v.def);
-			jry_free(v.def);
-			break;
-		}
 		default:
 			continue;
 		}
 	}
-
-	jry_free_def(*ctx->names);
-	jry_free(ctx->names);
 }
 
 void jry_compile(struct sc_mem	      *alloc,
@@ -1349,17 +1428,18 @@ void jry_compile(struct sc_mem	      *alloc,
 	assert(ctx->names == NULL);
 	assert(ctx->mdir != NULL);
 
-	sc_reap(alloc, ctx, (free_t) free_jay);
-
 	uint32_t    root = 0;
 	enum jy_ast type = asts->types[root];
 
 	if (type != AST_ROOT)
 		return;
 
-	ctx->names = calloc(1, sizeof *ctx->names);
+	ctx->names = sc_alloc(alloc, sizeof *ctx->names);
 
 	if (ctx->names == NULL)
+		return;
+
+	if (sc_reap(alloc, ctx->names, (free_t) def_free))
 		return;
 
 	union jy_value val = { .def = ctx->names };
@@ -1367,5 +1447,7 @@ void jry_compile(struct sc_mem	      *alloc,
 	if (emit_cnst(val, JY_K_MODULE, &ctx->vals, &ctx->types, &ctx->valsz))
 		return;
 
-	_root(asts, tkns, ctx, errs, root);
+	_root(alloc, asts, tkns, ctx, errs, root);
+
+	sc_reap(alloc, ctx, (free_t) free_jay);
 }

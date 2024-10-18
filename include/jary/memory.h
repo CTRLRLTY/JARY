@@ -51,6 +51,11 @@ struct su_mem {
 	int size;
 };
 
+static inline void ifree(void **ptr)
+{
+	free(*ptr);
+}
+
 void *sb_alloc(struct sb_mem *sb, uint32_t nmemb);
 void *sb_reserve(struct sb_mem *sb, uint32_t nmemb);
 void  sb_free(struct sb_mem *sb);

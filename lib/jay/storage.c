@@ -26,9 +26,13 @@ static inline bool exists(int			length,
 	return false;
 }
 
-int q_match(struct sqlite3 *db, struct Qmatch Q)
+int q_match(struct sqlite3 *db,
+	    char	  **errmsg,
+	    int (*callback)(void *, int, char **, char **),
+	    void	 *data,
+	    struct Qmatch Q)
 {
-	struct sc_mem buf    = { .buf = NULL };
+	struct sc_mem buf = { .buf = NULL };
 
 	int		qlen = Q.qlen;
 	struct QMbase **qs   = Q.qlist;
@@ -77,10 +81,14 @@ int q_match(struct sqlite3 *db, struct Qmatch Q)
 		const char *t = uniq[i]->table;
 		const char *c = uniq[i]->column;
 
+		char *fmt;
+
 		if (i + 1 > uniqsz)
-			sc_strfmt(&buf, &sql, "%s %s.%s,", sql, t, c);
+			fmt = "%s %s.%s AS \"%s.%s\",";
 		else
-			sc_strfmt(&buf, &sql, "%s %s.%s FROM", sql, t, c);
+			fmt = "%s %s.%s AS \"%s.%s\" FROM";
+
+		sc_strfmt(&buf, &sql, fmt, sql, t, c, t, c);
 
 		if (sql == NULL)
 			goto OUT_OF_MEMORY;
@@ -133,7 +141,7 @@ CLOSE: {
 	sql[sz - 1] = ';';
 }
 
-	if (sqlite3_exec(db, sql, Q.callback, NULL, NULL) != SQLITE_OK)
+	if (sqlite3_exec(db, sql, callback, data, errmsg) != SQLITE_OK)
 		goto TX_FAILED;
 
 	sc_free(&buf);
@@ -153,7 +161,7 @@ int q_create(struct sqlite3 *db, struct Qcreate Q)
 	const char **columns = Q.columns;
 	int	    *cflags  = Q.flags;
 
-	struct sc_mem buf    = { .buf = NULL };
+	struct sc_mem buf = { .buf = NULL };
 
 	char *sql;
 	sc_strfmt(&buf, &sql, "CREATE TABLE IF NOT EXISTS %s (", name);

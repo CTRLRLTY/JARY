@@ -24,7 +24,7 @@ static const char *error_reason[ERROR_MSG_COUNT_LIMIT] = {
 	[MSG_LOAD_FAIL]	 = "load failed",
 
 	// reserved for dynamic error
-	[MSG_DYNAMIC]	 = NULL,
+	[MSG_DYNAMIC] = NULL,
 };
 
 struct jy_module {
@@ -62,7 +62,7 @@ int jry_module_load(const char *path, struct jy_defs *def)
 
 	const char k[] = "__handle__";
 
-	if (jry_add_def(def, k, handle, JY_K_HANDLE) != 0)
+	if (def_add(def, k, handle, JY_K_HANDLE) != 0)
 		goto DLOAD_ERROR;
 
 	struct jy_module ctx	= { .def = def };
@@ -87,7 +87,7 @@ int jry_module_unload(struct jy_defs *def)
 	const char k[] = "__handle__";
 	uint32_t   nid;
 
-	if (!jry_find_def(def, k, &nid))
+	if (!def_find(def, k, &nid))
 		goto FINISH;
 
 	handle = def->vals[nid];
@@ -107,7 +107,6 @@ int jry_module_unload(struct jy_defs *def)
 
 CLOSE: {
 	dlclose(handle.handle);
-	jry_free_def(*def);
 }
 FINISH:
 	return status;
@@ -149,7 +148,7 @@ int def_func(struct jy_module	 *ctx,
 
 	memcpy(v.func->param_types, param_types, parambytes);
 
-	if (jry_add_def(ctx->def, key, v, JY_K_FUNC) != 0)
+	if (def_add(ctx->def, key, v, JY_K_FUNC) != 0)
 		return TO_ERROR(MSG_UNKNOWN);
 
 	return 0;
@@ -159,7 +158,7 @@ int del_func(struct jy_module *ctx, const char *key)
 {
 	uint32_t id;
 
-	if (!jry_find_def(ctx->def, key, &id))
+	if (!def_find(ctx->def, key, &id))
 		return TO_ERROR(MSG_UNKNOWN);
 
 	if (ctx->def->types[id] != JY_K_FUNC)

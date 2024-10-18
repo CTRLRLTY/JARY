@@ -6,6 +6,8 @@ extern "C" {
 #include "exec.h"
 
 #include "jary/memory.h"
+
+#include <sqlite3.h>
 }
 
 static size_t read_file(const char *path, char **dst)
@@ -47,6 +49,7 @@ TEST(ExecTest, MarkModule)
 	struct jy_jay	jay   = { .codes = NULL };
 	struct sc_mem	alloc = { .buf = NULL };
 	struct jy_defs *mark  = NULL;
+	struct sqlite3 *db    = NULL;
 	char	       *src   = NULL;
 	size_t		srcsz = read_file(MARK_MODULE_JARY_PATH, &src);
 
@@ -71,7 +74,7 @@ TEST(ExecTest, MarkModule)
 	{
 		uint32_t id;
 
-		ASSERT_TRUE(jry_find_def(jay.names, "mark", &id));
+		ASSERT_TRUE(def_find(jay.names, "mark", &id));
 
 		mark = jay.names->vals[id].module;
 	}
@@ -80,7 +83,7 @@ TEST(ExecTest, MarkModule)
 		uint32_t	    id;
 		struct jy_obj_func *ofunc;
 
-		ASSERT_TRUE(jry_find_def(mark, "mark", &id));
+		ASSERT_TRUE(def_find(mark, "mark", &id));
 
 		ofunc = mark->vals[id].func;
 
@@ -93,7 +96,7 @@ TEST(ExecTest, MarkModule)
 		union jy_value	    result;
 		struct jy_obj_func *ofunc;
 
-		ASSERT_TRUE(jry_find_def(mark, "count", &id));
+		ASSERT_TRUE(def_find(mark, "count", &id));
 
 		ofunc = mark->vals[id].func;
 
@@ -106,7 +109,7 @@ TEST(ExecTest, MarkModule)
 		uint32_t	    id;
 		struct jy_obj_func *ofunc;
 
-		ASSERT_TRUE(jry_find_def(mark, "unmark", &id));
+		ASSERT_TRUE(def_find(mark, "unmark", &id));
 
 		ofunc = mark->vals[id].func;
 
@@ -114,14 +117,31 @@ TEST(ExecTest, MarkModule)
 		ASSERT_EQ(ofunc->func(1, &key, NULL), 0);
 	}
 
-	ASSERT_EQ(jry_exec(NULL, jay.vals, jay.codes, jay.codesz), 0);
+	int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE
+		 | SQLITE_OPEN_READWRITE;
+	int err = sqlite3_open_v2("test.db", &db, flag, NULL);
+
+	ASSERT_EQ(err, SQLITE_OK) << "msg: " << sqlite3_errmsg(db);
+
+	char *sql = "CREATE TABLE data (yes TEXT);";
+	char *msg = NULL;
+	err	  = sqlite3_exec(db, sql, NULL, NULL, &msg);
+
+	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
+
+	sql = "INSERT INTO data (yes) VALUES (\"hello\")";
+	err = sqlite3_exec(db, sql, NULL, NULL, &msg);
+
+	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
+
+	ASSERT_EQ(jry_exec(db, NULL, &jay), 0);
 
 	{
 		uint32_t	    id;
 		union jy_value	    result;
 		struct jy_obj_func *ofunc;
 
-		ASSERT_TRUE(jry_find_def(mark, "count", &id));
+		ASSERT_TRUE(def_find(mark, "count", &id));
 
 		ofunc = mark->vals[id].func;
 
@@ -130,5 +150,6 @@ TEST(ExecTest, MarkModule)
 		ASSERT_EQ(result.i64, 1);
 	}
 
+	sqlite3_close_v2(db);
 	sc_free(&alloc);
 }

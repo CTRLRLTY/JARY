@@ -44,6 +44,7 @@ union jy_value {
 	void		    *handle;
 	struct jy_obj_func  *func;
 	struct jy_obj_str   *str;
+	char		    *cstr;
 	struct jy_defs	    *def;
 	struct jy_defs	    *module;
 	struct jy_field	    *field;

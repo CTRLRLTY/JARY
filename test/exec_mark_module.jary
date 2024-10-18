@@ -9,7 +9,7 @@ rule bye {
        match:
                 $data.yes <=> "hello"
        condition:
-               2 == 2
+                $data.yes == "hello"
        target:
                mark.mark("hello")
 }

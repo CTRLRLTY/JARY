@@ -30,12 +30,19 @@ struct stack {
 	struct sb_mem	m;
 };
 
+struct match_cb_data {
+	struct jy_defs *names;
+	struct sc_mem  *alloc;
+	int		colsz;
+};
+
 // TODO: This is so ugly.... but im in a hurry.
 struct runtime {
 	struct sqlite3	     *db;
 	const union jy_value *vals;
 	struct stack	     *stack;
 	union flag8	     *flag;
+	struct jy_defs	     *names;
 	const uint8_t	    **pc;
 	// runtime memory scratch
 	struct sc_mem	     *buf;
@@ -65,6 +72,131 @@ static inline union jy_value pop(struct stack *s)
 	return s->values[--idx];
 }
 
+static inline int fill_event(struct sc_mem *restrict alloc,
+			     struct jy_defs *restrict event,
+			     const char *member,
+			     const char *text)
+{
+	union jy_value f = { .field = NULL };
+	union jy_value v = { .handle = NULL };
+
+	def_get(event, member, &f, NULL);
+
+	assert(f.field != NULL);
+
+	switch (f.field->type) {
+	case JY_K_STR: {
+		size_t sz = strlen(text);
+		// +1 to include '\0'
+		v.str	  = sc_alloc(alloc, sizeof(*v.str) + sz + 1);
+
+		if (v.str == NULL)
+			goto OUT_OF_MEMORY;
+
+		v.str->size = sz;
+		memcpy(v.str->cstr, text, sz);
+		break;
+	}
+	case JY_K_LONG:
+		v.i64 = strtol(text, NULL, 10);
+		break;
+	default:
+		goto INV_FIELD;
+	}
+
+	jry_mem_push(f.field->as, f.field->size, v);
+
+	if (f.field->as == NULL)
+		goto OUT_OF_MEMORY;
+
+	f.field->size += 1;
+
+	return 0;
+INV_FIELD:
+	return 1;
+OUT_OF_MEMORY:
+	return -1;
+}
+
+static inline bool field_cmp(struct jy_field *field, union jy_value value)
+{
+	bool result = false;
+
+	for (int i = 0; i < field->size; ++i) {
+		union jy_value fv = field->as[i];
+
+		switch (field->type) {
+		case JY_K_STR: {
+			const char *s1 = fv.str->cstr;
+			const char *s2 = value.str->cstr;
+			size_t	    z1 = fv.str->size;
+			size_t	    z2 = value.str->size;
+
+			result = z1 == z2 && memcmp(s1, s2, z1) == 0;
+			break;
+		}
+		case JY_K_LONG:
+		case JY_K_BOOL:
+			result = fv.i64 == value.i64;
+			break;
+
+		default:
+			return false;
+		}
+
+		if (!result)
+			break;
+	}
+
+	return result;
+}
+
+static inline int match_clbk(struct match_cb_data *data,
+			     int		   colsz,
+			     char		 **values,
+			     char		 **columns)
+{
+	data->colsz += 1;
+
+	struct jy_defs *def   = data->names;
+	struct sc_mem  *alloc = data->alloc;
+
+	for (int i = 0; i < colsz; ++i) {
+		union jy_value event = { .def = NULL };
+		size_t	       len   = strlen(columns[i]) + 1;
+
+		char  buf[len];
+		char *sep;
+		char *key;
+		char *member;
+
+		mempcpy(buf, columns[i], len);
+		sep = strchr(buf, '.');
+
+		assert(sep != NULL);
+
+		*sep   = '\0';
+		key    = buf;
+		member = sep + 1;
+
+		def_get(def, key, &event, NULL);
+
+		assert(event.def != NULL);
+
+		switch (fill_event(alloc, event.def, member, values[i])) {
+		case -1:
+			goto OUT_OF_MEMORY;
+		default:
+			continue;
+		}
+	}
+
+	return 0;
+
+OUT_OF_MEMORY:
+	return -1;
+}
+
 static inline int interpret(struct runtime ctx)
 {
 	struct sqlite3	     *db    = ctx.db;
@@ -73,6 +205,7 @@ static inline int interpret(struct runtime ctx)
 	union flag8	     *flag  = ctx.flag;
 	const uint8_t	    **code  = ctx.pc;
 	struct sc_mem	     *rbuf  = ctx.buf;
+	struct jy_defs	     *names = ctx.names;
 
 	const uint8_t *pc     = *code;
 	enum jy_opcode opcode = *pc;
@@ -159,8 +292,8 @@ static inline int interpret(struct runtime ctx)
 		uint32_t field2;
 		uint32_t field1;
 
-		assert(jry_find_def(event1, "__name__", &field1));
-		assert(jry_find_def(event2, "__name__", &field2));
+		assert(def_find(event1, "__name__", &field1));
+		assert(def_find(event2, "__name__", &field2));
 
 		struct QMjoin *Q = sc_alloc(rbuf, sizeof *Q);
 
@@ -188,7 +321,7 @@ static inline int interpret(struct runtime ctx)
 
 		uint32_t field;
 
-		assert(jry_find_def(event, "__name__", &field));
+		assert(def_find(event, "__name__", &field));
 
 		struct QMexact *Q = sc_alloc(rbuf, sizeof *Q);
 
@@ -214,14 +347,22 @@ static inline int interpret(struct runtime ctx)
 		for (int i = 0; i < qlen; ++i)
 			qs[i] = pop(stack).handle;
 
-		struct Qmatch Q = { .qlen = qlen, .qlist = qs };
+		struct Qmatch Q	   = { .qlen = qlen, .qlist = qs };
+		q_callback_t  clbk = (q_callback_t) match_clbk;
 
-		switch (q_match(db, Q)) {
+		struct match_cb_data data = {
+			.names = names,
+			.alloc = rbuf,
+		};
+
+		switch (q_match(db, NULL, clbk, &data, Q)) {
 		case -1:
 			goto OUT_OF_MEMORY;
 		case -2:
 			goto QUERY_FAILED;
 		}
+
+		flag->bits.b8 = data.colsz;
 
 		pc += 1;
 		break;
@@ -231,8 +372,20 @@ static inline int interpret(struct runtime ctx)
 		struct jy_obj_str *v1 = pop(stack).str;
 		const char	  *s2 = v2->cstr;
 		const char	  *s1 = v1->cstr;
+		size_t		   z2 = v2->size;
+		size_t		   z1 = v1->size;
 
-		flag->bits.b8  = *s1 == *s2 && memcmp(s1, s2, v1->size) == 0;
+		flag->bits.b8  = z1 == z2 && memcmp(s1, s2, z1) == 0;
+		pc	      += 1;
+		break;
+	}
+	case JY_OP_CMPFIELD: {
+		union jy_value	     v	   = pop(stack);
+		struct jy_descriptor d	   = pop(stack).dscptr;
+		struct jy_defs	    *event = vals[d.name].def;
+		struct jy_field	    *field = event->vals[d.member].field;
+
+		flag->bits.b8  = field_cmp(field, v);
 		pc	      += 1;
 		break;
 	}
@@ -341,22 +494,23 @@ QUERY_FAILED:
 	return -2;
 }
 
-int jry_exec(struct sqlite3	  *db,
-	     const union jy_value *vals,
-	     const uint8_t	  *codes,
-	     uint32_t		   codesz)
+int jry_exec(struct sqlite3 *db, struct jy_exec *exec, const struct jy_jay *jay)
 {
-	const uint8_t *pc    = codes;
-	const uint8_t *end   = &codes[codesz - 1];
-	struct stack   stack = { .values = NULL };
-	union flag8    flag  = { .flag = 0 };
-	struct sc_mem  rbuf  = { .buf = NULL };
-	struct runtime ctx   = { .db	= db,
-				 .vals	= vals,
-				 .stack = &stack,
-				 .flag	= &flag,
-				 .pc	= &pc,
-				 .buf	= &rbuf };
+	const union jy_value *vals   = jay->vals;
+	const uint8_t	     *codes  = jay->codes;
+	uint32_t	      codesz = jay->codesz;
+	const uint8_t	     *pc     = codes;
+	const uint8_t	     *end    = &codes[codesz - 1];
+	struct stack	      stack  = { .values = NULL };
+	union flag8	      flag   = { .flag = 0 };
+	struct sc_mem	      rbuf   = { .buf = NULL };
+	struct runtime	      ctx    = { .db	= db,
+					 .names = jay->names,
+					 .vals	= vals,
+					 .stack = &stack,
+					 .flag	= &flag,
+					 .pc	= &pc,
+					 .buf	= &rbuf };
 
 	sc_reap(&rbuf, &stack.m, (free_t) sb_free);
 

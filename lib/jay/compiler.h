@@ -21,6 +21,7 @@ enum jy_opcode {
 
 	JY_OP_NOT,
 	JY_OP_CMPSTR,
+	JY_OP_CMPFIELD,
 	JY_OP_CMP,
 	JY_OP_LT,
 	JY_OP_GT,

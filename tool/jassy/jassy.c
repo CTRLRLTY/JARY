@@ -263,6 +263,8 @@ static const char *codestring(enum jy_opcode code)
 		return "OP_LT";
 	case JY_OP_CMPSTR:
 		return "OP_CMPSTR";
+	case JY_OP_CMPFIELD:
+		return "OP_CMPFIELD";
 	case JY_OP_CMP:
 		return "OP_CMP";
 	case JY_OP_NOT:
@@ -321,7 +323,7 @@ static void print_tkns(struct jy_tkns tkns)
 		enum jy_tkn t	= tkns.types[i];
 		const char *lex = tkns.lexemes[i];
 
-		const char *ts	= tkn2string(t);
+		const char *ts = tkn2string(t);
 
 		printf("%5u   %5u   %s", l, ofs, ts);
 
@@ -697,7 +699,7 @@ static void run_file(const char *path, const char *dirpath)
 	char	      *src    = NULL;
 	uint32_t       length = read_file(&alloc, path, &src);
 
-	char dirname[]	      = "/modules/";
+	char dirname[] = "/modules/";
 	char buf[strlen(dirpath) + sizeof(dirname)];
 
 	strcpy(buf, dirpath);
@@ -830,7 +832,7 @@ int main(int argc, const char **argv)
 	const char *binpath = argv[0];
 	const char *dirp    = strrchr(argv[0], '/');
 
-	int  dirsz	    = (dirp != NULL) ? dirp - binpath + 1 : 1;
+	int  dirsz = (dirp != NULL) ? dirp - binpath + 1 : 1;
 	char dirpath[dirsz];
 
 	memcpy(dirpath, binpath, dirsz);

@@ -6,6 +6,8 @@
 #define Q_COL_INT 0x1
 #define Q_COL_STR 0x2
 
+typedef int (*q_callback_t)(void *, int, char **, char **);
+
 struct sqlite3;
 
 enum QMtag {
@@ -37,7 +39,6 @@ struct QMjoin {
 struct Qmatch {
 	int		qlen;
 	struct QMbase **qlist;
-	int (*callback)(void *, int, char **, char **);
 };
 
 struct Qcreate {
@@ -54,7 +55,11 @@ struct Qinsert {
 	const char **values;
 };
 
-int q_match(struct sqlite3 *db, struct Qmatch Q);
+int q_match(struct sqlite3 *db,
+	    char	  **errmsg,
+	    q_callback_t    cb,
+	    void	   *data,
+	    struct Qmatch   Q);
 int q_create(struct sqlite3 *db, struct Qcreate Q);
 int q_insert(struct sqlite3 *db, struct Qinsert Q);
 

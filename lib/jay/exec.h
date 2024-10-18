@@ -1,14 +1,14 @@
 #ifndef JAYVM_EXEC_H
 #define JAYVM_EXEC_H
 
-#include "jary/types.h"
-
 #include <stdint.h>
-struct sqlite3;
 
-int jry_exec(struct sqlite3	  *db,
-	     const union jy_value *vals,
-	     const uint8_t	  *codes,
-	     uint32_t		   codesz);
+struct sqlite3;
+struct jy_jay;
+struct jy_exec;
+
+int jry_exec(struct sqlite3	 *db,
+	     struct jy_exec	 *exec,
+	     const struct jy_jay *jay);
 
 #endif // JAYVM_EXEC_H

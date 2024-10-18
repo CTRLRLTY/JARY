@@ -75,13 +75,13 @@ static __use_result int regenerate(struct jy_defs *tbl, uint32_t capacity)
 		char	      *key  = tbl->keys[i];
 		union jy_value val  = tbl->vals[i];
 
-		if (jry_add_def(&newtbl, key, val, type)) {
-			jry_free_def(newtbl);
+		if (def_add(&newtbl, key, val, type)) {
+			def_free(&newtbl);
 			goto OUT_OF_MEMORY;
 		}
 	}
 
-	jry_free_def(*tbl);
+	def_free(tbl);
 
 	*tbl = newtbl;
 
@@ -91,7 +91,7 @@ OUT_OF_MEMORY:
 	return -1;
 }
 
-bool jry_find_def(const struct jy_defs *tbl, const char *key, uint32_t *id)
+bool def_find(const struct jy_defs *tbl, const char *key, uint32_t *id)
 {
 	if (tbl->size == 0)
 		return false;
@@ -114,10 +114,50 @@ bool jry_find_def(const struct jy_defs *tbl, const char *key, uint32_t *id)
 	return *key == *ekey && strcmp(key, ekey) == 0;
 }
 
-int jry_add_def(struct jy_defs *tbl,
-		const char     *key,
-		union jy_value	value,
-		enum jy_ktype	type)
+int def_set(struct jy_defs *tbl,
+	    const char	   *key,
+	    union jy_value  value,
+	    enum jy_ktype   type)
+{
+	uint32_t id = 0;
+
+	if (!def_find(tbl, key, &id)) {
+		if (def_add(tbl, key, value, type) == -1)
+			goto OUT_OF_MEMORY;
+	} else {
+		tbl->vals[id]  = value;
+		tbl->types[id] = type;
+	}
+
+	return 0;
+OUT_OF_MEMORY:
+	return -1;
+}
+
+int def_get(struct jy_defs *tbl,
+	    const char	   *key,
+	    union jy_value *value,
+	    enum jy_ktype  *type)
+{
+	uint32_t id = 0;
+
+	if (!def_find(tbl, key, &id))
+		goto NOT_FOUND;
+
+	if (value)
+		*value = tbl->vals[id];
+	if (type)
+		*type = tbl->types[id];
+
+	return 0;
+NOT_FOUND:
+	return 1;
+}
+
+int def_add(struct jy_defs *tbl,
+	    const char	   *key,
+	    union jy_value  value,
+	    enum jy_ktype   type)
 {
 	if (tbl->capacity == 0) {
 		if (regenerate(tbl, 8))
@@ -147,10 +187,18 @@ OUT_OF_MEMORY:
 	return -1;
 }
 
-void jry_free_def(struct jy_defs tbl)
+void def_free(struct jy_defs *tbl)
 {
-	for (unsigned int i = 0; i < tbl.capacity; ++i)
-		jry_free(tbl.keys[i]);
+	for (unsigned int i = 0; i < tbl->capacity; ++i)
+		jry_free(tbl->keys[i]);
 
-	jry_free(tbl.keys);
+	jry_free(tbl->keys);
+}
+
+void def_clear(struct jy_defs *tbl)
+{
+	def_free(tbl);
+
+	struct jy_defs newtbl = { .keys = NULL };
+	*tbl		      = newtbl;
 }

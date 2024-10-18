@@ -1,7 +1,6 @@
 #ifndef JAYVM_DEFS_H
 #define JAYVM_DEFS_H
 
-#include "jary/common.h"
 #include "jary/types.h"
 
 #include <stdbool.h>
@@ -15,13 +14,24 @@ struct jy_defs {
 	unsigned short	size;
 };
 
-bool jry_find_def(const struct jy_defs *tbl, const char *key, uint32_t *id);
+bool def_find(const struct jy_defs *tbl, const char *key, uint32_t *id);
 
-__use_result int jry_add_def(struct jy_defs *tbl,
-			     const char	    *key,
-			     union jy_value  value,
-			     enum jy_ktype   type);
+int def_set(struct jy_defs *tbl,
+	    const char	   *key,
+	    union jy_value  value,
+	    enum jy_ktype   type);
 
-void jry_free_def(struct jy_defs tbl);
+int def_get(struct jy_defs *tbl,
+	    const char	   *key,
+	    union jy_value *value,
+	    enum jy_ktype  *type);
+
+int def_add(struct jy_defs *tbl,
+	    const char	   *key,
+	    union jy_value  value,
+	    enum jy_ktype   type);
+
+void def_free(struct jy_defs *tbl);
+void def_clear(struct jy_defs *tbl);
 
 #endif // JAYVM_DEFS_H

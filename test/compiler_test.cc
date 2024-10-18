@@ -37,7 +37,7 @@ static size_t read_file(const char *path, char **dst)
 
 TEST(CompilerTest, Basic)
 {
-	char *src	     = NULL;
+	char *src = NULL;
 
 	struct jy_asts asts  = { .tkns = NULL };
 	struct jy_tkns tkns  = { .lexemes = NULL };
@@ -61,6 +61,7 @@ TEST(CompilerTest, Basic)
                 JY_OP_EXACT,
                 JY_OP_PUSH8, 6,
                 JY_OP_QUERY,
+                JY_OP_JMPF,  25, 0,
                 //
                 JY_OP_PUSH8, 6,
                 JY_OP_PUSH8, 7,

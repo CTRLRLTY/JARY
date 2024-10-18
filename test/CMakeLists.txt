@@ -28,6 +28,7 @@ target_compile_definitions( compiler_test
 target_compile_definitions( exec_test 
         PUBLIC 
         MARK_MODULE_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_mark_module.jary" 
+        JOIN_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_join.jary" 
 )
 
 
@@ -86,6 +87,14 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy
         ${CMAKE_CURRENT_SOURCE_DIR}/exec_mark_module.jary
         $<TARGET_FILE_DIR:compiler_test>/exec_mark_module.jary
+)
+
+add_custom_command(
+        TARGET exec_test 
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_CURRENT_SOURCE_DIR}/exec_join.jary
+        $<TARGET_FILE_DIR:compiler_test>/exec_join.jary
 )
 
 include( GoogleTest )

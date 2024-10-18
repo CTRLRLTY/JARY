@@ -602,7 +602,8 @@ static bool _join_expr(const struct jy_asts *asts,
 	if (leftx.type != rightx.type)
 		goto INV_RIGHT;
 
-	*expr = rightx;
+	expr->id   = -1u;
+	expr->type = JY_K_MATCH;
 
 	if (emit_byte(JY_OP_JOIN, &ctx->codes, &ctx->codesz))
 		goto PANIC;

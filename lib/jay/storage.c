@@ -40,7 +40,7 @@ int q_match(struct sqlite3 *db,
 	char		     *sql;
 	const struct QMjoin  *joins[qlen];
 	const struct QMexact *exacts[qlen];
-	const struct QMbase  *uniq[qlen];
+	const struct QMbase  *uniq[qlen * 2];
 
 	int uniqsz  = 0;
 	int joinsz  = 0;
@@ -70,6 +70,18 @@ int q_match(struct sqlite3 *db,
 		}
 	}
 
+	for (int i = 0; i < joinsz; ++i) {
+		const struct QMjoin *J = joins[i];
+		struct QMbase	    *Q = sc_alloc(&buf, sizeof *Q);
+		Q->table	       = J->tbl_right;
+		Q->column	       = J->col_right;
+
+		if (!exists(uniqsz, uniq, Q)) {
+			uniq[i + uniqsz]  = Q;
+			uniqsz		 += 1;
+		}
+	}
+
 	assert(joinsz > 0 || exactsz > 0);
 
 	sc_strfmt(&buf, &sql, "SELECT");
@@ -83,7 +95,7 @@ int q_match(struct sqlite3 *db,
 
 		char *fmt;
 
-		if (i + 1 > uniqsz)
+		if (i + 1 < uniqsz)
 			fmt = "%s %s.%s AS \"%s.%s\",";
 		else
 			fmt = "%s %s.%s AS \"%s.%s\" FROM";
@@ -97,7 +109,7 @@ int q_match(struct sqlite3 *db,
 	for (int i = 0; i < uniqsz; ++i) {
 		const char *t = uniq[i]->table;
 
-		if (i + 1 > uniqsz)
+		if (i + 1 < uniqsz)
 			sc_strfmt(&buf, &sql, "%s %s,", sql, t);
 		else
 			sc_strfmt(&buf, &sql, "%s %s WHERE", sql, t);
@@ -185,7 +197,7 @@ int q_create(struct sqlite3 *db, struct Qcreate Q)
 			tstr = "TEXT";
 		}
 
-		if (i + 1 > length)
+		if (i + 1 < length)
 			sc_strfmt(&buf, &sql, "%s %s %s,", sql, c, tstr);
 		else
 			sc_strfmt(&buf, &sql, "%s %s %s);", sql, c, tstr);

@@ -3,7 +3,6 @@ import mark
 ingress data {
        field:
                yes string
-               time string
 }
 
 rule bye {

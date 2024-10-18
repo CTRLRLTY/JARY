@@ -1,0 +1,22 @@
+import mark
+
+ingress data1 {
+       field:
+               yes string
+}
+
+ingress data2 {
+       field:
+               no string
+}
+
+rule bye {
+       match:
+                $data1.yes join $data2.no 
+
+       condition:
+                $data1.yes == "hello"
+
+       target:
+               mark.mark("hello")
+}

@@ -60,14 +60,14 @@ TEST(ExecTest, MarkModule)
 
 	strcpy(str->cstr, "hello");
 
-	key.str	 = str;
-	jay.mdir = "../modules/";
+	key.str		  = str;
+	const char mdir[] = "../modules/";
 
 	jry_parse(&alloc, &asts, &tkns, &errs, src, srcsz);
 
 	ASSERT_EQ(errs.size, 0);
 
-	jry_compile(&alloc, &jay, &errs, &asts, &tkns);
+	jry_compile(&alloc, &jay, &errs, mdir, &asts, &tkns);
 
 	ASSERT_EQ(errs.size, 0);
 
@@ -176,14 +176,14 @@ TEST(ExecTest, Join)
 
 	strcpy(str->cstr, "hello");
 
-	key.str	 = str;
-	jay.mdir = "../modules/";
+	key.str		  = str;
+	const char mdir[] = "../modules/";
 
 	jry_parse(&alloc, &asts, &tkns, &errs, src, srcsz);
 
 	ASSERT_EQ(errs.size, 0);
 
-	jry_compile(&alloc, &jay, &errs, &asts, &tkns);
+	jry_compile(&alloc, &jay, &errs, mdir, &asts, &tkns);
 
 	ASSERT_EQ(errs.size, 0);
 

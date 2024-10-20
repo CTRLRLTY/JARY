@@ -51,7 +51,7 @@ struct runtime {
 static inline bool push(struct stack *s, union jy_value value)
 {
 	uint32_t idx = s->m.size / sizeof(value);
-	void	*mem = sb_alloc(&s->m, sizeof(value));
+	void	*mem = sb_alloc(&s->m, 0, sizeof(value));
 
 	if (mem == NULL)
 		return true;

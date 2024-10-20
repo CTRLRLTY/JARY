@@ -9,11 +9,10 @@
 struct sc_mem;
 
 struct jy_errs {
-	const char   **msgs;
-	uint32_t      *from;
-	uint32_t      *to;
-	struct su_mem *m;
-	uint32_t       size;
+	const char **msgs;
+	uint32_t    *from;
+	uint32_t    *to;
+	uint32_t     size;
 };
 
 struct jy_asts {

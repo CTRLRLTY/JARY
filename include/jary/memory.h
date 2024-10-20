@@ -28,9 +28,9 @@
 typedef void (*free_t)(void *);
 
 struct sb_mem {
-	void	*buf;
-	uint32_t capacity;
-	uint32_t size;
+	void *buf;
+	int   capacity;
+	int   size;
 };
 
 // shitty memory allocator...
@@ -56,8 +56,12 @@ static inline void ifree(void **ptr)
 	free(*ptr);
 }
 
-void *sb_alloc(struct sb_mem *sb, uint32_t nmemb);
-void *sb_reserve(struct sb_mem *sb, uint32_t nmemb);
+#define SB_NOGROW  0x1
+#define SB_NOREGEN 0x2
+
+void *sb_alloc(struct sb_mem *sb, int flag, uint32_t nmemb);
+void *sb_append(struct sb_mem *sb, int flag, uint32_t nmemb);
+void *sb_reserve(struct sb_mem *sb, int flag, uint32_t nmemb);
 void  sb_free(struct sb_mem *sb);
 
 void *su_alloc(struct su_mem *alloc, void *scptr, uint32_t nmemb);

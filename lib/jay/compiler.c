@@ -1282,6 +1282,7 @@ PANIC:
 static inline bool _import_stmt(struct sc_mem	     *alloc,
 				const struct jy_asts *asts,
 				const struct jy_tkns *tkns,
+				const char	     *mdir,
 				struct jy_jay	     *ctx,
 				struct jy_errs	     *errs,
 				uint32_t	      id)
@@ -1289,12 +1290,12 @@ static inline bool _import_stmt(struct sc_mem	     *alloc,
 	uint32_t tkn	  = asts->tkns[id];
 	char	*lexeme	  = tkns->lexemes[tkn];
 	uint32_t lexsz	  = tkns->lexsz[tkn];
-	int	 dirlen	  = strlen(ctx->mdir);
+	int	 dirlen	  = strlen(mdir);
 	char	 prefix[] = "lib";
 
 	char path[dirlen + sizeof(prefix) - 1 + lexsz];
 
-	strcpy(path, ctx->mdir);
+	strcpy(path, mdir);
 	strcat(path, prefix);
 	strncat(path, lexeme, lexsz);
 
@@ -1335,6 +1336,7 @@ PANIC:
 static inline bool _root(struct sc_mem	      *alloc,
 			 const struct jy_asts *asts,
 			 const struct jy_tkns *tkns,
+			 const char	      *mdir,
 			 struct jy_jay	      *ctx,
 			 struct jy_errs	      *errs,
 			 uint32_t	       id)
@@ -1373,7 +1375,7 @@ static inline bool _root(struct sc_mem	      *alloc,
 	}
 
 	for (uint32_t i = 0; i < imports_sz; ++i)
-		_import_stmt(alloc, asts, tkns, ctx, errs, imports[i]);
+		_import_stmt(alloc, asts, tkns, mdir, ctx, errs, imports[i]);
 
 	for (uint32_t i = 0; i < ingress_sz; ++i)
 		_ingress_decl(alloc, asts, tkns, ctx, errs, ingress[i]);
@@ -1422,11 +1424,12 @@ static void free_jay(struct jy_jay *ctx)
 void jry_compile(struct sc_mem	      *alloc,
 		 struct jy_jay	      *ctx,
 		 struct jy_errs	      *errs,
+		 const char	      *mdir,
 		 const struct jy_asts *asts,
 		 const struct jy_tkns *tkns)
 {
 	assert(ctx->names == NULL);
-	assert(ctx->mdir != NULL);
+	assert(mdir != NULL);
 
 	uint32_t    root = 0;
 	enum jy_ast type = asts->types[root];
@@ -1447,7 +1450,7 @@ void jry_compile(struct sc_mem	      *alloc,
 	if (emit_cnst(val, JY_K_MODULE, &ctx->vals, &ctx->types, &ctx->valsz))
 		return;
 
-	_root(alloc, asts, tkns, ctx, errs, root);
+	_root(alloc, asts, tkns, mdir, ctx, errs, root);
 
 	sc_reap(alloc, ctx, (free_t) free_jay);
 }

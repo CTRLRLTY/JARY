@@ -26,8 +26,10 @@ add_library( scanner OBJECT )
 add_library( parser STATIC )
 add_library( compiler STATIC )
 add_library( exec OBJECT )
+add_library( jary SHARED )
 
 add_subdirectory( lib/jay )
+add_subdirectory( jaryd )
 
 if ( BUILD_TOOLS )
         add_subdirectory( tool )

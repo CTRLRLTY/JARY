@@ -41,26 +41,10 @@ struct Qmatch {
 	struct QMbase **qlist;
 };
 
-struct Qcreate {
-	int	     colsz;
-	const char  *table;
-	const char **columns;
-	int	    *flags;
-};
-
-struct Qinsert {
-	int	     colsz;
-	const char  *table;
-	const char **columns;
-	const char **values;
-};
-
 int q_match(struct sqlite3 *db,
 	    char	  **errmsg,
 	    q_callback_t    cb,
 	    void	   *data,
 	    struct Qmatch   Q);
-int q_create(struct sqlite3 *db, struct Qcreate Q);
-int q_insert(struct sqlite3 *db, struct Qinsert Q);
 
 #endif // JAYVM_Q_H

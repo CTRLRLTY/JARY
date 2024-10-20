@@ -5,35 +5,47 @@
 #include <stdlib.h>
 #include <string.h>
 
-void *sb_alloc(struct sb_mem *sb, uint32_t nmemb)
+static const int sb_flag = SB_NOGROW | SB_NOREGEN;
+
+void *sb_alloc(struct sb_mem *sb, int flag, uint32_t nmemb)
 {
-	const uint32_t growth = 2;
-	const uint32_t nextsz = sb->size + nmemb;
+	if (sb_reserve(sb, flag, nmemb) == NULL)
+		goto OUT_OF_MEMORY;
 
-	if (nextsz >= sb->capacity) {
-		uint32_t newsz = (sb->capacity + nmemb) * growth;
-		void	*mem   = realloc(sb->buf, newsz);
-
-		if (mem == NULL)
-			goto OUT_OF_MEMORY;
-
-		sb->capacity = newsz;
-		sb->buf	     = mem;
-	}
-
-	sb->size = nextsz;
+	memset((char *) sb->buf + sb->size, 0, nmemb);
+	sb->size += nmemb;
 
 	return sb->buf;
 OUT_OF_MEMORY:
 	return NULL;
 }
 
-void *sb_reserve(struct sb_mem *sb, uint32_t nmemb)
+void *sb_append(struct sb_mem *sb, int flag, uint32_t nmemb)
 {
-	const uint32_t growth = 2;
-	const uint32_t nextsz = sb->size + nmemb;
+	if (sb_reserve(sb, flag, nmemb) == NULL)
+		goto OUT_OF_MEMORY;
 
-	if (nextsz >= sb->capacity) {
+	char *mem  = sb->buf;
+	mem	  += sb->size;
+	memset(mem, 0, nmemb);
+
+	sb->size += nmemb;
+
+	return mem;
+OUT_OF_MEMORY:
+	return NULL;
+}
+
+void *sb_reserve(struct sb_mem *sb, int flag, uint32_t nmemb)
+{
+	const uint32_t growth = 1
+			      + 1 * (sb_flag & SB_NOGROW & ~(flag & SB_NOGROW));
+	const int nextsz = sb->size + nmemb;
+
+	if (nextsz > sb->capacity) {
+		if (!(sb_flag & SB_NOREGEN & ~(flag & SB_NOREGEN)))
+			goto OUT_OF_MEMORY;
+
 		uint32_t newsz = (sb->capacity + nmemb) * growth;
 		void	*mem   = realloc(sb->buf, newsz);
 
@@ -146,8 +158,8 @@ int sc_strfmt(struct sc_mem *alloc, char **str, const char *fmt, ...)
 	va_list arg;
 
 	va_start(arg, fmt);
-
 	int sz = vasprintf(str, fmt, arg);
+	va_end(arg);
 
 	if (*str == NULL)
 		goto OUT_OF_MEMORY;
@@ -162,12 +174,11 @@ int sc_strfmt(struct sc_mem *alloc, char **str, const char *fmt, ...)
 	alloc->back->buf    = *str;
 	alloc->back->expire = free;
 	alloc->back->back   = oldback;
-
 	return sz;
 
 OUT_OF_MEMORY:
 	free(*str);
-	return -1;
+	return 0;
 }
 
 int sc_reap(struct sc_mem *alloc, void *buf, free_t expire)

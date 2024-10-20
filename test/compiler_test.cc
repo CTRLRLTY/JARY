@@ -48,10 +48,10 @@ TEST(CompilerTest, Basic)
 
 	sc_reap(&alloc, src, free);
 
-	ctx.mdir = "../modules/";
+	const char mdir[] = "../modules/";
 
 	jry_parse(&alloc, &asts, &tkns, &errs, src, srcsz);
-	jry_compile(&alloc, &ctx, &errs, &asts, &tkns);
+	jry_compile(&alloc, &ctx, &errs, mdir, &asts, &tkns);
 
 	// clang-format off
 	uint8_t codes[] = {

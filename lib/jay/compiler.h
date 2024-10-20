@@ -38,8 +38,6 @@ enum jy_opcode {
 struct sc_mem;
 
 struct jy_jay {
-	// module dirpath
-	const char     *mdir;
 	// global names
 	struct jy_defs *names;
 	// code chunk array
@@ -54,6 +52,7 @@ struct jy_jay {
 void jry_compile(struct sc_mem	      *alloc,
 		 struct jy_jay	      *ctx,
 		 struct jy_errs	      *errs,
+		 const char	      *mdir,
 		 const struct jy_asts *asts,
 		 const struct jy_tkns *tkns);
 

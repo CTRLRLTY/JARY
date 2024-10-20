@@ -698,14 +698,12 @@ static void run_file(const char *path, const char *dirpath)
 	uint32_t       length = read_file(&alloc, path, &src);
 
 	char dirname[] = "/modules/";
-	char buf[strlen(dirpath) + sizeof(dirname)];
+	char mdir[strlen(dirpath) + sizeof(dirname)];
 
-	strcpy(buf, dirpath);
-	strcat(buf, dirname);
+	strcpy(mdir, dirpath);
+	strcat(mdir, dirname);
 
-	struct jy_jay jay = {
-		.mdir = buf,
-	};
+	struct jy_jay jay = { .codes = NULL };
 
 	jry_parse(&alloc, &asts, &tkns, &errs, src, length);
 
@@ -754,7 +752,7 @@ static void run_file(const char *path, const char *dirpath)
 	       "===================================="
 	       "\n\n");
 
-	jry_compile(&alloc, &jay, &errs, &asts, &tkns);
+	jry_compile(&alloc, &jay, &errs, mdir, &asts, &tkns);
 
 	uint32_t modulesz = 0;
 	uint32_t eventsz  = 0;

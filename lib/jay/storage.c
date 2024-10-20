@@ -5,11 +5,7 @@
 #include <assert.h>
 #include <sqlite3.h>
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-
-#define TYPE_MASK 0xf
 
 static inline bool exists(int			length,
 			  const struct QMbase **qlist,
@@ -154,111 +150,6 @@ CLOSE: {
 }
 
 	if (sqlite3_exec(db, sql, callback, data, errmsg) != SQLITE_OK)
-		goto TX_FAILED;
-
-	sc_free(&buf);
-	return 0;
-OUT_OF_MEMORY:
-	sc_free(&buf);
-	return -1;
-TX_FAILED:
-	sc_free(&buf);
-	return -2;
-}
-
-int q_create(struct sqlite3 *db, struct Qcreate Q)
-{
-	const char  *name    = Q.table;
-	int	     length  = Q.colsz;
-	const char **columns = Q.columns;
-	int	    *cflags  = Q.flags;
-
-	struct sc_mem buf = { .buf = NULL };
-
-	char *sql;
-	sc_strfmt(&buf, &sql, "CREATE TABLE IF NOT EXISTS %s (", name);
-
-	if (sql == NULL)
-		goto OUT_OF_MEMORY;
-
-	for (int i = 0; i < length; ++i) {
-		const char *c	 = columns[i];
-		int	    f	 = cflags[i];
-		int	    type = f & TYPE_MASK;
-
-		char *tstr;
-
-		switch (type) {
-		case Q_COL_INT:
-			tstr = "INTEGER";
-			break;
-		case Q_COL_STR:
-		default:
-			tstr = "TEXT";
-		}
-
-		if (i + 1 < length)
-			sc_strfmt(&buf, &sql, "%s %s %s,", sql, c, tstr);
-		else
-			sc_strfmt(&buf, &sql, "%s %s %s);", sql, c, tstr);
-
-		if (sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	if (sqlite3_exec(db, sql, NULL, NULL, NULL) != SQLITE_OK)
-		goto TX_FAILED;
-
-	sc_free(&buf);
-	return 0;
-OUT_OF_MEMORY:
-	sc_free(&buf);
-	return -1;
-TX_FAILED:
-	sc_free(&buf);
-	return -2;
-}
-
-int q_insert(struct sqlite3 *db, struct Qinsert Q)
-{
-	const char   *name    = Q.table;
-	int	      length  = Q.colsz;
-	const char  **columns = Q.columns;
-	const char  **values  = Q.values;
-	struct sc_mem buf     = { .buf = NULL };
-	char	     *sql     = NULL;
-
-	sc_strfmt(&buf, &sql, "INSERT INTO %s (", name);
-
-	if (sql == NULL)
-		goto OUT_OF_MEMORY;
-
-	for (int i = 0; i < length; ++i) {
-		if (i + 1 > length)
-			sc_strfmt(&buf, &sql, "%s %s,", sql, columns[i]);
-		else
-			sc_strfmt(&buf, &sql, "%s %s)", sql, columns[i]);
-
-		if (sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	sc_strfmt(&buf, &sql, "%s VALUES(");
-
-	if (sql == NULL)
-		goto OUT_OF_MEMORY;
-
-	for (int i = 0; i < length; ++i) {
-		if (i + 1 > length)
-			sc_strfmt(&buf, &sql, "%s %s,", sql, values[i]);
-		else
-			sc_strfmt(&buf, &sql, "%s %s);", sql, values[i]);
-
-		if (sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	if (sqlite3_exec(db, sql, NULL, NULL, NULL) != SQLITE_OK)
 		goto TX_FAILED;
 
 	sc_free(&buf);

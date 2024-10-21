@@ -3,6 +3,34 @@
 
 #include <stdint.h>
 
+enum jy_opcode {
+	JY_OP_PUSH8,
+	JY_OP_PUSH16,
+
+	JY_OP_JOIN,
+	JY_OP_EXACT,
+	JY_OP_JMPT,
+	JY_OP_JMPF,
+	JY_OP_CALL,
+
+	JY_OP_QUERY,
+
+	JY_OP_NOT,
+	JY_OP_CMPSTR,
+	JY_OP_CMPFIELD,
+	JY_OP_CMP,
+	JY_OP_LT,
+	JY_OP_GT,
+
+	JY_OP_ADD,
+	JY_OP_CONCAT,
+	JY_OP_SUB,
+	JY_OP_MUL,
+	JY_OP_DIV,
+
+	JY_OP_END
+};
+
 enum jy_ktype {
 	JY_K_UNKNOWN = 0,
 	JY_K_RULE,
@@ -60,6 +88,18 @@ struct jy_obj_str {
 	uint32_t size;
 	// null terminated string
 	char	 cstr[];
+};
+
+struct jy_jay {
+	// global names
+	struct jy_defs *names;
+	// code chunk array
+	uint8_t	       *codes;
+	// constant table
+	union jy_value *vals;
+	enum jy_ktype  *types;
+	uint32_t	codesz;
+	uint16_t	valsz;
 };
 
 struct jy_obj_func {

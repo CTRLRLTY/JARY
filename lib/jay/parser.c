@@ -1,5 +1,38 @@
+/*
+BSD 3-Clause License
+
+Copyright (c) 2024. Muhammad Raznan. All Rights Reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
 #include "parser.h"
 
+#include "ast.h"
+#include "error.h"
 #include "scanner.h"
 
 #include "jary/common.h"
@@ -71,7 +104,7 @@ enum prec {
 typedef bool (*parsefn_t)(struct parser *,
 			  struct jy_asts *,
 			  struct jy_tkns *,
-			  struct jy_errs *,
+			  struct tkn_errs *,
 			  uint32_t *);
 
 struct rule {
@@ -82,18 +115,18 @@ struct rule {
 
 static inline struct rule *rule(enum jy_tkn type);
 
-static bool _precedence(struct parser  *p,
-			struct jy_asts *asts,
-			struct jy_tkns *tkns,
-			struct jy_errs *errs,
-			uint32_t       *topast,
-			enum prec	rbp);
+static bool _precedence(struct parser	*p,
+			struct jy_asts	*asts,
+			struct jy_tkns	*tkns,
+			struct tkn_errs *errs,
+			uint32_t	*topast,
+			enum prec	 rbp);
 
-static bool _expression(struct parser  *p,
-			struct jy_asts *asts,
-			struct jy_tkns *tkns,
-			struct jy_errs *errs,
-			uint32_t       *topast);
+static bool _expression(struct parser	*p,
+			struct jy_asts	*asts,
+			struct jy_tkns	*tkns,
+			struct tkn_errs *errs,
+			uint32_t	*topast);
 
 static inline __use_result int push_ast(struct jy_asts *asts,
 					enum jy_ast	type,
@@ -348,33 +381,33 @@ PANIC:
 	return true;
 }
 
-static bool _err(struct parser	*p,
-		 struct jy_asts *__unused(asts),
-		 struct jy_tkns *__unused(tkns),
-		 struct jy_errs *errs,
-		 uint32_t	*__unused(root))
+static bool _err(struct parser	 *p,
+		 struct jy_asts	 *__unused(asts),
+		 struct jy_tkns	 *__unused(tkns),
+		 struct tkn_errs *errs,
+		 uint32_t	 *__unused(root))
 {
-	jry_push_error(errs, msg_inv_token, p->tkn, p->tkn);
+	tkn_error(errs, msg_inv_token, p->tkn, p->tkn);
 
 	return true;
 }
 
-static bool _err_str(struct parser  *p,
-		     struct jy_asts *__unused(asts),
-		     struct jy_tkns *__unused(tkns),
-		     struct jy_errs *errs,
-		     uint32_t	    *__unused(root))
+static bool _err_str(struct parser   *p,
+		     struct jy_asts  *__unused(asts),
+		     struct jy_tkns  *__unused(tkns),
+		     struct tkn_errs *errs,
+		     uint32_t	     *__unused(root))
 {
-	jry_push_error(errs, msg_inv_string, p->tkn, p->tkn);
+	tkn_error(errs, msg_inv_string, p->tkn, p->tkn);
 
 	return true;
 }
 
-static bool _literal(struct parser  *p,
-		     struct jy_asts *asts,
-		     struct jy_tkns *tkns,
-		     struct jy_errs *errs,
-		     uint32_t	    *root)
+static bool _literal(struct parser   *p,
+		     struct jy_asts  *asts,
+		     struct jy_tkns  *tkns,
+		     struct tkn_errs *errs,
+		     uint32_t	     *root)
 {
 	enum jy_tkn type = tkns->types[p->tkn];
 
@@ -394,7 +427,7 @@ static bool _literal(struct parser  *p,
 		break;
 
 	default: {
-		jry_push_error(errs, msg_inv_literal, p->tkn, p->tkn);
+		tkn_error(errs, msg_inv_literal, p->tkn, p->tkn);
 		goto PANIC;
 	}
 	}
@@ -411,11 +444,11 @@ PANIC:
 	return true;
 }
 
-static bool _name(struct parser	 *p,
-		  struct jy_asts *asts,
-		  struct jy_tkns *tkns,
-		  struct jy_errs *__unused(errs),
-		  uint32_t	 *root)
+static bool _name(struct parser	  *p,
+		  struct jy_asts  *asts,
+		  struct jy_tkns  *tkns,
+		  struct tkn_errs *__unused(errs),
+		  uint32_t	  *root)
 {
 	if (push_ast(asts, AST_NAME, p->tkn, root) != 0)
 		return true;
@@ -425,11 +458,11 @@ static bool _name(struct parser	 *p,
 	return ended(tkns->types, tkns->size);
 }
 
-static bool _not(struct parser	*p,
-		 struct jy_asts *asts,
-		 struct jy_tkns *tkns,
-		 struct jy_errs *errs,
-		 uint32_t	*root)
+static bool _not(struct parser	 *p,
+		 struct jy_asts	 *asts,
+		 struct jy_tkns	 *tkns,
+		 struct tkn_errs *errs,
+		 uint32_t	 *root)
 {
 	if (push_ast(asts, AST_NOT, p->tkn, root) != 0)
 		goto PANIC;
@@ -451,11 +484,11 @@ PANIC:
 	return true;
 }
 
-static bool _event(struct parser  *p,
-		   struct jy_asts *asts,
-		   struct jy_tkns *tkns,
-		   struct jy_errs *errs,
-		   uint32_t	  *root)
+static bool _event(struct parser   *p,
+		   struct jy_asts  *asts,
+		   struct jy_tkns  *tkns,
+		   struct tkn_errs *errs,
+		   uint32_t	   *root)
 {
 	uint32_t dlrtkn = p->tkn;
 	// consume $
@@ -464,7 +497,7 @@ static bool _event(struct parser  *p,
 	enum jy_tkn type = tkns->types[p->tkn];
 
 	if (type != TKN_IDENTIFIER) {
-		jry_push_error(errs, msg_expect_ident, dlrtkn, p->tkn);
+		tkn_error(errs, msg_expect_ident, dlrtkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -479,11 +512,11 @@ PANIC:
 	return true;
 }
 
-static bool _grouping(struct parser  *p,
-		      struct jy_asts *asts,
-		      struct jy_tkns *tkns,
-		      struct jy_errs *errs,
-		      uint32_t	     *root)
+static bool _grouping(struct parser   *p,
+		      struct jy_asts  *asts,
+		      struct jy_tkns  *tkns,
+		      struct tkn_errs *errs,
+		      uint32_t	      *root)
 {
 	uint32_t grptkn = p->tkn;
 	// consume (
@@ -493,7 +526,7 @@ static bool _grouping(struct parser  *p,
 		goto PANIC;
 
 	if (tkns->types[p->tkn] != TKN_RIGHT_PAREN) {
-		jry_push_error(errs, msg_expect_paren_close, grptkn, p->tkn);
+		tkn_error(errs, msg_expect_paren_close, grptkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -505,17 +538,17 @@ PANIC:
 	return true;
 }
 
-static bool _call(struct parser	 *p,
-		  struct jy_asts *asts,
-		  struct jy_tkns *tkns,
-		  struct jy_errs *errs,
-		  uint32_t	 *root)
+static bool _call(struct parser	  *p,
+		  struct jy_asts  *asts,
+		  struct jy_tkns  *tkns,
+		  struct tkn_errs *errs,
+		  uint32_t	  *root)
 {
 	uint32_t    left    = *root;
 	enum jy_ast type    = asts->types[left];
 	uint32_t    nametkn = p->tkn;
 	if (type != AST_ACCESS) {
-		jry_push_error(errs, msg_inv_invoc, p->tkn, p->tkn);
+		tkn_error(errs, msg_inv_invoc, p->tkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -537,7 +570,7 @@ static bool _call(struct parser	 *p,
 
 		// > 2 bytes
 		if ((paramsz + 1) & 0x10000) {
-			jry_push_error(errs, msg_args_limit, nametkn, p->tkn);
+			tkn_error(errs, msg_args_limit, nametkn, p->tkn);
 			goto PANIC;
 		}
 
@@ -559,7 +592,7 @@ static bool _call(struct parser	 *p,
 	}
 
 	if (tkns->types[p->tkn] != TKN_RIGHT_PAREN) {
-		jry_push_error(errs, msg_expect_paren_close, nametkn, p->tkn);
+		tkn_error(errs, msg_expect_paren_close, nametkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -571,11 +604,11 @@ PANIC:
 	return true;
 }
 
-static bool _dot(struct parser	*p,
-		 struct jy_asts *asts,
-		 struct jy_tkns *tkns,
-		 struct jy_errs *errs,
-		 uint32_t	*root)
+static bool _dot(struct parser	 *p,
+		 struct jy_asts	 *asts,
+		 struct jy_tkns	 *tkns,
+		 struct tkn_errs *errs,
+		 uint32_t	 *root)
 {
 	uint32_t    right;
 	uint32_t    left  = *root;
@@ -586,7 +619,7 @@ static bool _dot(struct parser	*p,
 	case AST_EVENT:
 		break;
 	default: {
-		jry_push_error(errs, msg_inv_access, p->tkn, p->tkn);
+		tkn_error(errs, msg_inv_access, p->tkn, p->tkn);
 		goto PANIC;
 	}
 	}
@@ -601,8 +634,7 @@ static bool _dot(struct parser	*p,
 	enum jy_tkn type = tkns->types[p->tkn];
 
 	if (type != TKN_IDENTIFIER) {
-		jry_push_error(errs, msg_expect_ident, asts->tkns[*root],
-			       p->tkn);
+		tkn_error(errs, msg_expect_ident, asts->tkns[*root], p->tkn);
 		goto PANIC;
 	}
 
@@ -634,11 +666,11 @@ PANIC:
 	return true;
 }
 
-static bool _tilde(struct parser  *p,
-		   struct jy_asts *asts,
-		   struct jy_tkns *tkns,
-		   struct jy_errs *errs,
-		   uint32_t	  *root)
+static bool _tilde(struct parser   *p,
+		   struct jy_asts  *asts,
+		   struct jy_tkns  *tkns,
+		   struct tkn_errs *errs,
+		   uint32_t	   *root)
 {
 	uint32_t    optkn   = p->tkn;
 	uint32_t    left    = *root;
@@ -646,7 +678,7 @@ static bool _tilde(struct parser  *p,
 	enum jy_ast leftype = asts->types[left];
 
 	if (leftype != AST_NAME && leftype != AST_EVENT) {
-		jry_push_error(errs, msg_expect_name_or_event, lefttkn, p->tkn);
+		tkn_error(errs, msg_expect_name_or_event, lefttkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -657,7 +689,7 @@ static bool _tilde(struct parser  *p,
 	enum jy_tkn ttype    = tkns->types[p->tkn];
 
 	if (ttype != TKN_REGEXP) {
-		jry_push_error(errs, msg_expect_regex, lefttkn, regextkn);
+		tkn_error(errs, msg_expect_regex, lefttkn, regextkn);
 		goto PANIC;
 	}
 
@@ -667,7 +699,7 @@ static bool _tilde(struct parser  *p,
 	ttype = tkns->types[p->tkn];
 
 	if (ttype != TKN_NEWLINE) {
-		jry_push_error(errs, msg_inv_regex, lefttkn, p->tkn);
+		tkn_error(errs, msg_inv_regex, lefttkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -693,11 +725,11 @@ PANIC:
 	return true;
 }
 
-static bool _binary(struct parser  *p,
-		    struct jy_asts *asts,
-		    struct jy_tkns *tkns,
-		    struct jy_errs *errs,
-		    uint32_t	   *root)
+static bool _binary(struct parser   *p,
+		    struct jy_asts  *asts,
+		    struct jy_tkns  *tkns,
+		    struct tkn_errs *errs,
+		    uint32_t	    *root)
 {
 	uint32_t left  = *root;
 	uint32_t right = 0;
@@ -770,20 +802,19 @@ PANIC:
 	return true;
 }
 
-static bool _precedence(struct parser  *p,
-			struct jy_asts *asts,
-			struct jy_tkns *tkns,
-			struct jy_errs *errs,
-			uint32_t       *root,
-			enum prec	rbp)
+static bool _precedence(struct parser	*p,
+			struct jy_asts	*asts,
+			struct jy_tkns	*tkns,
+			struct tkn_errs *errs,
+			uint32_t	*root,
+			enum prec	 rbp)
 {
 	enum jy_tkn  pretype	= tkns->types[p->tkn];
 	struct rule *prefixrule = rule(pretype);
 	parsefn_t    prefixfn	= prefixrule->prefix;
 
 	if (prefixfn == NULL) {
-		jry_push_error(errs, msg_inv_expression, asts->tkns[*root],
-			       p->tkn);
+		tkn_error(errs, msg_inv_expression, asts->tkns[*root], p->tkn);
 		goto PANIC;
 	}
 
@@ -807,11 +838,11 @@ PANIC:
 	return true;
 }
 
-static inline bool _expression(struct parser  *p,
-			       struct jy_asts *asts,
-			       struct jy_tkns *tkns,
-			       struct jy_errs *errs,
-			       uint32_t	      *root)
+static inline bool _expression(struct parser   *p,
+			       struct jy_asts  *asts,
+			       struct jy_tkns  *tkns,
+			       struct tkn_errs *errs,
+			       uint32_t	       *root)
 {
 	uint32_t lastast = asts->size - 1;
 
@@ -828,11 +859,11 @@ PANIC:
 	return true;
 }
 
-static bool _types(struct parser  *p,
-		   struct jy_asts *asts,
-		   struct jy_tkns *tkns,
-		   struct jy_errs *errs,
-		   uint32_t	  *root)
+static bool _types(struct parser   *p,
+		   struct jy_asts  *asts,
+		   struct jy_tkns  *tkns,
+		   struct tkn_errs *errs,
+		   uint32_t	   *root)
 {
 	uint32_t    sectast = asts->size - 1;
 	uint32_t    sectkn  = asts->tkns[sectast];
@@ -840,7 +871,7 @@ static bool _types(struct parser  *p,
 	enum jy_tkn type    = tkns->types[nametkn];
 
 	if (type != TKN_IDENTIFIER) {
-		jry_push_error(errs, msg_inv_type_decl, sectkn, nametkn);
+		tkn_error(errs, msg_inv_type_decl, sectkn, nametkn);
 		goto PANIC;
 	}
 
@@ -864,7 +895,7 @@ static bool _types(struct parser  *p,
 		name_type = AST_BOOL_TYPE;
 		break;
 	default:
-		jry_push_error(errs, msg_expect_type, sectkn, p->tkn);
+		tkn_error(errs, msg_expect_type, sectkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -887,11 +918,11 @@ PANIC:
 	return true;
 }
 
-static bool _section(struct parser  *p,
-		     struct jy_asts *asts,
-		     struct jy_tkns *tkns,
-		     struct jy_errs *errs,
-		     uint32_t	     declast)
+static bool _section(struct parser   *p,
+		     struct jy_asts  *asts,
+		     struct jy_tkns  *tkns,
+		     struct tkn_errs *errs,
+		     uint32_t	      declast)
 {
 	enum jy_ast decltype   = asts->types[declast];
 	uint32_t    sectast    = asts->size - 1;
@@ -902,7 +933,7 @@ static bool _section(struct parser  *p,
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 	bool (*listfn)(struct parser *, struct jy_asts *, struct jy_tkns *,
-		       struct jy_errs *, uint32_t *);
+		       struct tkn_errs *, uint32_t *);
 
 	listfn = NULL;
 
@@ -947,7 +978,7 @@ static bool _section(struct parser  *p,
 	}
 
 	if (tkns->types[p->tkn] != TKN_COLON) {
-		jry_push_error(errs, msg_expect_semicolon, secttkn, p->tkn);
+		tkn_error(errs, msg_expect_semicolon, secttkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -983,8 +1014,7 @@ static bool _section(struct parser  *p,
 			goto PANIC;
 
 		if (tkns->types[p->tkn] != TKN_NEWLINE) {
-			jry_push_error(errs, msg_expect_newline, secttkn,
-				       p->tkn);
+			tkn_error(errs, msg_expect_newline, secttkn, p->tkn);
 			goto PANIC;
 		}
 
@@ -998,7 +1028,7 @@ FINISH:
 	return false;
 
 INVALID_SECTION: {
-	jry_push_error(errs, msg_inv_section, asts->tkns[declast], p->tkn);
+	tkn_error(errs, msg_inv_section, asts->tkns[declast], p->tkn);
 }
 PANIC:
 	// remove all node up to sectast (inclusive)
@@ -1008,16 +1038,16 @@ PANIC:
 	return true;
 }
 
-static bool _block(struct parser  *p,
-		   struct jy_asts *asts,
-		   struct jy_tkns *tkns,
-		   struct jy_errs *errs,
-		   uint32_t	   declast)
+static bool _block(struct parser   *p,
+		   struct jy_asts  *asts,
+		   struct jy_tkns  *tkns,
+		   struct tkn_errs *errs,
+		   uint32_t	    declast)
 {
 	uint32_t decltkn = asts->tkns[declast];
 
 	if (tkns->types[p->tkn] != TKN_LEFT_BRACE) {
-		jry_push_error(errs, msg_expect_open_brace, decltkn, p->tkn);
+		tkn_error(errs, msg_expect_open_brace, decltkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -1055,7 +1085,7 @@ static bool _block(struct parser  *p,
 
 CLOSING:
 	if (tkns->types[p->tkn] != TKN_RIGHT_BRACE) {
-		jry_push_error(errs, msg_expect_close_brace, decltkn, p->tkn);
+		tkn_error(errs, msg_expect_close_brace, decltkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -1072,16 +1102,16 @@ PANIC:
 	return true;
 }
 
-static inline bool _identifier(struct parser  *p,
-			       struct jy_asts *asts,
-			       struct jy_tkns *tkns,
-			       struct jy_errs *errs,
-			       uint32_t	       ast)
+static inline bool _identifier(struct parser   *p,
+			       struct jy_asts  *asts,
+			       struct jy_tkns  *tkns,
+			       struct tkn_errs *errs,
+			       uint32_t		ast)
 {
 	enum jy_tkn type = tkns->types[p->tkn];
 
 	if (type != TKN_IDENTIFIER) {
-		jry_push_error(errs, msg_expect_ident, asts->tkns[ast], p->tkn);
+		tkn_error(errs, msg_expect_ident, asts->tkns[ast], p->tkn);
 		goto PANIC;
 	}
 
@@ -1094,10 +1124,10 @@ PANIC:
 	return true;
 }
 
-static bool _declstmt(struct parser  *p,
-		      struct jy_asts *asts,
-		      struct jy_tkns *tkns,
-		      struct jy_errs *errs)
+static bool _declstmt(struct parser   *p,
+		      struct jy_asts  *asts,
+		      struct jy_tkns  *tkns,
+		      struct tkn_errs *errs)
 {
 	uint32_t declast     = asts->size - 1;
 	uint32_t decltkn     = p->tkn;
@@ -1138,8 +1168,7 @@ static bool _declstmt(struct parser  *p,
 		uint32_t pattkn	     = p->tkn;
 
 		if (tkns->types[pattkn] != TKN_STRING) {
-			jry_push_error(errs, msg_expect_string, decltkn,
-				       pattkn);
+			tkn_error(errs, msg_expect_string, decltkn, pattkn);
 			goto PANIC;
 		}
 
@@ -1158,7 +1187,7 @@ static bool _declstmt(struct parser  *p,
 	}
 
 	default: {
-		jry_push_error(errs, msg_inv_decl, decltkn, decltkn);
+		tkn_error(errs, msg_inv_decl, decltkn, decltkn);
 		goto PANIC;
 	}
 	}
@@ -1172,10 +1201,10 @@ PANIC:
 	return true;
 }
 
-static int _entry(struct parser	 *p,
-		  struct jy_asts *asts,
-		  struct jy_tkns *tkns,
-		  struct jy_errs *errs)
+static int _entry(struct parser	  *p,
+		  struct jy_asts  *asts,
+		  struct jy_tkns  *tkns,
+		  struct tkn_errs *errs)
 {
 	uint32_t roottkn = tkns->size;
 	int	 status	 = push_tkn(tkns, TKN_NONE, 0, 0, NULL, 0);
@@ -1261,7 +1290,7 @@ static inline struct rule *rule(enum jy_tkn type)
 	return &rules[type];
 }
 
-void free_asts(struct jy_asts *asts)
+static inline void free_asts(struct jy_asts *asts)
 {
 	jry_free(asts->types);
 	jry_free(asts->tkns);
@@ -1273,7 +1302,7 @@ void free_asts(struct jy_asts *asts)
 	jry_free(asts->childsz);
 }
 
-void free_tkns(struct jy_tkns *tkns)
+static inline void free_tkns(struct jy_tkns *tkns)
 {
 	jry_free(tkns->types);
 	jry_free(tkns->lines);
@@ -1286,19 +1315,12 @@ void free_tkns(struct jy_tkns *tkns)
 	jry_free(tkns->lexsz);
 }
 
-void free_errs(struct jy_errs *errs)
-{
-	jry_free(errs->msgs);
-	jry_free(errs->from);
-	jry_free(errs->to);
-}
-
-void jry_parse(struct sc_mem  *alloc,
-	       struct jy_asts *ast,
-	       struct jy_tkns *tkns,
-	       struct jy_errs *errs,
-	       const char     *src,
-	       uint32_t	       length)
+void jry_parse(struct sc_mem   *alloc,
+	       struct jy_asts  *ast,
+	       struct jy_tkns  *tkns,
+	       struct tkn_errs *errs,
+	       const char      *src,
+	       uint32_t		length)
 {
 	struct parser p = {
 		.src   = src,
@@ -1313,21 +1335,4 @@ void jry_parse(struct sc_mem  *alloc,
 		return;
 
 	_entry(&p, ast, tkns, errs);
-}
-
-int jry_push_error(struct jy_errs *errs,
-		   const char	  *msg,
-		   uint32_t	   from,
-		   uint32_t	   to)
-{
-	jry_mem_push(errs->msgs, errs->size, msg);
-	jry_mem_push(errs->from, errs->size, from);
-	jry_mem_push(errs->to, errs->size, to);
-
-	if (errs->from == NULL)
-		return -1;
-
-	errs->size += 1;
-
-	return 0;
 }

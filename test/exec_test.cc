@@ -170,7 +170,7 @@ TEST(ExecTest, MarkModule)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	ASSERT_EQ(jry_exec(db, NULL, &jay), 0);
+	ASSERT_EQ(jry_exec(db, &jay), 0);
 
 	{
 		uint32_t	    id;
@@ -235,7 +235,7 @@ TEST(ExecTest, Join)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << sqlite3_errmsg(db);
 
-	char *sql = "CREATE TABLE data1 (yes TEXT);";
+	char *sql = "CREATE TABLE data1 (yes TEXT, nein TEXT);";
 	char *msg = NULL;
 	err	  = sqlite3_exec(db, sql, NULL, NULL, &msg);
 
@@ -247,7 +247,10 @@ TEST(ExecTest, Join)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	sql = "INSERT INTO data1 (yes) VALUES (\"hello\")";
+	sql = "INSERT INTO data1 (yes, nein) VALUES (\"hello\", \"goodbye\")";
+	err = sqlite3_exec(db, sql, NULL, NULL, &msg);
+
+	sql = "INSERT INTO data1 (yes, nein) VALUES (\"hello\", \"bye?\")";
 	err = sqlite3_exec(db, sql, NULL, NULL, &msg);
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
@@ -257,7 +260,7 @@ TEST(ExecTest, Join)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	ASSERT_EQ(jry_exec(db, NULL, &jay), 0);
+	ASSERT_EQ(jry_exec(db, &jay), 0);
 
 	{
 		uint32_t	    id;
@@ -270,7 +273,7 @@ TEST(ExecTest, Join)
 
 		// calling count function -> mark.count()
 		ASSERT_EQ(ofunc->func(1, &key, &result), 0);
-		ASSERT_EQ(result.i64, 1);
+		ASSERT_EQ(result.i64, 2);
 	}
 
 	sqlite3_close_v2(db);

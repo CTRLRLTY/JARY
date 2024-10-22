@@ -162,7 +162,7 @@ int def_set(struct jy_defs *tbl,
 
 	return 0;
 OUT_OF_MEMORY:
-	return -1;
+	return 1;
 }
 
 int def_get(struct jy_defs *tbl,
@@ -183,6 +183,27 @@ int def_get(struct jy_defs *tbl,
 	return 0;
 NOT_FOUND:
 	return 1;
+}
+
+int def_keys(const struct jy_defs *tbl, int max, char **keys)
+{
+	int set = 0;
+	for (int i = 0; i < tbl->capacity; ++i) {
+		if (set >= max)
+			goto FINISH;
+
+		if (tbl->keys[i] == NULL)
+			continue;
+
+		if (tbl->keys[i][0] == '_' && tbl->keys[i][1] == '_')
+			continue;
+
+		keys[set]  = tbl->keys[i];
+		set	  += 1;
+	}
+
+FINISH:
+	return set;
 }
 
 int def_add(struct jy_defs *tbl,

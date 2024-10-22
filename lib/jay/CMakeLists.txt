@@ -30,7 +30,7 @@
 target_sources( scanner PRIVATE scanner.c )
 target_sources( parser PUBLIC memory.c PRIVATE parser.c)
 target_sources( compiler PUBLIC memory.c PRIVATE compiler.c defs.c dload.c )
-target_sources( exec PRIVATE exec.c storage.c )
+target_sources( exec PRIVATE exec.c )
 
 target_sources( jary 
         PRIVATE 
@@ -41,7 +41,6 @@ target_sources( jary
         defs.c
         dload.c
         exec.c 
-        storage.c 
         jary.c
 )
 

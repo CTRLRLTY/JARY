@@ -57,6 +57,8 @@ int def_get(struct jy_defs *tbl,
 	    union jy_value *value,
 	    enum jy_ktype  *type);
 
+int def_keys(const struct jy_defs *tbl, int max, char **keys);
+
 int def_add(struct jy_defs *tbl,
 	    const char	   *key,
 	    union jy_value  value,

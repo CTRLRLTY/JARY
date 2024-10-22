@@ -234,8 +234,10 @@ static const char *ast2string(enum jy_ast type)
 		return "NAME";
 	case AST_PATH:
 		return "PATH";
-	case AST_ACCESS:
-		return "ACCESS";
+	case AST_QACCESS:
+		return "QACCESS";
+	case AST_EACCESS:
+		return "EACCESS";
 	case TOTAL_AST_TYPES:
 		break;
 	}
@@ -258,18 +260,14 @@ static const char *k2string(enum jy_ktype type)
 		return "[FUNC]";
 	case JY_K_EVENT:
 		return "[EVENT]";
-	case JY_K_LONG_FIELD:
-		return "[LONG_FIELD]";
-	case JY_K_STR_FIELD:
-		return "[STR_FIELD]";
-	case JY_K_BOOL_FIELD:
-		return "[BOOL_FIELD]";
 	case JY_K_BOOL:
 		return "[BOOL]";
 	case JY_K_INGRESS:
 		return "[INGRESS]";
 	case JY_K_RULE:
 		return "[RULE]";
+	case JY_K_CHUNK:
+		return "[CHUNK]";
 	case JY_K_HANDLE:
 		return "[HANDLE]";
 	case JY_K_DESCRIPTOR:
@@ -298,8 +296,8 @@ static const char *codestring(enum jy_opcode code)
 		return "OP_LT";
 	case JY_OP_CMPSTR:
 		return "OP_CMPSTR";
-	case JY_OP_CMPFIELD:
-		return "OP_CMPFIELD";
+	case JY_OP_LOAD:
+		return "OP_LOAD";
 	case JY_OP_CMP:
 		return "OP_CMP";
 	case JY_OP_NOT:
@@ -528,6 +526,7 @@ static inline void print_value(enum jy_ktype type, const union jy_value value)
 	case JY_K_HANDLE:
 	case JY_K_FUNC:
 	case JY_K_EVENT:
+	case JY_K_CHUNK:
 	case JY_K_MODULE:
 		printf("[PTR:%p]", value.handle);
 		return;
@@ -535,15 +534,13 @@ static inline void print_value(enum jy_ktype type, const union jy_value value)
 		printf("%ld", value.i64);
 		return;
 	case JY_K_STR:
-		printf("%s", value.str->cstr);
+		if (value.str)
+			printf("%s", value.str->cstr);
+		else
+			printf("UNBOUND");
 		return;
 	case JY_K_DESCRIPTOR:
 		printf("%u %u", value.dscptr.name, value.dscptr.member);
-		return;
-	case JY_K_LONG_FIELD:
-	case JY_K_STR_FIELD:
-	case JY_K_BOOL_FIELD:
-		printf("UNBOUND");
 		return;
 	}
 }
@@ -654,9 +651,12 @@ static void print_kpool(const enum jy_ktype  *types,
 	}
 }
 
-static void print_chunks(uint8_t *codes, uint32_t codesz)
+static void print_chunk(uint8_t *codes, int indent)
 {
-	for (uint32_t pc = 0; pc < codesz;) {
+	for (uint32_t pc = 0; codes[pc] != JY_OP_END;) {
+		if (indent)
+			printf("%*c", indent, '\t');
+
 		printf("%5d | ", pc);
 
 		enum jy_opcode opcode = codes[pc];
@@ -677,6 +677,10 @@ static void print_chunks(uint8_t *codes, uint32_t codesz)
 			printf(" %d", *arg.u8);
 			pc += 2;
 			break;
+		case JY_OP_PUSH16:
+			printf(" %d", *arg.u16);
+			pc += 3;
+			break;
 		case JY_OP_JMPF:
 		case JY_OP_JMPT: {
 			printf(" %d", *arg.i16);
@@ -694,6 +698,20 @@ static void print_chunks(uint8_t *codes, uint32_t codesz)
 		}
 
 		printf("\n");
+	}
+}
+
+static inline void print_chunks(const union jy_value *vals,
+				const enum jy_ktype  *types,
+				uint16_t	      valsz)
+{
+	for (uint32_t i = 0; i < valsz; ++i) {
+		if (types[i] != JY_K_CHUNK)
+			continue;
+
+		union jy_value m = vals[i];
+		printf("%5u [CHUNK] (%p) \n", i, m.handle);
+		print_chunk(vals[i].code, 1);
 	}
 }
 
@@ -727,12 +745,12 @@ static uint32_t read_file(struct sc_mem *alloc, const char *path, char **dst)
 
 static void run_file(const char *path, const char *dirpath)
 {
-	struct sc_mem	alloc  = { .buf = NULL };
+	struct sc_mem	sc     = { .buf = NULL };
 	struct jy_asts	asts   = { .types = NULL };
 	struct jy_tkns	tkns   = { .types = NULL };
 	struct tkn_errs errs   = { .msgs = NULL };
 	char	       *src    = NULL;
-	uint32_t	length = read_file(&alloc, path, &src);
+	uint32_t	length = read_file(&sc, path, &src);
 
 	char dirname[] = "/modules/";
 	char mdir[strlen(dirpath) + sizeof(dirname)];
@@ -742,7 +760,7 @@ static void run_file(const char *path, const char *dirpath)
 
 	struct jy_jay jay = { .codes = NULL };
 
-	jry_parse(&alloc, &asts, &tkns, &errs, src, length);
+	jry_parse(&sc, &asts, &tkns, &errs, src, length);
 
 	printf("===================================="
 	       "\n"
@@ -776,12 +794,6 @@ static void run_file(const char *path, const char *dirpath)
 	printf("\n");
 	print_asts(&asts, tkns.lexemes, tkns.size, maxdepth);
 
-	if (errs.size) {
-		print_errors(&errs, &tkns, path);
-		printf("\n");
-		goto END;
-	}
-
 	printf("\n\n");
 
 	printf("Jay VM Context"
@@ -789,10 +801,11 @@ static void run_file(const char *path, const char *dirpath)
 	       "===================================="
 	       "\n\n");
 
-	jry_compile(&alloc, &jay, &errs, mdir, &asts, &tkns);
+	jry_compile(&sc, &jay, &errs, mdir, &asts, &tkns);
 
 	uint32_t modulesz = 0;
 	uint32_t eventsz  = 0;
+	uint32_t chunksz  = 0;
 
 	for (uint32_t i = 0; i < jay.valsz; ++i) {
 		switch (jay.types[i]) {
@@ -801,6 +814,9 @@ static void run_file(const char *path, const char *dirpath)
 			break;
 		case JY_K_EVENT:
 			eventsz += 1;
+			break;
+		case JY_K_CHUNK:
+			chunksz += 1;
 			break;
 		default:
 			continue;
@@ -811,7 +827,7 @@ static void run_file(const char *path, const char *dirpath)
 	printf("Constant Pool : %u\n", jay.valsz);
 	printf("Total Names   : %u\n", jay.names->size);
 	printf("Total Events  : %u\n", eventsz);
-	printf("Total Chunk   : %u\n", jay.codesz);
+	printf("Total Chunk   : %u\n", chunksz);
 
 	printf("\n");
 
@@ -842,12 +858,21 @@ static void run_file(const char *path, const char *dirpath)
 		printf("\n");
 	}
 
-	printf("BYTECODE"
+	printf("FREE CHUNKS"
+	       "\n"
+	       "__________________\n\n");
+
+	if (chunksz) {
+		print_chunks(jay.vals, jay.types, jay.valsz);
+		printf("\n");
+	}
+
+	printf("ENTRY CHUNK"
 	       "\n"
 	       "__________________\n\n");
 
 	if (jay.codesz) {
-		print_chunks(jay.codes, jay.codesz);
+		print_chunk(jay.codes, 0);
 		printf("\n");
 	}
 
@@ -856,8 +881,7 @@ static void run_file(const char *path, const char *dirpath)
 		printf("\n");
 	}
 
-END:
-	sc_free(&alloc);
+	sc_free(&sc);
 }
 
 int main(int argc, const char **argv)

@@ -135,20 +135,6 @@ OUT_OF_MEMORY:
 	return -1;
 }
 
-static inline bool field_cmp_valid(enum jy_ktype left, enum jy_ktype right)
-{
-	switch (left) {
-	case JY_K_STR_FIELD:
-		return right == JY_K_STR;
-	case JY_K_LONG_FIELD:
-		return right == JY_K_LONG;
-	case JY_K_BOOL_FIELD:
-		return right == JY_K_BOOL;
-	default:
-		return true;
-	}
-}
-
 static inline bool _expr(const struct jy_asts *asts,
 			 const struct jy_tkns *tkns,
 			 uint32_t	       id,
@@ -324,13 +310,13 @@ PANIC:
 	return true;
 }
 
-static bool _access_expr(const struct jy_asts *asts,
-			 const struct jy_tkns *tkns,
-			 uint32_t	       id,
-			 struct jy_jay	      *ctx,
-			 struct tkn_errs      *errs,
-			 struct jy_defs	      *scope,
-			 struct kexpr	      *expr)
+static bool _qaccess_expr(const struct jy_asts *asts,
+			  const struct jy_tkns *tkns,
+			  uint32_t		id,
+			  struct jy_jay	       *ctx,
+			  struct tkn_errs      *errs,
+			  struct jy_defs       *scope,
+			  struct kexpr	       *expr)
 {
 	assert(asts->childsz[id] == 2);
 
@@ -343,12 +329,29 @@ static bool _access_expr(const struct jy_asts *asts,
 		return true;
 
 	// discard previous codes
-	ctx->codesz	       = oldsz;
-	union jy_value	desc   = ctx->vals[expr->id];
-	struct jy_defs *lscope = ctx->vals[desc.dscptr.name].def;
-	lscope		       = lscope->vals[desc.dscptr.member].def;
+	ctx->codesz		    = oldsz;
+	struct jy_descriptor desc   = ctx->vals[expr->id].dscptr;
+	struct jy_defs	    *lscope = ctx->vals[desc.name].def;
+	lscope			    = lscope->vals[desc.member].def;
 
 	if (_expr(asts, tkns, right, ctx, errs, lscope, expr))
+		return true;
+
+	return false;
+}
+
+static bool _eaccess_expr(const struct jy_asts *asts,
+			  const struct jy_tkns *tkns,
+			  uint32_t		id,
+			  struct jy_jay	       *ctx,
+			  struct tkn_errs      *errs,
+			  struct jy_defs       *scope,
+			  struct kexpr	       *expr)
+{
+	if (_qaccess_expr(asts, tkns, id, ctx, errs, scope, expr))
+		return true;
+
+	if (emit_byte(JY_OP_LOAD, &ctx->codes, &ctx->codesz))
 		return true;
 
 	return false;
@@ -569,10 +572,13 @@ static bool _exact_expr(const struct jy_asts *asts,
 	struct kexpr leftx  = { 0 };
 	struct kexpr rightx = { 0 };
 
+	if (asts->types[left] != AST_QACCESS)
+		goto INV_LEFT;
+
 	if (_expr(asts, tkns, left, ctx, errs, scope, &leftx))
 		goto PANIC;
 
-	if (leftx.type != JY_K_STR_FIELD)
+	if (leftx.type != JY_K_STR)
 		goto INV_LEFT;
 
 	if (_expr(asts, tkns, right, ctx, errs, scope, &rightx))
@@ -620,20 +626,17 @@ static bool _join_expr(const struct jy_asts *asts,
 	struct kexpr leftx  = { 0 };
 	struct kexpr rightx = { 0 };
 
+	if (asts->types[left] != AST_QACCESS)
+		goto INV_LEFT;
+
+	if (asts->types[right] != AST_QACCESS)
+		goto INV_RIGHT;
+
 	if (_expr(asts, tkns, left, ctx, errs, scope, &leftx))
 		goto PANIC;
 
 	if (_expr(asts, tkns, right, ctx, errs, scope, &rightx))
 		goto PANIC;
-
-	switch (leftx.type) {
-	case JY_K_STR_FIELD:
-	case JY_K_LONG_FIELD:
-	case JY_K_BOOL_FIELD:
-		break;
-	default:
-		goto INV_LEFT;
-	}
 
 	if (leftx.type != rightx.type)
 		goto INV_RIGHT;
@@ -686,13 +689,6 @@ static bool _equal_expr(const struct jy_asts *asts,
 	enum jy_opcode code;
 
 	switch (leftx.type) {
-	case JY_K_STR_FIELD:
-	case JY_K_LONG_FIELD:
-	case JY_K_BOOL_FIELD:
-		if (!field_cmp_valid(leftx.type, rightx.type))
-			goto INV_EXP;
-		code = JY_OP_CMPFIELD;
-		goto EMIT;
 	case JY_K_LONG:
 	case JY_K_BOOL:
 		code = JY_OP_CMP;
@@ -707,7 +703,6 @@ static bool _equal_expr(const struct jy_asts *asts,
 	if (leftx.type != rightx.type)
 		goto INV_EXP;
 
-EMIT:
 	expr->id   = -1u;
 	expr->type = JY_K_BOOL;
 
@@ -914,9 +909,10 @@ static cmplfn_t rules[TOTAL_AST_TYPES] = {
 	[AST_DIVIDE]   = _arith_expr,
 	// < binaries
 
-	[AST_NAME]   = _descriptor_expr,
-	[AST_EVENT]  = _descriptor_expr,
-	[AST_ACCESS] = _access_expr,
+	[AST_NAME]    = _descriptor_expr,
+	[AST_EVENT]   = _descriptor_expr,
+	[AST_QACCESS] = _qaccess_expr,
+	[AST_EACCESS] = _eaccess_expr,
 
 	// > literal
 	[AST_REGEXP] = NULL,
@@ -1037,7 +1033,7 @@ PANIC:
 	return true;
 }
 
-static inline bool _field_sect(struct sc_mem	    *alloc,
+static inline bool _field_sect(struct sc_mem	    *__unused(alloc),
 			       const struct jy_asts *asts,
 			       const struct jy_tkns *tkns,
 			       struct tkn_errs	    *errs,
@@ -1059,28 +1055,19 @@ static inline bool _field_sect(struct sc_mem	    *alloc,
 			continue;
 		}
 
-		enum jy_ktype  ktype;
-		union jy_value f = {
-			.field = sc_alloc(alloc, sizeof(*f.field)),
-		};
-
-		if (f.field == NULL)
-			goto PANIC;
-
-		enum jy_ast type = asts->types[type_id];
+		enum jy_ktype  ktype = JY_K_UNKNOWN;
+		union jy_value value = { .handle = NULL };
+		enum jy_ast    type  = asts->types[type_id];
 
 		switch (type) {
 		case AST_LONG_TYPE:
-			ktype	      = JY_K_LONG_FIELD;
-			f.field->type = JY_K_LONG;
+			ktype = JY_K_LONG;
 			break;
 		case AST_STR_TYPE:
-			ktype	      = JY_K_STR_FIELD;
-			f.field->type = JY_K_STR;
+			ktype = JY_K_STR;
 			break;
 		case AST_BOOL_TYPE:
-			ktype	      = JY_K_BOOL_FIELD;
-			f.field->type = JY_K_BOOL;
+			ktype = JY_K_BOOL;
 			break;
 		default: {
 			uint32_t from = asts->tkns[id];
@@ -1090,7 +1077,7 @@ static inline bool _field_sect(struct sc_mem	    *alloc,
 		}
 		}
 
-		if (def_add(def, name, f, ktype))
+		if (def_add(def, name, value, ktype))
 			goto PANIC;
 	}
 
@@ -1104,7 +1091,8 @@ static inline int emit_query(uint16_t	     *valsz,
 			     enum jy_ktype  **types,
 			     uint32_t	     *codesz,
 			     uint8_t	    **codes,
-			     long	      qlen)
+			     long	      qlen,
+			     size_t	      chunkid)
 {
 	uint32_t id = *valsz;
 
@@ -1128,6 +1116,9 @@ EMIT_QUERY:
 	if (emit_push(id, codes, codesz))
 		goto OUT_OF_MEMORY;
 
+	if (emit_push(chunkid, codes, codesz))
+		goto OUT_OF_MEMORY;
+
 	if (emit_byte(JY_OP_QUERY, codes, codesz))
 		goto OUT_OF_MEMORY;
 
@@ -1136,7 +1127,8 @@ OUT_OF_MEMORY:
 	return -1;
 }
 
-static inline bool _rule_decl(const struct jy_asts *asts,
+static inline bool _rule_decl(struct sc_mem	   *alloc,
+			      const struct jy_asts *asts,
 			      const struct jy_tkns *tkns,
 			      struct jy_jay	   *ctx,
 			      struct tkn_errs	   *errs,
@@ -1185,37 +1177,9 @@ static inline bool _rule_decl(const struct jy_asts *asts,
 		}
 	}
 
-	long qlen = 0;
-
-	for (uint32_t i = 0; i < matchsz; ++i) {
-		uint32_t id  = matchs[i];
-		qlen	    += asts->childsz[id];
-
-		_match_sect(asts, tkns, id, ctx, errs);
-	}
-
-	if (matchsz) {
-		if (emit_query(&ctx->valsz, &ctx->vals, &ctx->types,
-			       &ctx->codesz, &ctx->codes, qlen))
-			goto PANIC;
-
-		if (emit_byte(JY_OP_JMPF, &ctx->codes, &ctx->codesz))
-			goto PANIC;
-
-		jry_mem_push(patchofs, patchsz, ctx->codesz);
-
-		if (patchofs == NULL)
-			goto PANIC;
-
-		patchsz += 1;
-
-		// Reserved 2 bytes for short jump
-		if (emit_byte(0, &ctx->codes, &ctx->codesz))
-			goto PANIC;
-
-		if (emit_byte(0, &ctx->codes, &ctx->codesz))
-			goto PANIC;
-	}
+	// TODO: describe error when target section is empty
+	if (targetsz == 0)
+		goto PANIC;
 
 	for (uint32_t i = 0; i < condsz; ++i) {
 		uint32_t id = conds[i];
@@ -1227,11 +1191,47 @@ static inline bool _rule_decl(const struct jy_asts *asts,
 		_target_sect(asts, tkns, id, ctx, errs);
 	}
 
+	// patch jumps to END
 	for (uint32_t i = 0; i < patchsz; ++i) {
 		uint32_t ofs = patchofs[i];
 		short	 jmp = (short) (ctx->codesz - ofs + 1);
 
 		memcpy(ctx->codes + ofs, &jmp, sizeof(jmp));
+	}
+
+	if (emit_byte(JY_OP_END, &ctx->codes, &ctx->codesz))
+		goto PANIC;
+
+	uint8_t *code = sc_alloc(alloc, ctx->codesz);
+
+	if (code == NULL)
+		goto PANIC;
+
+	union jy_value chunk = {
+		.code = memcpy(code, ctx->codes, ctx->codesz),
+	};
+
+	uint32_t chunk_k_id = ctx->valsz;
+
+	if (emit_cnst(chunk, JY_K_CHUNK, &ctx->vals, &ctx->types, &ctx->valsz))
+		goto PANIC;
+
+	// reset code
+	ctx->codesz = 0;
+
+	long qlen = 0;
+
+	for (uint32_t i = 0; i < matchsz; ++i) {
+		uint32_t id  = matchs[i];
+		qlen	    += asts->childsz[id];
+
+		_match_sect(asts, tkns, id, ctx, errs);
+	}
+
+	if (matchsz) {
+		if (emit_query(&ctx->valsz, &ctx->vals, &ctx->types,
+			       &ctx->codesz, &ctx->codes, qlen, chunk_k_id))
+			goto PANIC;
 	}
 
 	sc_free(&scratch);
@@ -1417,7 +1417,7 @@ static inline bool _root(struct sc_mem	      *alloc,
 		_ingress_decl(alloc, asts, tkns, ctx, errs, ingress[i]);
 
 	for (uint32_t i = 0; i < rules_sz; ++i)
-		_rule_decl(asts, tkns, ctx, errs, rules[i]);
+		_rule_decl(alloc, asts, tkns, ctx, errs, rules[i]);
 
 	if (emit_byte(JY_OP_END, &ctx->codes, &ctx->codesz) != 0)
 		return true;
@@ -1476,17 +1476,22 @@ void jry_compile(struct sc_mem	      *alloc,
 	ctx->names = sc_alloc(alloc, sizeof *ctx->names);
 
 	if (ctx->names == NULL)
-		return;
+		goto OUT_OF_MEMORY;
 
 	if (sc_reap(alloc, ctx->names, (free_t) def_free))
-		return;
+		goto OUT_OF_MEMORY;
 
 	union jy_value val = { .def = ctx->names };
 
 	if (emit_cnst(val, JY_K_MODULE, &ctx->vals, &ctx->types, &ctx->valsz))
-		return;
+		goto OUT_OF_MEMORY;
 
 	_root(alloc, asts, tkns, mdir, ctx, errs, root);
 
-	sc_reap(alloc, ctx, (free_t) free_jay);
+	if (sc_reap(alloc, ctx, (free_t) free_jay))
+		goto OUT_OF_MEMORY;
+
+OUT_OF_MEMORY:
+	// TODO: handle OOM
+	return;
 }

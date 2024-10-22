@@ -35,7 +35,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "compiler.h"
 #include "error.h"
 #include "parser.h"
-#include "storage.h"
 #include "token.h"
 
 #include "jary/defs.h"
@@ -56,7 +55,8 @@ struct jarycode {
 
 struct jary {
 	struct sc_mem	 sc;
-	/*char		*errmsg;*/
+	// TODO: use this for storing error msg
+	/*const char		*errmsg;*/
 	struct jarycode *code;
 	struct sqlite3	*db;
 };
@@ -65,16 +65,16 @@ static inline int event_table(struct sqlite3	   *db,
 			      const char	   *name,
 			      const struct jy_defs *event)
 {
-	int	      errno = JARY_OK;
-	struct sc_mem m	    = { .buf = NULL };
+	int	      ret = JARY_OK;
+	struct sc_mem m	  = { .buf = NULL };
 
 	char *sql;
-	int   sqlsz;
+	int   sqlsz = 0;
 
 	sc_strfmt(&m, &sql, "CREATE TABLE %s (", name);
 
 	if (sql == NULL) {
-		errno = JARY_ERR_OOM;
+		ret = JARY_ERR_OOM;
 		goto FINISH;
 	}
 
@@ -86,10 +86,10 @@ static inline int event_table(struct sqlite3	   *db,
 			continue;
 
 		switch (event->types[i]) {
-		case JY_K_STR_FIELD:
+		case JY_K_STR:
 			type = "TEXT";
 			break;
-		case JY_K_LONG_FIELD:
+		case JY_K_LONG:
 			type = "INTEGER";
 			break;
 		default:
@@ -99,17 +99,19 @@ static inline int event_table(struct sqlite3	   *db,
 		sqlsz = sc_strfmt(&m, &sql, "%s%s %s,", sql, column, type);
 
 		if (sql == NULL) {
-			errno = JARY_ERR_OOM;
+			ret = JARY_ERR_OOM;
 			goto FINISH;
 		}
 	}
+
+	assert(sqlsz > 0);
 
 	sql[sqlsz - 1] = ')';
 
 	sc_strfmt(&m, &sql, "%s;", sql);
 
 	if (sql == NULL) {
-		errno = JARY_ERR_OOM;
+		ret = JARY_ERR_OOM;
 		goto FINISH;
 	}
 
@@ -117,16 +119,17 @@ static inline int event_table(struct sqlite3	   *db,
 	case SQLITE_OK:
 		break;
 	default:
-		errno = JARY_ERR_SQLITE3;
+		ret = JARY_ERR_SQLITE3;
 	}
 
 FINISH:
 	sc_free(&m);
-	return errno;
+	return ret;
 }
 
 int jary_open(struct jary **jary)
 {
+	int	      ret;
 	struct jary  *J;
 	struct sc_mem m = { .buf = NULL };
 
@@ -146,14 +149,56 @@ int jary_open(struct jary **jary)
 	return JARY_OK;
 
 OPEN_ERROR:
-	sc_free(&m);
-	*jary = NULL;
-	return JARY_ERROR;
+	ret = JARY_ERROR;
+	// TODO: Handle close?
+	sqlite3_close_v2(J->db);
+	goto PANIC;
 
 OUT_OF_MEMORY:
+	ret = JARY_ERR_OOM;
+
+PANIC:
 	sc_free(&m);
 	*jary = NULL;
-	return JARY_ERR_OOM;
+
+	return ret;
+}
+
+int jary_insert_event(struct jary *restrict jary,
+		      const char  *name,
+		      int	   length,
+		      const char **keys,
+		      const char **values)
+{
+	assert(jary != NULL);
+	assert(jary->code != NULL);
+
+	struct jy_defs *names = jary->code->jay->names;
+	struct jy_defs *event = NULL;
+	union jy_value	view;
+	enum jy_ktype	type;
+
+	if (def_get(names, name, &view, &type))
+		goto INV_NAMES;
+
+	event = view.def;
+
+	if (type != JY_K_EVENT)
+		goto INV_NAMES;
+
+	for (int i = 0; i < length; ++i) {
+		const char *k = keys[i];
+
+		if (def_get(event, k, &view, &type))
+			goto INV_KEY;
+	}
+
+INV_NAMES:
+	// TODO: write error msg here
+	return JARY_ERROR;
+INV_KEY:
+	// TODO: write error msg here
+	return JARY_ERROR;
 }
 
 int jary_compile(struct jary *restrict jary,

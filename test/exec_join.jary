@@ -3,6 +3,7 @@ import mark
 ingress data1 {
        field:
                yes string
+               nein string
 }
 
 ingress data2 {

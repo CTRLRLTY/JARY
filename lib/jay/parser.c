@@ -82,6 +82,8 @@ static const char msg_args_limit[]	     = "too many arguments";
 
 struct parser {
 	const char *src;
+	// currect section type
+	enum jy_tkn section;
 	uint32_t    srcsz;
 	// current tkn id
 	uint32_t    tkn;
@@ -547,7 +549,8 @@ static bool _call(struct parser	  *p,
 	uint32_t    left    = *root;
 	enum jy_ast type    = asts->types[left];
 	uint32_t    nametkn = p->tkn;
-	if (type != AST_ACCESS) {
+
+	if (type != AST_EACCESS) {
 		tkn_error(errs, msg_inv_invoc, p->tkn, p->tkn);
 		goto PANIC;
 	}
@@ -624,8 +627,22 @@ static bool _dot(struct parser	 *p,
 	}
 	}
 
+	enum jy_ast access;
+
+	switch (p->section) {
+	case TKN_CONDITION:
+	case TKN_JUMP:
+		access = AST_EACCESS;
+		break;
+	case TKN_MATCH:
+		access = AST_QACCESS;
+		break;
+	default:
+		goto PANIC;
+	}
+
 	// set root to .
-	if (push_ast(asts, AST_ACCESS, p->tkn, root) != 0)
+	if (push_ast(asts, access, p->tkn, root) != 0)
 		goto PANIC;
 
 	// consume .
@@ -924,10 +941,11 @@ static bool _section(struct parser   *p,
 		     struct tkn_errs *errs,
 		     uint32_t	      declast)
 {
-	enum jy_ast decltype   = asts->types[declast];
-	uint32_t    sectast    = asts->size - 1;
-	uint32_t    secttkn    = p->tkn;
-	enum jy_tkn sectkntype = tkns->types[secttkn];
+	bool ret	     = false;
+	enum jy_ast decltype = asts->types[declast];
+	uint32_t sectast     = asts->size - 1;
+	uint32_t secttkn     = p->tkn;
+	p->section	     = tkns->types[secttkn];
 
 	// consume section
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
@@ -937,7 +955,7 @@ static bool _section(struct parser   *p,
 
 	listfn = NULL;
 
-	switch (sectkntype) {
+	switch (p->section) {
 	case TKN_JUMP:
 		if (decltype != AST_RULE_DECL)
 			goto INVALID_SECTION;
@@ -1024,8 +1042,7 @@ static bool _section(struct parser   *p,
 		listype = tkns->types[p->tkn];
 	}
 
-FINISH:
-	return false;
+	goto FINISH;
 
 INVALID_SECTION: {
 	tkn_error(errs, msg_inv_section, asts->tkns[declast], p->tkn);
@@ -1035,7 +1052,10 @@ PANIC:
 	while (sectast < asts->size)
 		pop_ast(asts);
 
-	return true;
+	ret = true;
+FINISH:
+	p->section = TKN_NONE;
+	return ret;
 }
 
 static bool _block(struct parser   *p,

@@ -31,8 +31,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "jary/memory.h"
 
-// SHITTY MEMORY
-
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>

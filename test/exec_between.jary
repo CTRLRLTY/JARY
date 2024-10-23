@@ -1,0 +1,14 @@
+import mark
+
+ingress data {
+       field:
+                age long
+}
+
+rule bye {
+       match:
+                $data.age between 3..10 
+
+       target:
+                mark.mark("hello")
+}

@@ -247,10 +247,8 @@ TEST(ExecTest, Join)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	sql = "INSERT INTO data1 (yes, nein) VALUES (\"hello\", \"goodbye\")";
-	err = sqlite3_exec(db, sql, NULL, NULL, &msg);
-
-	sql = "INSERT INTO data1 (yes, nein) VALUES (\"hello\", \"bye?\")";
+	sql = "INSERT INTO data1 (yes, nein) VALUES ('hello', 'goodbye'), "
+	      "('hello', 'bye?')";
 	err = sqlite3_exec(db, sql, NULL, NULL, &msg);
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
@@ -275,6 +273,153 @@ TEST(ExecTest, Join)
 		ASSERT_EQ(ofunc->func(1, &key, &result), 0);
 		ASSERT_EQ(result.i64, 2);
 	}
+
+	sqlite3_close_v2(db);
+	sc_free(&alloc);
+}
+
+TEST(ExecTest, Within)
+{
+	union jy_value	   key;
+	struct jy_obj_str *str;
+
+	struct jy_asts	asts  = { .tkns = NULL };
+	struct jy_tkns	tkns  = { .lexemes = NULL };
+	struct tkn_errs errs  = { .from = NULL };
+	struct jy_jay	jay   = { .codes = NULL };
+	struct sc_mem	alloc = { .buf = NULL };
+	struct jy_defs *mark  = NULL;
+	struct sqlite3 *db    = NULL;
+	char	       *src   = NULL;
+	size_t		srcsz = read_file(WITHIN_JARY_PATH, &src);
+
+	str = (jy_obj_str *) sc_alloc(&alloc, sizeof(*str) + 6);
+	sc_reap(&alloc, src, free);
+
+	str->size = 5;
+
+	strcpy(str->cstr, "hello");
+
+	key.str		  = str;
+	const char mdir[] = "../modules/";
+
+	jry_parse(&alloc, &asts, &tkns, &errs, src, srcsz);
+
+	ASSERT_EQ(errs.size, 0);
+
+	jry_compile(&alloc, &jay, &errs, mdir, &asts, &tkns);
+
+	ASSERT_EQ(errs.size, 0);
+
+	uint32_t id;
+
+	ASSERT_TRUE(def_find(jay.names, "mark", &id));
+
+	mark = jay.names->vals[id].module;
+
+	int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE
+		 | SQLITE_OPEN_READWRITE;
+	int err = sqlite3_open_v2("test.db", &db, flag, NULL);
+
+	ASSERT_EQ(err, SQLITE_OK) << "msg: " << sqlite3_errmsg(db);
+
+	char *sql = "CREATE TABLE data (yes TEXT, __arrival__ "
+		    "INTEGER DEFAULT (unixepoch()));";
+	char *msg = NULL;
+	err	  = sqlite3_exec(db, sql, NULL, NULL, &msg);
+
+	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
+
+	sql = "INSERT INTO data (yes) VALUES ('hello')";
+	err = sqlite3_exec(db, sql, NULL, NULL, &msg);
+
+	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
+
+	ASSERT_EQ(jry_exec(db, &jay), 0);
+
+	union jy_value	    result;
+	struct jy_obj_func *ofunc;
+
+	ASSERT_TRUE(def_find(mark, "count", &id));
+
+	ofunc = mark->vals[id].func;
+
+	// calling count function -> mark.count()
+	ASSERT_EQ(ofunc->func(1, &key, &result), 0);
+	ASSERT_EQ(result.i64, 1);
+
+	sqlite3_close_v2(db);
+	sc_free(&alloc);
+}
+
+TEST(ExecTest, Between)
+{
+	union jy_value	   key;
+	struct jy_obj_str *str;
+
+	struct jy_asts	asts  = { .tkns = NULL };
+	struct jy_tkns	tkns  = { .lexemes = NULL };
+	struct tkn_errs errs  = { .from = NULL };
+	struct jy_jay	jay   = { .codes = NULL };
+	struct sc_mem	alloc = { .buf = NULL };
+	struct jy_defs *mark  = NULL;
+	struct sqlite3 *db    = NULL;
+	char	       *src   = NULL;
+	size_t		srcsz = read_file(BETWEEN_JARY_PATH, &src);
+
+	str = (jy_obj_str *) sc_alloc(&alloc, sizeof(*str) + 6);
+	sc_reap(&alloc, src, free);
+
+	str->size = 5;
+
+	strcpy(str->cstr, "hello");
+
+	key.str		  = str;
+	const char mdir[] = "../modules/";
+
+	jry_parse(&alloc, &asts, &tkns, &errs, src, srcsz);
+
+	ASSERT_EQ(errs.size, 0);
+
+	jry_compile(&alloc, &jay, &errs, mdir, &asts, &tkns);
+
+	ASSERT_EQ(errs.size, 0);
+
+	uint32_t id;
+
+	ASSERT_TRUE(def_find(jay.names, "mark", &id));
+
+	mark = jay.names->vals[id].module;
+
+	int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE
+		 | SQLITE_OPEN_READWRITE;
+	int err = sqlite3_open_v2("test.db", &db, flag, NULL);
+
+	ASSERT_EQ(err, SQLITE_OK) << "msg: " << sqlite3_errmsg(db);
+
+	char *sql = "CREATE TABLE data (age INTEGER);";
+	char *msg = NULL;
+	err	  = sqlite3_exec(db, sql, NULL, NULL, &msg);
+
+	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
+
+	sql = "INSERT INTO data (age) VALUES (8), (4), (11);";
+	err = sqlite3_exec(db, sql, NULL, NULL, &msg);
+
+	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
+
+	ASSERT_EQ(jry_exec(db, &jay), 0);
+
+	union jy_value	    result;
+	struct jy_obj_func *ofunc;
+
+	ASSERT_TRUE(def_find(mark, "count", &id));
+
+	ofunc = mark->vals[id].func;
+
+	// calling count function -> mark.count()
+	ASSERT_EQ(ofunc->func(1, &key, &result), 0);
+	ASSERT_EQ(result.i64, 2);
 
 	sqlite3_close_v2(db);
 	sc_free(&alloc);

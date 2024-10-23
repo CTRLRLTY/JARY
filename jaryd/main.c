@@ -80,6 +80,10 @@ static void run_file(const char *path, const char *dirpath)
 
 	jary_compile(jary, length, src, dirpath);
 
+	const char *keys[]   = { "nein" };
+	const char *values[] = { "\"goodbye\"" };
+	jary_insert_event(jary, "data2", 1, keys, values);
+
 	jary_close(jary);
 
 	sc_free(&alloc);

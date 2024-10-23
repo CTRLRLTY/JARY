@@ -96,6 +96,9 @@ static inline int event_table(struct sqlite3	   *db,
 			continue;
 		}
 
+		if (strcmp(column, "__arrival__") == 0)
+			type = "INTEGER DEFAULT (unixepoch())";
+
 		sqlsz = sc_strfmt(&m, &sql, "%s%s %s,", sql, column, type);
 
 		if (sql == NULL) {
@@ -173,32 +176,74 @@ int jary_insert_event(struct jary *restrict jary,
 	assert(jary != NULL);
 	assert(jary->code != NULL);
 
-	struct jy_defs *names = jary->code->jay->names;
-	struct jy_defs *event = NULL;
-	union jy_value	view;
-	enum jy_ktype	type;
+	int	      ret = JARY_OK;
+	struct sc_mem m	  = { .buf = NULL };
 
-	if (def_get(names, name, &view, &type))
-		goto INV_NAMES;
+	char *sql;
+	int   sqlsz = 0;
 
-	event = view.def;
+	sc_strfmt(&m, &sql, "INSERT INTO %s (", name);
 
-	if (type != JY_K_EVENT)
-		goto INV_NAMES;
+	if (sql == NULL)
+		goto OUT_OF_MEMORY;
 
 	for (int i = 0; i < length; ++i) {
-		const char *k = keys[i];
+		const char *column = keys[i];
 
-		if (def_get(event, k, &view, &type))
-			goto INV_KEY;
+		if (column == NULL)
+			continue;
+
+		sqlsz = sc_strfmt(&m, &sql, "%s%s,", sql, column);
+
+		if (sql == NULL)
+			goto OUT_OF_MEMORY;
 	}
 
-INV_NAMES:
-	// TODO: write error msg here
-	return JARY_ERROR;
-INV_KEY:
-	// TODO: write error msg here
-	return JARY_ERROR;
+	assert(sqlsz > 0);
+
+	sql[sqlsz - 1] = ')';
+
+	sc_strfmt(&m, &sql, "%s VALUES (", sql);
+
+	if (sql == NULL)
+		goto OUT_OF_MEMORY;
+
+	for (int i = 0; i < length; ++i) {
+		const char *value = values[i];
+
+		if (value == NULL)
+			continue;
+
+		sqlsz = sc_strfmt(&m, &sql, "%s%s,", sql, value);
+
+		if (sql == NULL)
+			goto OUT_OF_MEMORY;
+	}
+
+	assert(sqlsz > 0);
+
+	sql[sqlsz - 1] = ')';
+
+	sc_strfmt(&m, &sql, "%s;", sql);
+
+	if (sql == NULL)
+		goto OUT_OF_MEMORY;
+
+	switch (sqlite3_exec(jary->db, sql, NULL, NULL, NULL)) {
+	case SQLITE_OK:
+		break;
+	default:
+		ret = JARY_ERR_SQLITE3;
+	}
+
+	goto FINISH;
+
+OUT_OF_MEMORY:
+	ret = JARY_ERR_OOM;
+
+FINISH:
+	sc_free(&m);
+	return ret;
 }
 
 int jary_compile(struct jary *restrict jary,
@@ -278,6 +323,8 @@ int jary_compile(struct jary *restrict jary,
 	for (size_t i = 0; i < eventsz; ++i)
 		if (event_table(jary->db, table[i], events[i]))
 			return JARY_ERROR;
+
+	jary->code = code;
 
 	return JARY_OK;
 }

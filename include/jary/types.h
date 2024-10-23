@@ -48,6 +48,7 @@ enum jy_ktype {
 
 	JY_K_EVENT,
 
+	JY_K_TIME,
 	JY_K_LONG,
 	JY_K_STR,
 	JY_K_BOOL,
@@ -67,6 +68,16 @@ struct jy_field {
 	union jy_value *as;
 };
 
+struct jy_time_ofs {
+	enum {
+		JY_TIME_HOUR   = 3600,
+		JY_TIME_MINUTE = 60,
+		JY_TIME_SECOND = 1,
+	} time;
+
+	int offset;
+};
+
 // generic view for all qualified Jary values
 union jy_value {
 	void		    *obj;
@@ -81,6 +92,7 @@ union jy_value {
 	struct jy_descriptor dscptr;
 	long		     i64;
 	long		     ofs;
+	struct jy_time_ofs   timeofs;
 };
 
 typedef int (*jy_funcptr_t)(int, union jy_value *, union jy_value *);

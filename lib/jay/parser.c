@@ -421,6 +421,15 @@ static bool _literal(struct parser   *p,
 	case TKN_STRING:
 		root_type = AST_STRING;
 		break;
+	case TKN_HOUR:
+		root_type = AST_HOUR;
+		break;
+	case TKN_MINUTE:
+		root_type = AST_MINUTE;
+		break;
+	case TKN_SECOND:
+		root_type = AST_SECOND;
+		break;
 	case TKN_FALSE:
 		root_type = AST_FALSE;
 		break;
@@ -792,6 +801,12 @@ static bool _binary(struct parser   *p,
 		break;
 	case TKN_EXACT:
 		root_type = AST_EXACT;
+		break;
+	case TKN_BETWEEN:
+		root_type = AST_BETWEEN;
+		break;
+	case TKN_WITHIN:
+		root_type = AST_WITHIN;
 		break;
 
 	default:
@@ -1284,8 +1299,10 @@ static struct rule rules[TOTAL_TKN_TYPES] = {
 	[TKN_SLASH]  = { NULL, _binary, PREC_FACTOR },
 	[TKN_STAR]   = { NULL, _binary, PREC_FACTOR },
 
-	[TKN_JOINX] = { NULL, _binary, PREC_CALL - 1 },
-	[TKN_EXACT] = { NULL, _binary, PREC_EQUALITY },
+	[TKN_JOINX]   = { NULL, _binary, PREC_CALL - 1 },
+	[TKN_EXACT]   = { NULL, _binary, PREC_EQUALITY },
+	[TKN_BETWEEN] = { NULL, _binary, PREC_EQUALITY },
+	[TKN_WITHIN]  = { NULL, _binary, PREC_EQUALITY },
 
 	[TKN_EQUAL]	  = { NULL, _binary, PREC_EQUALITY },
 	[TKN_LESSTHAN]	  = { NULL, _binary, PREC_COMPARISON },
@@ -1300,6 +1317,9 @@ static struct rule rules[TOTAL_TKN_TYPES] = {
 	[TKN_NUMBER] = { _literal, NULL, PREC_NONE },
 	[TKN_FALSE]  = { _literal, NULL, PREC_NONE },
 	[TKN_TRUE]   = { _literal, NULL, PREC_NONE },
+	[TKN_HOUR]   = { _literal, NULL, PREC_NONE },
+	[TKN_MINUTE] = { _literal, NULL, PREC_NONE },
+	[TKN_SECOND] = { _literal, NULL, PREC_NONE },
 
 	[TKN_IDENTIFIER] = { _name, NULL, PREC_NONE },
 	[TKN_DOLLAR]	 = { _event, NULL, PREC_NONE },

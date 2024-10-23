@@ -1,0 +1,15 @@
+import mark
+
+ingress data {
+       field:
+               yes string
+}
+
+rule bye {
+       match:
+                $data.yes exact "hello" 
+                $data within 10s 
+
+       target:
+               mark.mark("hello")
+}

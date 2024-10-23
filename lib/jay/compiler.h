@@ -53,6 +53,8 @@ enum jy_opcode {
 	JY_OP_CALL,
 
 	JY_OP_QUERY,
+	JY_OP_BETWEEN,
+	JY_OP_WITHIN,
 
 	JY_OP_NOT,
 	JY_OP_CMPSTR,

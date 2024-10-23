@@ -150,6 +150,67 @@ static inline bool _expr(const struct jy_asts *asts,
 	return fn(asts, tkns, id, ctx, errs, scope, expr);
 }
 
+static bool _time_expr(const struct jy_asts *asts,
+		       const struct jy_tkns *tkns,
+		       uint32_t		     ast,
+		       struct jy_jay	    *ctx,
+		       struct tkn_errs	    *__unused(errs),
+		       struct jy_defs	    *__unused(scope),
+		       struct kexpr	    *expr)
+{
+	uint32_t tkn	= asts->tkns[ast];
+	char	*lexeme = tkns->lexemes[tkn];
+
+	struct jy_time_ofs timeofs = { .offset = strtol(lexeme, NULL, 10) };
+
+	switch (asts->types[ast]) {
+	case AST_HOUR:
+		timeofs.time = JY_TIME_HOUR;
+		break;
+	case AST_MINUTE:
+		timeofs.time = JY_TIME_MINUTE;
+		break;
+	case AST_SECOND:
+		timeofs.time = JY_TIME_SECOND;
+		break;
+	default:
+		goto PANIC;
+	}
+
+	union jy_value view = { .timeofs = timeofs };
+
+	for (uint32_t i = 0; i < ctx->valsz; ++i) {
+		enum jy_ktype	   type = ctx->types[i];
+		struct jy_time_ofs tofs = ctx->vals[i].timeofs;
+
+		if (type != JY_K_TIME)
+			continue;
+
+		if (memcmp(&timeofs, &tofs, sizeof(tofs)))
+			continue;
+
+		expr->id = i;
+
+		goto DONE;
+	}
+
+	expr->id = ctx->valsz;
+
+	if (emit_cnst(view, JY_K_TIME, &ctx->vals, &ctx->types, &ctx->valsz))
+		goto PANIC;
+
+DONE:
+	expr->type = JY_K_TIME;
+
+	if (emit_push(expr->id, &ctx->codes, &ctx->codesz) != 0)
+		goto PANIC;
+
+	return false;
+
+PANIC:
+	return true;
+}
+
 static bool _long_expr(const struct jy_asts *asts,
 		       const struct jy_tkns *tkns,
 		       uint32_t		     id,
@@ -764,6 +825,47 @@ PANIC:
 	return true;
 }
 
+static bool _range_expr(const struct jy_asts *asts,
+			const struct jy_tkns *tkns,
+			uint32_t	      ast,
+			struct jy_jay	     *ctx,
+			struct tkn_errs	     *errs,
+			struct jy_defs	     *scope,
+			struct kexpr	     *expr)
+{
+	assert(asts->childsz[ast] == 2);
+
+	uint32_t left  = asts->child[ast][0];
+	uint32_t right = asts->child[ast][1];
+
+	struct kexpr leftx  = { 0 };
+	struct kexpr rightx = { 0 };
+
+	if (_expr(asts, tkns, left, ctx, errs, scope, &leftx))
+		goto PANIC;
+
+	if (leftx.type != JY_K_LONG)
+		goto INV_EXP;
+
+	if (_expr(asts, tkns, right, ctx, errs, scope, &rightx))
+		goto PANIC;
+
+	if (leftx.type != rightx.type)
+		goto INV_EXP;
+
+	*expr = rightx;
+
+	return false;
+
+INV_EXP: {
+	uint32_t from = asts->tkns[left];
+	uint32_t to   = asts->tkns[right];
+	tkn_error(errs, msg_inv_expression, from, to);
+}
+PANIC:
+	return true;
+}
+
 static bool _compare_expr(const struct jy_asts *asts,
 			  const struct jy_tkns *tkns,
 			  uint32_t		ast,
@@ -817,6 +919,118 @@ static bool _compare_expr(const struct jy_asts *asts,
 INV_EXP: {
 	uint32_t from = asts->tkns[left];
 	uint32_t to   = asts->tkns[right];
+	tkn_error(errs, msg_inv_expression, from, to);
+}
+PANIC:
+	return true;
+}
+
+static bool _within_expr(const struct jy_asts *asts,
+			 const struct jy_tkns *tkns,
+			 uint32_t	       ast,
+			 struct jy_jay	      *ctx,
+			 struct tkn_errs      *errs,
+			 struct jy_defs	      *scope,
+			 struct kexpr	      *expr)
+{
+	assert(asts->childsz[ast] == 2);
+
+	uint32_t left  = asts->child[ast][0];
+	uint32_t right = asts->child[ast][1];
+
+	struct kexpr leftx  = { 0 };
+	struct kexpr rightx = { 0 };
+
+	if (_expr(asts, tkns, left, ctx, errs, scope, &leftx))
+		goto PANIC;
+
+	if (leftx.type != JY_K_EVENT)
+		goto INV_LEFT;
+
+	if (_expr(asts, tkns, right, ctx, errs, scope, &rightx))
+		goto PANIC;
+
+	if (rightx.type != JY_K_TIME)
+		goto INV_WITHIN;
+
+	if (emit_byte(JY_OP_WITHIN, &ctx->codes, &ctx->codesz))
+		goto PANIC;
+
+	expr->id   = -1u;
+	expr->type = JY_K_MATCH;
+
+	return false;
+
+INV_LEFT: {
+	uint32_t from = asts->tkns[left];
+	uint32_t to   = asts->tkns[left];
+	tkn_error(errs, msg_inv_expression, from, to);
+	goto PANIC;
+}
+
+INV_WITHIN: {
+	uint32_t from = asts->tkns[ast];
+	uint32_t to   = asts->tkns[ast];
+	tkn_error(errs, msg_inv_expression, from, to);
+}
+PANIC:
+	return true;
+}
+
+static bool _between_expr(const struct jy_asts *asts,
+			  const struct jy_tkns *tkns,
+			  uint32_t		ast,
+			  struct jy_jay	       *ctx,
+			  struct tkn_errs      *errs,
+			  struct jy_defs       *scope,
+			  struct kexpr	       *expr)
+{
+	assert(asts->childsz[ast] == 2);
+
+	uint32_t left  = asts->child[ast][0];
+	uint32_t right = asts->child[ast][1];
+
+	struct kexpr leftx  = { 0 };
+	struct kexpr rightx = { 0 };
+
+	if (_expr(asts, tkns, left, ctx, errs, scope, &leftx))
+		goto PANIC;
+
+	if (leftx.type != JY_K_LONG)
+		goto INV_LEFT;
+
+	if (asts->types[right] != AST_CONCAT)
+		goto INV_RIGHT;
+
+	if (_range_expr(asts, tkns, right, ctx, errs, scope, &rightx))
+		goto PANIC;
+
+	if (rightx.type != JY_K_LONG)
+		goto INV_BETWEEN;
+
+	if (emit_byte(JY_OP_BETWEEN, &ctx->codes, &ctx->codesz))
+		goto PANIC;
+
+	expr->id   = -1u;
+	expr->type = JY_K_MATCH;
+
+	return false;
+
+INV_LEFT: {
+	uint32_t from = asts->tkns[left];
+	uint32_t to   = asts->tkns[left];
+	tkn_error(errs, msg_inv_expression, from, to);
+	goto PANIC;
+}
+INV_RIGHT: {
+	uint32_t from = asts->tkns[left];
+	uint32_t to   = asts->tkns[right];
+	tkn_error(errs, msg_inv_expression, from, to);
+	goto PANIC;
+}
+INV_BETWEEN: {
+	uint32_t from = asts->tkns[ast];
+	uint32_t to   = asts->tkns[ast];
 	tkn_error(errs, msg_inv_expression, from, to);
 }
 PANIC:
@@ -895,8 +1109,10 @@ static cmplfn_t rules[TOTAL_AST_TYPES] = {
 	[AST_OR]  = _or_expr,
 
 	// > binaries
-	[AST_JOINX] = _join_expr,
-	[AST_EXACT] = _exact_expr,
+	[AST_JOINX]   = _join_expr,
+	[AST_EXACT]   = _exact_expr,
+	[AST_BETWEEN] = _between_expr,
+	[AST_WITHIN]  = _within_expr,
 
 	[AST_EQUALITY] = _equal_expr,
 	[AST_LESSER]   = _compare_expr,
@@ -918,6 +1134,9 @@ static cmplfn_t rules[TOTAL_AST_TYPES] = {
 	[AST_REGEXP] = NULL,
 	[AST_LONG]   = _long_expr,
 	[AST_STRING] = _string_expr,
+	[AST_HOUR]   = _time_expr,
+	[AST_MINUTE] = _time_expr,
+	[AST_SECOND] = _time_expr,
 	[AST_FALSE]  = NULL,
 	[AST_TRUE]   = NULL,
 	// < literal
@@ -1181,6 +1400,12 @@ static inline bool _rule_decl(struct sc_mem	   *alloc,
 	if (targetsz == 0)
 		goto PANIC;
 
+	uint8_t *oldcode   = ctx->codes;
+	uint32_t oldcodesz = ctx->codesz;
+
+	ctx->codes  = NULL;
+	ctx->codesz = 0;
+
 	for (uint32_t i = 0; i < condsz; ++i) {
 		uint32_t id = conds[i];
 		_condition_sect(asts, tkns, id, ctx, errs, &patchofs, &patchsz);
@@ -1202,14 +1427,10 @@ static inline bool _rule_decl(struct sc_mem	   *alloc,
 	if (emit_byte(JY_OP_END, &ctx->codes, &ctx->codesz))
 		goto PANIC;
 
-	uint8_t *code = sc_alloc(alloc, ctx->codesz);
+	union jy_value chunk = { .code = ctx->codes };
 
-	if (code == NULL)
+	if (sc_reap(alloc, chunk.code, free))
 		goto PANIC;
-
-	union jy_value chunk = {
-		.code = memcpy(code, ctx->codes, ctx->codesz),
-	};
 
 	uint32_t chunk_k_id = ctx->valsz;
 
@@ -1217,7 +1438,8 @@ static inline bool _rule_decl(struct sc_mem	   *alloc,
 		goto PANIC;
 
 	// reset code
-	ctx->codesz = 0;
+	ctx->codes  = oldcode;
+	ctx->codesz = oldcodesz;
 
 	long qlen = 0;
 
@@ -1297,6 +1519,11 @@ static inline bool _ingress_decl(struct sc_mem	      *alloc,
 	_name_.str->cstr[lexsz] = '\0';
 
 	if (def_add(v.def, "__name__", _name_, JY_K_STR))
+		goto PANIC;
+
+	union jy_value null = { .handle = NULL };
+
+	if (def_add(v.def, "__arrival__", null, JY_K_LONG))
 		goto PANIC;
 
 	for (uint32_t i = 0; i < fieldsz; ++i)

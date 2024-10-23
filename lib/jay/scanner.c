@@ -185,7 +185,23 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 		while (!ENDED() && isdigit(CURRENT()))
 			(void) NEXT();
 
-		*type = TKN_NUMBER;
+		switch (current[0]) {
+		case 'h':
+			current++;
+			*type = TKN_HOUR;
+			break;
+		case 'm':
+			current++;
+			*type = TKN_MINUTE;
+			break;
+		case 's':
+			current++;
+			*type = TKN_SECOND;
+			break;
+		default:
+			*type = TKN_NUMBER;
+		}
+
 		goto FINISH;
 	}
 
@@ -218,6 +234,8 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 	case 'b':
 		if (KEYWORD(start + 1, "ool", 3))
 			*type = TKN_BOOL_TYPE;
+		else if (KEYWORD(start + 1, "etween", 6))
+			*type = TKN_BETWEEN;
 		else
 			goto IDENTIFIER;
 
@@ -305,6 +323,13 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 	case 'n':
 		if (KEYWORD(start + 1, "ot", 2))
 			*type = TKN_NOT;
+		else
+			goto IDENTIFIER;
+
+		goto FINISH;
+	case 'w':
+		if (KEYWORD(start + 1, "ithin", 5))
+			*type = TKN_WITHIN;
 		else
 			goto IDENTIFIER;
 

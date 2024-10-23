@@ -46,10 +46,14 @@ typedef int (*q_callback_t)(void *, int, char **, char **);
 
 struct sqlite3;
 struct jy_defs;
+struct jy_time_ofs;
 
 enum QMtag {
+	QM_NONE = 0,
 	QM_EXACT,
 	QM_JOIN,
+	QM_WITHIN,
+	QM_BETWEEN,
 };
 
 struct QMbase {
@@ -63,6 +67,21 @@ struct QMexact {
 	const char *table;
 	const char *column;
 	const char *value;
+};
+
+struct QMbetween {
+	enum QMtag  type;
+	const char *table;
+	const char *column;
+	long	    min;
+	long	    max;
+};
+
+struct QMwithin {
+	enum QMtag	   type;
+	const char	  *table;
+	const char	  *column;
+	struct jy_time_ofs timeofs;
 };
 
 struct QMjoin {
@@ -103,15 +122,19 @@ static inline int q_match(struct sqlite3 *db,
 	struct QMbase **qs    = Q.qlist;
 	struct jy_defs *names = Q.names;
 
-	char		     *sql;
-	const struct QMjoin  *joins[qlen];
-	const struct QMexact *exacts[qlen];
-	const struct jy_defs *events[qlen * 2];
-	const char	     *eventnames[qlen * 2];
+	char		       *sql;
+	const struct QMjoin    *joins[qlen];
+	const struct QMexact   *exacts[qlen];
+	const struct QMbetween *between[qlen];
+	const struct QMwithin  *within[qlen];
+	const struct jy_defs   *events[qlen * 2];
+	const char	       *eventnames[qlen * 2];
 
-	int eventsz = 0;
-	int joinsz  = 0;
-	int exactsz = 0;
+	int eventsz   = 0;
+	int joinsz    = 0;
+	int exactsz   = 0;
+	int withinsz  = 0;
+	int betweensz = 0;
 
 	memset(joins, 0, sizeof(joins));
 	memset(exacts, 0, sizeof(exacts));
@@ -133,6 +156,9 @@ static inline int q_match(struct sqlite3 *db,
 		}
 
 		switch (Q->type) {
+		case QM_NONE:
+			assert(Q->type != QM_NONE);
+			break;
 		case QM_EXACT:
 			exacts[exactsz]	 = (struct QMexact *) Q;
 			exactsz		+= 1;
@@ -141,29 +167,34 @@ static inline int q_match(struct sqlite3 *db,
 			joins[joinsz]  = (struct QMjoin *) Q;
 			joinsz	      += 1;
 			break;
+		case QM_WITHIN:
+			within[withinsz]  = (struct QMwithin *) Q;
+			withinsz	 += 1;
+			break;
+		case QM_BETWEEN:
+			between[betweensz]  = (struct QMbetween *) Q;
+			betweensz	   += 1;
+			break;
 		}
 	}
 
 	for (int i = 0; i < joinsz; ++i) {
 		const struct QMjoin *J = joins[i];
-		struct QMbase	    *Q = sc_alloc(&buf, sizeof *Q);
-		Q->table	       = J->tbl_right;
-		Q->column	       = J->col_right;
 
 		union jy_value event;
 		enum jy_ktype  type;
 
-		assert(def_get(names, Q->table, &event, &type) == 0);
+		assert(def_get(names, J->tbl_right, &event, &type) == 0);
 		assert(type == JY_K_EVENT);
 
 		if (!exists(eventsz, events, event.def)) {
 			events[eventsz]	     = event.def;
-			eventnames[eventsz]  = Q->table;
+			eventnames[eventsz]  = J->tbl_right;
 			eventsz		    += 1;
 		}
 	}
 
-	assert(joinsz > 0 || exactsz > 0);
+	assert(joinsz > 0 || exactsz > 0 || withinsz > 0 || betweensz > 0);
 
 	sc_strfmt(&buf, &sql, "SELECT");
 
@@ -208,12 +239,13 @@ static inline int q_match(struct sqlite3 *db,
 	}
 
 	for (int i = 0; i < joinsz; ++i) {
-		const struct QMjoin *Q	 = joins[i];
-		const char	    *lt	 = Q->tbl_left;
-		const char	    *lc	 = Q->col_left;
-		const char	    *rt	 = Q->tbl_right;
-		const char	    *rc	 = Q->col_right;
-		char		    *fmt = "%s %s.%s = %s.%s,";
+		const struct QMjoin *Q	= joins[i];
+		const char	    *lt = Q->tbl_left;
+		const char	    *lc = Q->col_left;
+		const char	    *rt = Q->tbl_right;
+		const char	    *rc = Q->col_right;
+
+		const char *fmt = "%s %s.%s = %s.%s AND";
 
 		sz = sc_strfmt(&buf, &sql, fmt, sql, lt, lc, rt, rc);
 
@@ -221,16 +253,13 @@ static inline int q_match(struct sqlite3 *db,
 			goto OUT_OF_MEMORY;
 	}
 
-	if (exactsz == 0)
-		goto CLOSE;
-
 	for (int i = 0; i < exactsz; ++i) {
 		const struct QMexact *Q	 = exacts[i];
 		const char	     *lt = Q->table;
 		const char	     *lc = Q->column;
 		const char	     *r	 = Q->value;
 
-		const char fmt[] = "%s %s.%s = \"%s\",";
+		const char *fmt = "%s %s.%s = '%s' AND";
 
 		// TODO: potential SQL injection? maybe later...
 		sz = sc_strfmt(&buf, &sql, fmt, sql, lt, lc, r);
@@ -239,8 +268,35 @@ static inline int q_match(struct sqlite3 *db,
 			goto OUT_OF_MEMORY;
 	}
 
-CLOSE:
-	sql[sz - 1] = ';';
+	for (int i = 0; i < withinsz; ++i) {
+		const struct QMwithin *Q = within[i];
+		long ofs		 = Q->timeofs.offset * Q->timeofs.time;
+
+		const char fmt[] = "%s unixepoch() - %s.%s <= %ld AND";
+
+		sz = sc_strfmt(&buf, &sql, fmt, sql, Q->table, Q->column, ofs);
+
+		if (sql == NULL)
+			goto OUT_OF_MEMORY;
+	}
+
+	for (int i = 0; i < betweensz; ++i) {
+		const struct QMbetween *Q   = between[i];
+		const char	       *t   = Q->table;
+		const char	       *c   = Q->column;
+		long			min = Q->min;
+		long			max = Q->max;
+
+		const char fmt[] = "%s %s.%s > %ld AND %s.%s < %ld AND";
+
+		sz = sc_strfmt(&buf, &sql, fmt, sql, t, c, min, t, c, max);
+
+		if (sql == NULL)
+			goto OUT_OF_MEMORY;
+	}
+
+	sql[sz - 4] = ';';
+	sql[sz - 3] = '\0';
 
 	if (sqlite3_exec(db, sql, callback, data, errmsg) != SQLITE_OK)
 		goto TX_FAILED;

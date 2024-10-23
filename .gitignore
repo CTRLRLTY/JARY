@@ -9,3 +9,4 @@ Testing/
 .gdb_history
 !test/*.jary
 *.orig
+*.db

@@ -47,6 +47,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 static const char *tkn2string(enum jy_tkn type)
 {
 	switch (type) {
+	case TKN_BETWEEN:
+		return "TKN_BETWEEN";
+	case TKN_WITHIN:
+		return "TKN_WITHIN";
+	case TKN_HOUR:
+		return "TKN_HOUR";
+	case TKN_MINUTE:
+		return "TKN_MINUTE";
+	case TKN_SECOND:
+		return "TKN_SECOND";
 	case TKN_NONE:
 		return "TKN_NONE";
 	case TKN_ERR:
@@ -91,6 +101,8 @@ static const char *tkn2string(enum jy_tkn type)
 		return "TKN_FIELD";
 	case TKN_LONG_TYPE:
 		return "TKN_LONG_TYPE";
+	case TKN_BOOL_TYPE:
+		return "TKN_BOOL_TYPE";
 	case TKN_STRING_TYPE:
 		return "TKN_STRING_TYPE";
 	case TKN_EXACT:
@@ -158,6 +170,16 @@ static const char *ast2string(enum jy_ast type)
 	switch (type) {
 	case AST_NONE:
 		return "NONE";
+	case AST_WITHIN:
+		return "WITHIN";
+	case AST_BETWEEN:
+		return "BETWEEN";
+	case AST_HOUR:
+		return "HOUR";
+	case AST_MINUTE:
+		return "MINUTE";
+	case AST_SECOND:
+		return "SECOND";
 	case AST_ROOT:
 		return "ROOT";
 	case AST_RULE_DECL:
@@ -248,8 +270,12 @@ static const char *ast2string(enum jy_ast type)
 static const char *k2string(enum jy_ktype type)
 {
 	switch (type) {
+	case JY_K_TIME:
+		return "[TIME]";
 	case JY_K_TARGET:
 		return "[TARGET]";
+	case JY_K_MATCH:
+		return "[MATCH]";
 	case JY_K_MODULE:
 		return "[MODULE]";
 	case JY_K_LONG:
@@ -272,12 +298,18 @@ static const char *k2string(enum jy_ktype type)
 		return "[HANDLE]";
 	case JY_K_DESCRIPTOR:
 		return "[DESCRIPTOR]";
+	case JY_K_UNKNOWN:
+		return "[UNKNOWN]";
 	}
 }
 
 static const char *codestring(enum jy_opcode code)
 {
 	switch (code) {
+	case JY_OP_WITHIN:
+		return "OP_WITHIN";
+	case JY_OP_BETWEEN:
+		return "OP_BETWEEN";
 	case JY_OP_PUSH8:
 		return "OP_PUSH8";
 	case JY_OP_PUSH16:
@@ -532,6 +564,22 @@ static inline void print_value(enum jy_ktype type, const union jy_value value)
 		return;
 	case JY_K_LONG:
 		printf("%ld", value.i64);
+		return;
+	case JY_K_TIME:
+		printf("%d ", value.timeofs.offset);
+
+		switch (value.timeofs.time) {
+		case JY_TIME_HOUR:
+			printf("[TIME_HOUR]");
+			break;
+		case JY_TIME_MINUTE:
+			printf("[TIME_MINUTE] ");
+			break;
+		case JY_TIME_SECOND:
+			printf("[TIME_SECOND] ");
+			break;
+		}
+
 		return;
 	case JY_K_STR:
 		if (value.str)

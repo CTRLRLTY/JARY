@@ -58,6 +58,8 @@ target_compile_definitions( exec_test
         PUBLIC 
         MARK_MODULE_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_mark_module.jary" 
         JOIN_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_join.jary" 
+        WITHIN_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_within.jary"
+        BETWEEN_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_between.jary"
 )
 
 
@@ -114,16 +116,8 @@ add_custom_command(
         TARGET exec_test 
         POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-        ${CMAKE_CURRENT_SOURCE_DIR}/exec_mark_module.jary
-        $<TARGET_FILE_DIR:compiler_test>/exec_mark_module.jary
-)
-
-add_custom_command(
-        TARGET exec_test 
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-        ${CMAKE_CURRENT_SOURCE_DIR}/exec_join.jary
-        $<TARGET_FILE_DIR:compiler_test>/exec_join.jary
+        ${CMAKE_CURRENT_SOURCE_DIR}/exec_*.jary
+        $<TARGET_FILE_DIR:compiler_test>/
 )
 
 include( GoogleTest )
@@ -132,7 +126,3 @@ gtest_discover_tests( scanner_test )
 gtest_discover_tests( parser_test )
 gtest_discover_tests( compiler_test )
 gtest_discover_tests( exec_test )
-
-
-
-

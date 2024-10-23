@@ -319,13 +319,60 @@ static inline int interpret(struct runtime *ctx)
 		flag->bits.b8  = !flag->bits.b8;
 		pc	      += 1;
 		break;
-
 	case JY_OP_LOAD: {
 		struct jy_descriptor d	   = pop(stack).dscptr;
 		struct jy_defs	    *event = vals[d.name].def;
 		union jy_value	     v	   = event->vals[d.member];
 
 		if (push(stack, v))
+			goto OUT_OF_MEMORY;
+
+		pc += 1;
+		break;
+	}
+	case JY_OP_BETWEEN: {
+		long		     max   = pop(stack).i64;
+		long		     min   = pop(stack).i64;
+		struct jy_descriptor d	   = pop(stack).dscptr;
+		struct jy_defs	    *event = vals[d.name].def;
+
+		struct QMbetween *Q = sc_alloc(rbuf, sizeof *Q);
+		uint32_t	  namefield;
+
+		assert(def_find(event, "__name__", &namefield));
+
+		Q->type	  = QM_BETWEEN;
+		Q->max	  = max;
+		Q->min	  = min;
+		Q->table  = event->vals[namefield].str->cstr;
+		Q->column = event->keys[d.member];
+
+		union jy_value view = { .handle = Q };
+
+		if (push(stack, view))
+			goto OUT_OF_MEMORY;
+
+		pc += 1;
+		break;
+	}
+	case JY_OP_WITHIN: {
+		struct jy_time_ofs   timeofs = pop(stack).timeofs;
+		struct jy_descriptor d	     = pop(stack).dscptr;
+		struct jy_defs	    *names   = vals[d.name].def;
+
+		struct QMwithin *Q = sc_alloc(rbuf, sizeof *Q);
+
+		if (Q == NULL)
+			goto OUT_OF_MEMORY;
+
+		Q->type	   = QM_WITHIN;
+		Q->table   = names->keys[d.member];
+		Q->column  = "__arrival__";
+		Q->timeofs = timeofs;
+
+		union jy_value view = { .handle = Q };
+
+		if (push(stack, view))
 			goto OUT_OF_MEMORY;
 
 		pc += 1;
@@ -354,9 +401,9 @@ static inline int interpret(struct runtime *ctx)
 		Q->tbl_right = event1->vals[field1].str->cstr;
 		Q->col_right = event1->keys[d1.member];
 
-		union jy_value sql = { .handle = Q };
+		union jy_value view = { .handle = Q };
 
-		if (push(stack, sql))
+		if (push(stack, view))
 			goto OUT_OF_MEMORY;
 
 		pc += 1;
@@ -433,7 +480,6 @@ static inline int interpret(struct runtime *ctx)
 		pc	      += 1;
 		break;
 	}
-
 	case JY_OP_CMP: {
 		long v2	      = pop(stack).i64;
 		long v1	      = pop(stack).i64;

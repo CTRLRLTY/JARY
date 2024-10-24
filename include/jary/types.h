@@ -43,7 +43,7 @@ enum jy_ktype {
 	JY_K_DESCRIPTOR,
 
 	JY_K_FUNC,
-	JY_K_TARGET,
+	JY_K_ACTION,
 	JY_K_MATCH,
 
 	JY_K_EVENT,
@@ -82,8 +82,8 @@ struct jy_time_ofs {
 union jy_value {
 	void		    *obj;
 	void		    *handle;
-	struct jy_obj_func  *func;
-	struct jy_obj_str   *str;
+	struct jy_func	    *func;
+	struct jy_str	    *str;
 	char		    *cstr;
 	struct jy_defs	    *def;
 	struct jy_defs	    *module;
@@ -97,14 +97,14 @@ union jy_value {
 
 typedef int (*jy_funcptr_t)(int, union jy_value *, union jy_value *);
 
-struct jy_obj_str {
+struct jy_str {
 	// size does not include '\0'
 	uint32_t size;
 	// null terminated string
 	char	 cstr[];
 };
 
-struct jy_obj_func {
+struct jy_func {
 	enum jy_ktype return_type;
 	uint8_t	      param_size;
 	jy_funcptr_t  func;

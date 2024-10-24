@@ -76,8 +76,8 @@ static size_t read_file(const char *path, char **dst)
 
 TEST(ExecTest, MarkModule)
 {
-	union jy_value	   key;
-	struct jy_obj_str *str;
+	union jy_value key;
+	struct jy_str *str;
 
 	struct jy_asts	asts  = { .tkns = NULL };
 	struct jy_tkns	tkns  = { .lexemes = NULL };
@@ -89,7 +89,7 @@ TEST(ExecTest, MarkModule)
 	char	       *src   = NULL;
 	size_t		srcsz = read_file(MARK_MODULE_JARY_PATH, &src);
 
-	str = (jy_obj_str *) sc_alloc(&alloc, sizeof(*str) + 6);
+	str = (jy_str *) sc_alloc(&alloc, sizeof(*str) + 6);
 	sc_reap(&alloc, src, free);
 
 	str->size = 5;
@@ -116,8 +116,8 @@ TEST(ExecTest, MarkModule)
 	}
 
 	{
-		uint32_t	    id;
-		struct jy_obj_func *ofunc;
+		uint32_t	id;
+		struct jy_func *ofunc;
 
 		ASSERT_TRUE(def_find(mark, "mark", &id));
 
@@ -128,9 +128,9 @@ TEST(ExecTest, MarkModule)
 	}
 
 	{
-		uint32_t	    id;
-		union jy_value	    result;
-		struct jy_obj_func *ofunc;
+		uint32_t	id;
+		union jy_value	result;
+		struct jy_func *ofunc;
 
 		ASSERT_TRUE(def_find(mark, "count", &id));
 
@@ -142,8 +142,8 @@ TEST(ExecTest, MarkModule)
 	}
 
 	{
-		uint32_t	    id;
-		struct jy_obj_func *ofunc;
+		uint32_t	id;
+		struct jy_func *ofunc;
 
 		ASSERT_TRUE(def_find(mark, "unmark", &id));
 
@@ -173,9 +173,9 @@ TEST(ExecTest, MarkModule)
 	ASSERT_EQ(jry_exec(db, &jay), 0);
 
 	{
-		uint32_t	    id;
-		union jy_value	    result;
-		struct jy_obj_func *ofunc;
+		uint32_t	id;
+		union jy_value	result;
+		struct jy_func *ofunc;
 
 		ASSERT_TRUE(def_find(mark, "count", &id));
 
@@ -192,8 +192,8 @@ TEST(ExecTest, MarkModule)
 
 TEST(ExecTest, Join)
 {
-	union jy_value	   key;
-	struct jy_obj_str *str;
+	union jy_value key;
+	struct jy_str *str;
 
 	struct jy_asts	asts  = { .tkns = NULL };
 	struct jy_tkns	tkns  = { .lexemes = NULL };
@@ -205,7 +205,7 @@ TEST(ExecTest, Join)
 	char	       *src   = NULL;
 	size_t		srcsz = read_file(JOIN_JARY_PATH, &src);
 
-	str = (jy_obj_str *) sc_alloc(&alloc, sizeof(*str) + 6);
+	str = (jy_str *) sc_alloc(&alloc, sizeof(*str) + 6);
 	sc_reap(&alloc, src, free);
 
 	str->size = 5;
@@ -261,9 +261,9 @@ TEST(ExecTest, Join)
 	ASSERT_EQ(jry_exec(db, &jay), 0);
 
 	{
-		uint32_t	    id;
-		union jy_value	    result;
-		struct jy_obj_func *ofunc;
+		uint32_t	id;
+		union jy_value	result;
+		struct jy_func *ofunc;
 
 		ASSERT_TRUE(def_find(mark, "count", &id));
 
@@ -280,8 +280,8 @@ TEST(ExecTest, Join)
 
 TEST(ExecTest, Within)
 {
-	union jy_value	   key;
-	struct jy_obj_str *str;
+	union jy_value key;
+	struct jy_str *str;
 
 	struct jy_asts	asts  = { .tkns = NULL };
 	struct jy_tkns	tkns  = { .lexemes = NULL };
@@ -293,7 +293,7 @@ TEST(ExecTest, Within)
 	char	       *src   = NULL;
 	size_t		srcsz = read_file(WITHIN_JARY_PATH, &src);
 
-	str = (jy_obj_str *) sc_alloc(&alloc, sizeof(*str) + 6);
+	str = (jy_str *) sc_alloc(&alloc, sizeof(*str) + 6);
 	sc_reap(&alloc, src, free);
 
 	str->size = 5;
@@ -337,8 +337,8 @@ TEST(ExecTest, Within)
 
 	ASSERT_EQ(jry_exec(db, &jay), 0);
 
-	union jy_value	    result;
-	struct jy_obj_func *ofunc;
+	union jy_value	result;
+	struct jy_func *ofunc;
 
 	ASSERT_TRUE(def_find(mark, "count", &id));
 
@@ -354,8 +354,8 @@ TEST(ExecTest, Within)
 
 TEST(ExecTest, Between)
 {
-	union jy_value	   key;
-	struct jy_obj_str *str;
+	union jy_value key;
+	struct jy_str *str;
 
 	struct jy_asts	asts  = { .tkns = NULL };
 	struct jy_tkns	tkns  = { .lexemes = NULL };
@@ -367,7 +367,7 @@ TEST(ExecTest, Between)
 	char	       *src   = NULL;
 	size_t		srcsz = read_file(BETWEEN_JARY_PATH, &src);
 
-	str = (jy_obj_str *) sc_alloc(&alloc, sizeof(*str) + 6);
+	str = (jy_str *) sc_alloc(&alloc, sizeof(*str) + 6);
 	sc_reap(&alloc, src, free);
 
 	str->size = 5;
@@ -410,8 +410,8 @@ TEST(ExecTest, Between)
 
 	ASSERT_EQ(jry_exec(db, &jay), 0);
 
-	union jy_value	    result;
-	struct jy_obj_func *ofunc;
+	union jy_value	result;
+	struct jy_func *ofunc;
 
 	ASSERT_TRUE(def_find(mark, "count", &id));
 
@@ -419,7 +419,7 @@ TEST(ExecTest, Between)
 
 	// calling count function -> mark.count()
 	ASSERT_EQ(ofunc->func(1, &key, &result), 0);
-	ASSERT_EQ(result.i64, 2);
+	ASSERT_EQ(result.i64, 1);
 
 	sqlite3_close_v2(db);
 	sc_free(&alloc);

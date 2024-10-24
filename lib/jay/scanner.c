@@ -79,7 +79,7 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 		if (*current != '=')
 			break;
 		current += 1;
-		*type	 = TKN_EQUAL;
+		*type	 = TKN_EQ;
 		goto FINISH;
 	case '{':
 		*type = TKN_LEFT_BRACE;
@@ -227,6 +227,8 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 			*type = TKN_AND;
 		else if (KEYWORD(start + 1, "ny", 2))
 			*type = TKN_ANY;
+		else if (KEYWORD(start + 1, "ction", 5))
+			*type = TKN_JUMP;
 		else
 			goto IDENTIFIER;
 
@@ -250,6 +252,8 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 	case 'e':
 		if (KEYWORD(start + 1, "xact", 4))
 			*type = TKN_EXACT;
+		else if (KEYWORD(start + 1, "qual", 4))
+			*type = TKN_EQUAL;
 		else
 			goto IDENTIFIER;
 
@@ -300,8 +304,6 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 	case 't':
 		if (KEYWORD(start + 1, "rue", 3))
 			*type = TKN_TRUE;
-		else if (KEYWORD(start + 1, "arget", 5))
-			*type = TKN_JUMP;
 		else
 			goto IDENTIFIER;
 

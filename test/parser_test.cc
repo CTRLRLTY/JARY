@@ -117,7 +117,7 @@ TEST(ParserTest, RuleDeclaration)
 			   "\n"
 			   "              1 < 2 and \"a\" == \"a\""
 			   "\n"
-			   "      target:"
+			   "      action:"
 			   "\n"
 			   "              mark.mark($data.yes)"
 			   "\n"
@@ -141,8 +141,8 @@ TEST(ParserTest, RuleDeclaration)
 		AST_LONG,     AST_LESSER,	  AST_LONG,
 		AST_AND,      AST_STRING,	  AST_EQUALITY,
 		AST_STRING,   AST_JUMP_SECT,	  AST_NAME,
-		AST_QACCESS,  AST_NAME,		  AST_CALL,
-		AST_EVENT,    AST_QACCESS,	  AST_EVENT
+		AST_EACCESS,  AST_NAME,		  AST_CALL,
+		AST_EVENT,    AST_EACCESS,	  AST_EVENT
 	};
 
 	ASSERT_EQ(errs.size, 0);

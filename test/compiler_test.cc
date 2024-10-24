@@ -91,26 +91,12 @@ TEST(CompilerTest, Basic)
 	// clang-format off
 	uint8_t codes[] = {
                 //
-                JY_OP_PUSH8, 4,
-                JY_OP_PUSH8, 5,
-                JY_OP_EXACT,
-                JY_OP_PUSH8, 6,
-                JY_OP_QUERY,
-                JY_OP_JMPF,  25, 0,
-                //
-                JY_OP_PUSH8, 6,
-                JY_OP_PUSH8, 7,
-                JY_OP_CMP,
-                JY_OP_JMPF,  8, 0,
-                //
-                JY_OP_PUSH8, 6,
+                JY_OP_PUSH8, 11,
                 JY_OP_PUSH8, 8,
-                JY_OP_GT,
-                JY_OP_JMPF,  9, 0,
-                //
-                JY_OP_PUSH8, 10,
-                JY_OP_PUSH8, 5,
-                JY_OP_CALL,  1,
+                JY_OP_EQUAL,
+                JY_OP_PUSH8, 3,
+                JY_OP_PUSH8, 9,
+                JY_OP_QUERY,
                 JY_OP_END,
         };
 	// clang-format on

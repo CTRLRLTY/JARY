@@ -7,8 +7,9 @@ ingress data {
 
 rule bye {
        match:
+                $data.age equal 4 
                 $data.age between 3..10 
 
-       target:
+       action:
                 mark.mark("hello")
 }

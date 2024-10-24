@@ -47,6 +47,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 static const char *tkn2string(enum jy_tkn type)
 {
 	switch (type) {
+	case TKN_EQUAL:
+		return "TKN_EQUAL";
 	case TKN_BETWEEN:
 		return "TKN_BETWEEN";
 	case TKN_WITHIN:
@@ -121,8 +123,8 @@ static const char *tkn2string(enum jy_tkn type)
 		return "TKN_STAR";
 	case TKN_SLASH:
 		return "TKN_SLASH";
-	case TKN_EQUAL:
-		return "TKN_EQUAL";
+	case TKN_EQ:
+		return "TKN_EQ";
 	case TKN_LESSTHAN:
 		return "TKN_LESSTHAN";
 	case TKN_GREATERTHAN:
@@ -272,7 +274,7 @@ static const char *k2string(enum jy_ktype type)
 	switch (type) {
 	case JY_K_TIME:
 		return "[TIME]";
-	case JY_K_TARGET:
+	case JY_K_ACTION:
 		return "[TARGET]";
 	case JY_K_MATCH:
 		return "[MATCH]";
@@ -342,8 +344,8 @@ static const char *codestring(enum jy_opcode code)
 		return "OP_CALL";
 	case JY_OP_JOIN:
 		return "OP_JOIN";
-	case JY_OP_EXACT:
-		return "OP_EXACT";
+	case JY_OP_EQUAL:
+		return "OP_EQUAL";
 	case JY_OP_CONCAT:
 		return "OP_CONCAT";
 	case JY_OP_QUERY:

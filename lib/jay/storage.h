@@ -62,11 +62,22 @@ struct QMbase {
 	const char *column;
 };
 
-struct QMexact {
+struct QMequal {
 	enum QMtag  type;
 	const char *table;
 	const char *column;
-	const char *value;
+
+	struct {
+		enum {
+			QME_LONG,
+			QME_CSTR,
+		} type;
+
+		union {
+			int64_t	    i64;
+			const char *cstr;
+		} as;
+	} value;
 };
 
 struct QMbetween {
@@ -124,7 +135,7 @@ static inline int q_match(struct sqlite3 *db,
 
 	char		       *sql;
 	const struct QMjoin    *joins[qlen];
-	const struct QMexact   *exacts[qlen];
+	const struct QMequal   *exacts[qlen];
 	const struct QMbetween *between[qlen];
 	const struct QMwithin  *within[qlen];
 	const struct jy_defs   *events[qlen * 2];
@@ -160,7 +171,7 @@ static inline int q_match(struct sqlite3 *db,
 			assert(Q->type != QM_NONE);
 			break;
 		case QM_EXACT:
-			exacts[exactsz]	 = (struct QMexact *) Q;
+			exacts[exactsz]	 = (struct QMequal *) Q;
 			exactsz		+= 1;
 			break;
 		case QM_JOIN:
@@ -254,15 +265,26 @@ static inline int q_match(struct sqlite3 *db,
 	}
 
 	for (int i = 0; i < exactsz; ++i) {
-		const struct QMexact *Q	 = exacts[i];
+		const struct QMequal *Q	 = exacts[i];
 		const char	     *lt = Q->table;
 		const char	     *lc = Q->column;
-		const char	     *r	 = Q->value;
+		const char	     *fmt;
 
-		const char *fmt = "%s %s.%s = '%s' AND";
-
-		// TODO: potential SQL injection? maybe later...
-		sz = sc_strfmt(&buf, &sql, fmt, sql, lt, lc, r);
+		switch (Q->value.type) {
+		case QME_CSTR: {
+			const char *r = Q->value.as.cstr;
+			// TODO: potential SQL injection? maybe later...
+			fmt	      = "%s %s.%s = '%s' AND";
+			sz = sc_strfmt(&buf, &sql, fmt, sql, lt, lc, r);
+			break;
+		}
+		case QME_LONG: {
+			long r = Q->value.as.i64;
+			fmt    = "%s %s.%s = '%ld' AND";
+			sz     = sc_strfmt(&buf, &sql, fmt, sql, lt, lc, r);
+			break;
+		}
+		}
 
 		if (sql == NULL)
 			goto OUT_OF_MEMORY;

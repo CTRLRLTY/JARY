@@ -47,7 +47,7 @@ enum jy_opcode {
 
 	JY_OP_LOAD,
 	JY_OP_JOIN,
-	JY_OP_EXACT,
+	JY_OP_EQUAL,
 	JY_OP_JMPT,
 	JY_OP_JMPF,
 	JY_OP_CALL,

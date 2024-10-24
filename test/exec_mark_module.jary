@@ -12,6 +12,6 @@ rule bye {
        condition:
                 $data.yes == "hello"
 
-       target:
+       action:
                mark.mark("hello")
 }

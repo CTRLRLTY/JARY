@@ -124,8 +124,8 @@ static inline int value_from_cstr(struct sc_mem	 *alloc,
 {
 	switch (type) {
 	case JY_K_STR: {
-		struct jy_obj_str *ostr;
-		uint32_t	   sz = strlen(str);
+		struct jy_str *ostr;
+		uint32_t       sz = strlen(str);
 
 		// +1 to include '\0'
 		ostr = sc_alloc(alloc, sizeof(*ostr) + sz + 1);
@@ -283,7 +283,7 @@ static inline int interpret(struct runtime *ctx)
 		for (size_t i = 0; i < paramsz; ++i)
 			args[i] = pop(stack);
 
-		struct jy_obj_func *func = pop(stack).func;
+		struct jy_func *func = pop(stack).func;
 
 		union jy_value retval;
 
@@ -409,8 +409,8 @@ static inline int interpret(struct runtime *ctx)
 		pc += 1;
 		break;
 	}
-	case JY_OP_EXACT: {
-		struct jy_obj_str   *str    = pop(stack).str;
+	case JY_OP_EQUAL: {
+		union jy_value	     right  = pop(stack);
 		struct jy_descriptor dscptr = pop(stack).dscptr;
 		struct jy_defs	    *event  = vals[dscptr.name].def;
 
@@ -418,15 +418,28 @@ static inline int interpret(struct runtime *ctx)
 
 		assert(def_find(event, "__name__", &field));
 
-		struct QMexact *Q = sc_alloc(rbuf, sizeof *Q);
+		struct QMequal *Q = sc_alloc(rbuf, sizeof *Q);
 
 		if (Q == NULL)
 			goto OUT_OF_MEMORY;
 
-		Q->type		   = QM_EXACT;
-		Q->table	   = event->vals[field].str->cstr;
-		Q->column	   = event->keys[dscptr.member];
-		Q->value	   = str->cstr;
+		Q->type	  = QM_EXACT;
+		Q->table  = event->vals[field].str->cstr;
+		Q->column = event->keys[dscptr.member];
+
+		switch (event->types[dscptr.member]) {
+		case JY_K_STR:
+			Q->value.type	 = QME_CSTR;
+			Q->value.as.cstr = right.str->cstr;
+			break;
+		case JY_K_LONG:
+			Q->value.type	= QME_LONG;
+			Q->value.as.i64 = right.i64;
+			break;
+		default:
+			goto QUERY_FAILED;
+		}
+
 		union jy_value sql = { .handle = Q };
 
 		if (push(stack, sql))
@@ -469,12 +482,12 @@ static inline int interpret(struct runtime *ctx)
 		break;
 	}
 	case JY_OP_CMPSTR: {
-		struct jy_obj_str *v2 = pop(stack).str;
-		struct jy_obj_str *v1 = pop(stack).str;
-		const char	  *s2 = v2->cstr;
-		const char	  *s1 = v1->cstr;
-		size_t		   z2 = v2->size;
-		size_t		   z1 = v1->size;
+		struct jy_str *v2 = pop(stack).str;
+		struct jy_str *v1 = pop(stack).str;
+		const char    *s2 = v2->cstr;
+		const char    *s1 = v1->cstr;
+		size_t	       z2 = v2->size;
+		size_t	       z1 = v1->size;
 
 		flag->bits.b8  = z1 == z2 && memcmp(s1, s2, z1) == 0;
 		pc	      += 1;
@@ -549,8 +562,8 @@ static inline int interpret(struct runtime *ctx)
 	case JY_OP_CONCAT: {
 		union jy_value result;
 
-		struct jy_obj_str *v2 = pop(stack).str;
-		struct jy_obj_str *v1 = pop(stack).str;
+		struct jy_str *v2 = pop(stack).str;
+		struct jy_str *v1 = pop(stack).str;
 
 		size_t strsz = v2->size + v1->size;
 		char   buf[strsz + 1];
@@ -558,7 +571,7 @@ static inline int interpret(struct runtime *ctx)
 		strcpy(buf, v1->cstr);
 		strcat(buf, v2->cstr);
 
-		uint32_t allocsz = sizeof(struct jy_obj_str) + strsz + 1;
+		uint32_t allocsz = sizeof(struct jy_str) + strsz + 1;
 		result.str	 = sc_alloc(rbuf, allocsz);
 
 		if (result.str == NULL)

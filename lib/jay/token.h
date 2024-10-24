@@ -77,8 +77,9 @@ enum jy_tkn {
 
 	TKN_JOINX,
 	TKN_EXACT,
-
 	TKN_EQUAL,
+
+	TKN_EQ,
 	TKN_LESSTHAN,
 	TKN_GREATERTHAN,
 	TKN_AND,

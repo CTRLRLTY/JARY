@@ -781,7 +781,7 @@ static bool _binary(struct parser   *p,
 	case TKN_SLASH:
 		root_type = AST_DIVIDE;
 		break;
-	case TKN_EQUAL:
+	case TKN_EQ:
 		root_type = AST_EQUALITY;
 		break;
 	case TKN_LESSTHAN:
@@ -795,6 +795,9 @@ static bool _binary(struct parser   *p,
 		break;
 	case TKN_OR:
 		root_type = AST_OR;
+		break;
+	case TKN_EQUAL:
+		root_type = AST_EQUAL;
 		break;
 	case TKN_JOINX:
 		root_type = AST_JOINX;
@@ -1303,8 +1306,9 @@ static struct rule rules[TOTAL_TKN_TYPES] = {
 	[TKN_EXACT]   = { NULL, _binary, PREC_EQUALITY },
 	[TKN_BETWEEN] = { NULL, _binary, PREC_EQUALITY },
 	[TKN_WITHIN]  = { NULL, _binary, PREC_EQUALITY },
+	[TKN_EQUAL]   = { NULL, _binary, PREC_EQUALITY },
 
-	[TKN_EQUAL]	  = { NULL, _binary, PREC_EQUALITY },
+	[TKN_EQ]	  = { NULL, _binary, PREC_EQUALITY },
 	[TKN_LESSTHAN]	  = { NULL, _binary, PREC_COMPARISON },
 	[TKN_GREATERTHAN] = { NULL, _binary, PREC_COMPARISON },
 

@@ -11,6 +11,6 @@ rule bye {
                 $data.yes exact "hello"
        condition:
                1 == 2 and 1 > 3
-       target:
+       action:
                mark.mark("hello")
 }

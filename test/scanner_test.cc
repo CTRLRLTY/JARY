@@ -85,7 +85,7 @@ TEST(ScannerTest, ScanSymbol)
 		TKN_LEFT_BRACE,
 		TKN_RIGHT_BRACE,
 		// operator
-		TKN_EQUAL,
+		TKN_EQ,
 		TKN_TILDE,
 		TKN_LESSTHAN,
 		TKN_GREATERTHAN,
@@ -110,7 +110,7 @@ TEST(ScannerTest, ScanKeyword)
 	const char *str[] = {
 		"all",	 "and",	   "any",	"false",  "true",    "or",
 		"not",	 "input",  "rule",	"import", "ingress", "include",
-		"match", "target", "condition", "field",
+		"match", "action", "condition", "field",
 	};
 
 	enum jy_tkn types[] {

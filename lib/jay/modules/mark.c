@@ -143,7 +143,7 @@ static int mark(int argc, union jy_value *argv, union jy_value *result)
 	(void) argc;
 	(void) result;
 
-	struct jy_obj_str *str	   = argv[0].str;
+	struct jy_str *str	   = argv[0].str;
 	struct table *restrict tbl = &marked;
 	const char *key		   = str->cstr;
 	size_t	    keysz	   = str->size;
@@ -180,7 +180,7 @@ static int unmark(int argc, union jy_value *argv, union jy_value *result)
 	(void) argc;
 	(void) result;
 
-	struct jy_obj_str *str	   = argv[0].str;
+	struct jy_str *str	   = argv[0].str;
 	struct table *restrict tbl = &marked;
 
 	int id;
@@ -201,7 +201,7 @@ static int count(int argc, union jy_value *argv, union jy_value *result)
 {
 	(void) argc;
 
-	struct jy_obj_str *str	   = argv[0].str;
+	struct jy_str *str	   = argv[0].str;
 	struct table *restrict tbl = &marked;
 
 	int id;
@@ -218,8 +218,8 @@ int module_load(struct jy_module *ctx)
 {
 	enum jy_ktype params = JY_K_STR;
 
-	def_func(ctx, "mark", JY_K_TARGET, 1, &params, (jy_funcptr_t) mark);
-	def_func(ctx, "unmark", JY_K_TARGET, 1, &params, (jy_funcptr_t) unmark);
+	def_func(ctx, "mark", JY_K_ACTION, 1, &params, (jy_funcptr_t) mark);
+	def_func(ctx, "unmark", JY_K_ACTION, 1, &params, (jy_funcptr_t) unmark);
 	def_func(ctx, "count", JY_K_LONG, 1, &params, (jy_funcptr_t) count);
 
 	return 0;

@@ -10,6 +10,6 @@ rule bye {
                 $data.yes exact "hello" 
                 $data within 10s 
 
-       target:
+       action:
                mark.mark("hello")
 }

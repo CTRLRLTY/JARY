@@ -269,7 +269,7 @@ static bool _string_expr(const struct jy_asts *asts,
 		if (ctx->types[i] != JY_K_STR)
 			continue;
 
-		struct jy_obj_str *v = ctx->vals[i].str;
+		struct jy_str *v = ctx->vals[i].str;
 
 		if (v->size != lexsz || memcmp(v->cstr, lexeme, lexsz))
 			continue;
@@ -279,7 +279,7 @@ static bool _string_expr(const struct jy_asts *asts,
 		goto EMIT;
 	}
 
-	uint32_t       allocsz = sizeof(struct jy_obj_str) + lexsz + 1;
+	uint32_t       allocsz = sizeof(struct jy_str) + lexsz + 1;
 	union jy_value value   = { .str = jry_alloc(allocsz) };
 
 	if (value.str == NULL)
@@ -439,10 +439,10 @@ static bool _call_expr(const struct jy_asts *asts,
 		goto PANIC;
 	}
 
-	union jy_value	    desc  = ctx->vals[expr->id];
-	union jy_value	    def	  = ctx->vals[desc.dscptr.name];
-	union jy_value	    value = def.def->vals[desc.dscptr.member];
-	struct jy_obj_func *ofunc = value.func;
+	union jy_value	desc  = ctx->vals[expr->id];
+	union jy_value	def   = ctx->vals[desc.dscptr.name];
+	union jy_value	value = def.def->vals[desc.dscptr.member];
+	struct jy_func *ofunc = value.func;
 
 	uint32_t *child	  = asts->child[ast];
 	uint32_t  childsz = asts->childsz[ast];
@@ -639,19 +639,24 @@ static bool _exact_expr(const struct jy_asts *asts,
 	if (_expr(asts, tkns, left, ctx, errs, scope, &leftx))
 		goto PANIC;
 
-	if (leftx.type != JY_K_STR)
-		goto INV_LEFT;
+	switch (leftx.type) {
+	case JY_K_STR:
+	case JY_K_LONG:
+		break;
+	default:
+		goto PANIC;
+	}
 
 	if (_expr(asts, tkns, right, ctx, errs, scope, &rightx))
 		goto PANIC;
 
-	if (rightx.type != JY_K_STR)
+	if (rightx.type != leftx.type)
 		goto INV_RIGHT;
 
 	expr->id   = -1u;
 	expr->type = JY_K_MATCH;
 
-	if (emit_byte(JY_OP_EXACT, &ctx->codes, &ctx->codesz) != 0)
+	if (emit_byte(JY_OP_EQUAL, &ctx->codes, &ctx->codesz) != 0)
 		goto PANIC;
 
 	return false;
@@ -725,13 +730,13 @@ PANIC:
 	return true;
 }
 
-static bool _equal_expr(const struct jy_asts *asts,
-			const struct jy_tkns *tkns,
-			uint32_t	      ast,
-			struct jy_jay	     *ctx,
-			struct tkn_errs	     *errs,
-			struct jy_defs	     *scope,
-			struct kexpr	     *expr)
+static bool _equality_expr(const struct jy_asts *asts,
+			   const struct jy_tkns *tkns,
+			   uint32_t		 ast,
+			   struct jy_jay	*ctx,
+			   struct tkn_errs	*errs,
+			   struct jy_defs	*scope,
+			   struct kexpr		*expr)
 {
 	assert(asts->childsz[ast] == 2);
 
@@ -1111,10 +1116,11 @@ static cmplfn_t rules[TOTAL_AST_TYPES] = {
 	// > binaries
 	[AST_JOINX]   = _join_expr,
 	[AST_EXACT]   = _exact_expr,
+	[AST_EQUAL]   = _exact_expr,
 	[AST_BETWEEN] = _between_expr,
 	[AST_WITHIN]  = _within_expr,
 
-	[AST_EQUALITY] = _equal_expr,
+	[AST_EQUALITY] = _equality_expr,
 	[AST_LESSER]   = _compare_expr,
 	[AST_GREATER]  = _compare_expr,
 
@@ -1239,7 +1245,7 @@ static inline bool _target_sect(const struct jy_asts *asts,
 
 		_expr(asts, tkns, chid, ctx, errs, ctx->names, &expr);
 
-		if (expr.type != JY_K_TARGET) {
+		if (expr.type != JY_K_ACTION) {
 			uint32_t from = asts->tkns[sect];
 			uint32_t to   = asts->tkns[chid];
 			tkn_error(errs, msg_inv_target_expr, from, to);
@@ -1507,9 +1513,8 @@ static inline bool _ingress_decl(struct sc_mem	      *alloc,
 	if (sc_reap(alloc, v.def, (free_t) def_free))
 		goto PANIC;
 
-	union jy_value _name_ = {
-		.str = sc_alloc(alloc, sizeof(struct jy_obj_str) + lexsz + 1)
-	};
+	union jy_value _name_ = { .str = sc_alloc(alloc, sizeof(struct jy_str)
+								 + lexsz + 1) };
 
 	if (_name_.str == NULL)
 		goto PANIC;

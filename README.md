@@ -33,5 +33,5 @@ rule myrule
 The rule essentially states that when there's a person named John Doe between the age of 18-30 and is on a cleaning duty within the last 10 minutes, log the string "John Doe is working on cleaning duty".
 
 ## Additional resources
-Visit the project wiki [introduction](https://github.com/CTRLRLTY/JARY/wiki/Introduction) to get started.
+Visit the project wiki [introduction](https://github.com/CTRLRLTY/JARY/wiki/) to get started.
 

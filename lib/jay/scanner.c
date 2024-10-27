@@ -143,20 +143,15 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 		}
 
 		goto FINISH;
-
-	case '\n':
-		while (!ENDED() && CURRENT() == '\n')
-			(void) NEXT();
-
-		*type = TKN_NEWLINE;
-		goto FINISH;
-
-	case '\0':
-		*type = TKN_EOF;
-		goto FINISH;
-
 	case '/': {
 		const char *old = current;
+
+		if (CURRENT() == '/') {
+			while (CURRENT() != '\n')
+				NEXT();
+			*type = TKN_COMMENT;
+			goto FINISH;
+		}
 
 		do {
 			if (CURRENT() == '/' && PREV() != '\\') {
@@ -171,6 +166,15 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 
 		goto FINISH;
 	}
+	case '\n':
+		while (!ENDED() && CURRENT() == '\n')
+			(void) NEXT();
+
+		*type = TKN_NEWLINE;
+		goto FINISH;
+	case '\0':
+		*type = TKN_EOF;
+		goto FINISH;
 
 	case '0':
 	case '1':
@@ -214,8 +218,8 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 		(void) NEXT();
 
 #define KEYWORD(__base, __target, __len)                                       \
-	(memcmp((__base), (__target), (__len)) == 0                            \
-	 && current == (__base) + (__len))
+	current == (__base) + (__len)                                          \
+		&& memcmp((__base), (__target), (__len)) == 0
 
 	switch (start[0]) {
 	case 'a':
@@ -277,6 +281,8 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 	case 'o':
 		if (start[1] == 'r')
 			*type = TKN_OR;
+		else if (KEYWORD(start + 1, "utput", 5))
+			*type = TKN_OUTPUT;
 		else
 			goto IDENTIFIER;
 
@@ -308,9 +314,11 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 			goto IDENTIFIER;
 
 		goto FINISH;
-	case 'r': // rule
+	case 'r':
 		if (KEYWORD(start + 1, "ule", 3))
 			*type = TKN_RULE;
+		else if (KEYWORD(start + 1, "egex", 4))
+			*type = TKN_REGEX;
 		else
 			goto IDENTIFIER;
 

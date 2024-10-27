@@ -48,7 +48,7 @@ add_executable( scanner_test scanner_test.cc )
 add_executable( parser_test parser_test.cc )
 add_executable( compiler_test compiler_test.cc )
 add_executable( exec_test exec_test.cc )
-
+add_executable( jary_test jary_test.cc )
 
 target_compile_definitions( compiler_test 
         PUBLIC 
@@ -60,6 +60,11 @@ target_compile_definitions( exec_test
         JOIN_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_join.jary" 
         WITHIN_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_within.jary"
         BETWEEN_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_between.jary"
+)
+target_compile_definitions( jary_test 
+        PUBLIC 
+        SIMPLE_JARY_PATH="$<TARGET_FILE_DIR:compiler_test>/jary_simple.jary" 
+        MODULE_DIR="${CMAKE_BINARY_DIR}/modules/" 
 )
 
 
@@ -79,6 +84,14 @@ target_compile_options( exec_test
         PRIVATE 
         $<$<COMPILE_LANGUAGE:CXX>:-Wno-write-strings -Wno-pedantic -Wno-missing-field-initializers -fpermissive>
 )
+target_compile_options( jary_test 
+        PRIVATE 
+        $<$<COMPILE_LANGUAGE:CXX>:-Wno-write-strings -Wno-pedantic -Wno-missing-field-initializers -fpermissive>
+)
+
+if ( SANITIZE AND UNIX AND CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$" )
+        target_link_options( jary_test BEFORE PRIVATE -fsanitize=address -fno-omit-frame-pointer )
+endif()
 
 
 target_link_libraries( scanner_test
@@ -105,11 +118,18 @@ target_link_libraries( exec_test
         exec 
 )
 
+target_link_libraries( jary_test 
+        PRIVATE
+        GTest::gtest_main
+        jary 
+)
+
 add_custom_command(
         TARGET compiler_test
         POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/compiler_basic.jary
-        $<TARGET_FILE_DIR:compiler_test>/compiler_basic.jary
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_CURRENT_SOURCE_DIR}/compiler_*.jary
+        $<TARGET_FILE_DIR:compiler_test>/
 )
 
 add_custom_command(
@@ -120,9 +140,17 @@ add_custom_command(
         $<TARGET_FILE_DIR:compiler_test>/
 )
 
+add_custom_command(
+        TARGET jary_test 
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/jary_*.jary
+        $<TARGET_FILE_DIR:compiler_test>/
+)
+
 include( GoogleTest )
 
 gtest_discover_tests( scanner_test )
 gtest_discover_tests( parser_test )
 gtest_discover_tests( compiler_test )
 gtest_discover_tests( exec_test )
+gtest_discover_tests( jary_test )

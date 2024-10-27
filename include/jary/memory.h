@@ -98,6 +98,7 @@ static inline void ifree(void **ptr)
 
 void *sb_alloc(struct sb_mem *sb, int flag, uint32_t nmemb);
 void *sb_append(struct sb_mem *sb, int flag, uint32_t nmemb);
+void *sb_add(struct sb_mem *sb, int flag, uint32_t nmemb);
 void *sb_reserve(struct sb_mem *sb, int flag, uint32_t nmemb);
 void  sb_free(struct sb_mem *sb);
 

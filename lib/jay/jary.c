@@ -34,6 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ast.h"
 #include "compiler.h"
 #include "error.h"
+#include "exec.h"
 #include "parser.h"
 #include "token.h"
 
@@ -42,28 +43,42 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <assert.h>
 #include <sqlite3.h>
+#include <stdio.h>
 #include <string.h>
 
-struct jarycode {
-	struct jy_tkns	*tkns;
-	struct jy_asts	*asts;
-	struct jy_jay	*jay;
-	struct tkn_errs *errs;
-	char		*mdir;
-	struct sb_mem	*sb;
+struct exec {
+	const struct jy_tkns  *tkns;
+	const struct jy_asts  *asts;
+	const struct jy_jay   *jay;
+	const struct tkn_errs *errs;
+};
+
+struct jyOutput {
+	unsigned int	size;
+	union jy_value *values;
 };
 
 struct jary {
-	struct sc_mem	 sc;
-	// TODO: use this for storing error msg
-	/*const char		*errmsg;*/
-	struct jarycode *code;
-	struct sqlite3	*db;
+	struct sc_mem	sc;
+	struct sb_mem	sb;
+	char	       *mdir;
+	const char     *errmsg;
+	struct exec    *code;
+	struct sqlite3 *db;
+	uint8_t	       *ev_colsz;
+	const char    **ev_tables;
+	const char   ***ev_cols;
+	const char   ***ev_vals;
+	int (**r_clbks)(void *, const struct jyOutput *);
+	uint16_t *r_clbk_ords;
+	void	**r_clbk_datas;
+	uint32_t  ev_sz;
+	uint16_t  r_clbk_sz;
 };
 
-static inline int event_table(struct sqlite3	   *db,
-			      const char	   *name,
-			      const struct jy_defs *event)
+static inline int create_event_table(struct sqlite3	  *db,
+				     const char		  *name,
+				     const struct jy_defs *event)
 {
 	int	      ret = JARY_OK;
 	struct sc_mem m	  = { .buf = NULL };
@@ -71,7 +86,7 @@ static inline int event_table(struct sqlite3	   *db,
 	char *sql;
 	int   sqlsz = 0;
 
-	sc_strfmt(&m, &sql, "CREATE TABLE %s (", name);
+	sc_strfmt(&m, &sql, "CREATE TABLE IF NOT EXISTS %s (", name);
 
 	if (sql == NULL) {
 		ret = JARY_ERR_OOM;
@@ -130,52 +145,12 @@ FINISH:
 	return ret;
 }
 
-int jary_open(struct jary **jary)
+static inline int insert_event(struct sqlite3 *db,
+			       const char     *name,
+			       uint32_t	       length,
+			       const char    **keys,
+			       const char    **values)
 {
-	int	      ret;
-	struct jary  *J;
-	struct sc_mem m = { .buf = NULL };
-
-	J = sc_alloc(&m, sizeof *J);
-
-	if (J == NULL)
-		goto OUT_OF_MEMORY;
-
-	J->sc = m;
-
-	int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE
-		 | SQLITE_OPEN_READWRITE;
-	if (sqlite3_open_v2("dumb.db", &J->db, flag, NULL))
-		goto OPEN_ERROR;
-
-	*jary = J;
-	return JARY_OK;
-
-OPEN_ERROR:
-	ret = JARY_ERROR;
-	// TODO: Handle close?
-	sqlite3_close_v2(J->db);
-	goto PANIC;
-
-OUT_OF_MEMORY:
-	ret = JARY_ERR_OOM;
-
-PANIC:
-	sc_free(&m);
-	*jary = NULL;
-
-	return ret;
-}
-
-int jary_insert_event(struct jary *restrict jary,
-		      const char  *name,
-		      int	   length,
-		      const char **keys,
-		      const char **values)
-{
-	assert(jary != NULL);
-	assert(jary->code != NULL);
-
 	int	      ret = JARY_OK;
 	struct sc_mem m	  = { .buf = NULL };
 
@@ -187,7 +162,7 @@ int jary_insert_event(struct jary *restrict jary,
 	if (sql == NULL)
 		goto OUT_OF_MEMORY;
 
-	for (int i = 0; i < length; ++i) {
+	for (uint32_t i = 0; i < length; ++i) {
 		const char *column = keys[i];
 
 		if (column == NULL)
@@ -208,7 +183,7 @@ int jary_insert_event(struct jary *restrict jary,
 	if (sql == NULL)
 		goto OUT_OF_MEMORY;
 
-	for (int i = 0; i < length; ++i) {
+	for (uint32_t i = 0; i < length; ++i) {
 		const char *value = values[i];
 
 		if (value == NULL)
@@ -229,7 +204,7 @@ int jary_insert_event(struct jary *restrict jary,
 	if (sql == NULL)
 		goto OUT_OF_MEMORY;
 
-	switch (sqlite3_exec(jary->db, sql, NULL, NULL, NULL)) {
+	switch (sqlite3_exec(db, sql, NULL, NULL, NULL)) {
 	case SQLITE_OK:
 		break;
 	default:
@@ -246,59 +221,331 @@ FINISH:
 	return ret;
 }
 
-int jary_compile(struct jary *restrict jary,
-		 size_t	     length,
-		 const char *source,
-		 const char *modulepath)
+static inline int rule_clbks(size_t		    rule,
+			     const struct jyOutput *output,
+			     size_t		    length,
+			     const uint16_t	   *ords,
+			     void *const	   *datas,
+			     int (*const *clbks)(void *data,
+						 const struct jyOutput *))
 {
-	// TODO: write error message
-	if (jary->code != NULL)
+	for (size_t i = 0; i < length; ++i) {
+		if (ords[i] != rule)
+			continue;
+
+		void *data = datas[i];
+		switch (clbks[i](data, output)) {
+		case JARY_INT_CRASH:
+			return JARY_INT_CRASH;
+		case JARY_INT_FINAL:
+			goto FINISH;
+		};
+	}
+
+FINISH:
+	return JARY_OK;
+}
+
+int jary_open(struct jary **jary, struct sqlite3 *db)
+{
+	int	     ret;
+	struct jary *J = calloc(sizeof(struct jary), 1);
+
+	if (J == NULL)
+		goto OUT_OF_MEMORY;
+
+	J->mdir = "./";
+
+	if (db == NULL) {
+		int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE
+			 | SQLITE_OPEN_READWRITE;
+		if (sqlite3_open_v2("dumb.db", &J->db, flag, NULL))
+			goto OPEN_ERROR;
+	} else {
+		J->db = db;
+	}
+
+	if (sc_reap(&J->sc, &J->sb, (free_t) sb_free))
+		goto OUT_OF_MEMORY;
+
+	if (sc_reap(&J->sc, &J->ev_colsz, (free_t) ifree))
+		goto OUT_OF_MEMORY;
+
+	if (sc_reap(&J->sc, &J->ev_tables, (free_t) ifree))
+		goto OUT_OF_MEMORY;
+
+	if (sc_reap(&J->sc, &J->ev_cols, (free_t) ifree))
+		goto OUT_OF_MEMORY;
+
+	if (sc_reap(&J->sc, &J->ev_vals, (free_t) ifree))
+		goto OUT_OF_MEMORY;
+
+	if (sc_reap(&J->sc, &J->r_clbk_datas, (free_t) ifree))
+		goto OUT_OF_MEMORY;
+
+	if (sc_reap(&J->sc, &J->r_clbk_ords, (free_t) ifree))
+		goto OUT_OF_MEMORY;
+
+	if (sc_reap(&J->sc, &J->r_clbks, (free_t) ifree))
+		goto OUT_OF_MEMORY;
+
+	*jary = J;
+	return JARY_OK;
+
+OPEN_ERROR:
+	ret = JARY_ERROR;
+	// TODO: Handle close?
+	sqlite3_close_v2(J->db);
+	goto PANIC;
+
+OUT_OF_MEMORY:
+	ret = JARY_ERR_OOM;
+
+PANIC:
+	free(J);
+	*jary = NULL;
+
+	return ret;
+}
+
+int jary_modulepath(struct jary *jary, const char *path)
+{
+	struct sc_mem *sc = &jary->sc;
+
+	// TODO: if a user keep changing module path, those allocated pointers
+	// will live until jary is closed. This is kinda wasteful but meh.
+	sc_strfmt(sc, &jary->mdir, "%s", path);
+
+	if (jary->mdir == NULL) {
+		jary->errmsg = "out of memory";
+		return JARY_ERR_OOM;
+	}
+
+	return JARY_OK;
+}
+
+int jary_event(struct jary *J, const char *name, unsigned int *event)
+{
+	int ret = JARY_OK;
+
+	if (J->code == NULL)
+		return JARY_ERR_NOTEXIST;
+
+	assert(J->code->jay);
+	assert(J->code->jay->names);
+
+	struct jy_defs *names = J->code->jay->names;
+	struct sc_mem  *sc    = &J->sc;
+
+	if (!def_find(names, name, NULL)) {
+		J->errmsg = "event not expected";
+		return JARY_ERR_NOTEXIST;
+	}
+
+	char *table = NULL;
+
+	sc_strfmt(sc, &table, "%s", name);
+
+	if (table == NULL)
+		return JARY_ERR_OOM;
+
+	jry_mem_push(J->ev_tables, J->ev_sz, table);
+
+	if (J->ev_tables == NULL)
+		goto OUT_OF_MEMORY;
+
+	jry_mem_push(J->ev_colsz, J->ev_sz, 0);
+
+	if (J->ev_colsz == NULL)
+		goto OUT_OF_MEMORY;
+
+	jry_mem_push(J->ev_cols, J->ev_sz, NULL);
+
+	if (J->ev_cols == NULL)
+		goto OUT_OF_MEMORY;
+
+	jry_mem_push(J->ev_vals, J->ev_sz, NULL);
+
+	if (J->ev_vals == NULL)
+		goto OUT_OF_MEMORY;
+
+	goto FINISH;
+
+OUT_OF_MEMORY:
+	ret = JARY_ERR_OOM;
+
+FINISH:
+	*event	  = J->ev_sz;
+	J->ev_sz += 1;
+
+	return ret;
+}
+
+int jary_field_str(struct jary *jary,
+		   unsigned int event,
+		   const char  *field,
+		   const char  *value)
+{
+	assert(event <= jary->ev_sz);
+
+	const char     *table = jary->ev_tables[event];
+	struct sc_mem  *sc    = &jary->sc;
+	struct jy_defs *names = jary->code->jay->names;
+	union jy_value	view;
+	enum jy_ktype	type;
+
+	assert(def_get(names, table, &view, NULL) == JARY_OK);
+
+	if (def_get(view.def, field, NULL, &type)) {
+		jary->errmsg = "field not expected";
+		return JARY_ERR_NOTEXIST;
+	}
+
+	if (type != JY_K_STR) {
+		jary->errmsg = "not a field string";
+		return JARY_ERR_MISMATCH;
+	}
+
+	char *col;
+	char *val;
+
+	uint8_t	     colsz = jary->ev_colsz[event];
+	const char **cols  = jary->ev_cols[event];
+	const char **vals  = jary->ev_vals[event];
+
+	sc_strfmt(sc, &col, "%s", field);
+
+	if (col == NULL)
+		goto OUT_OF_MEMORY;
+
+	val = sqlite3_mprintf("%Q", value);
+
+	if (val == NULL)
+		goto OUT_OF_MEMORY;
+
+	if (sc_reap(sc, val, sqlite3_free))
+		goto OUT_OF_MEMORY;
+
+	for (size_t i = 0; i < colsz; ++i) {
+		const char *f = cols[i];
+
+		if (*f == *field && strcmp(field, f)) {
+			cols[i] = field;
+			vals[i] = value;
+			goto FINISH;
+		}
+	}
+
+	jry_mem_push(vals, colsz, val);
+
+	if (vals == NULL)
+		goto OUT_OF_MEMORY;
+
+	jry_mem_push(cols, colsz, col);
+
+	if (cols == NULL)
+		goto OUT_OF_MEMORY;
+
+	goto FINISH;
+
+OUT_OF_MEMORY:
+	jary->errmsg = "out of memory";
+
+FINISH:
+	colsz		      += 1;
+	jary->ev_colsz[event]  = colsz;
+	jary->ev_cols[event]   = cols;
+	jary->ev_vals[event]   = vals;
+	return JARY_OK;
+}
+
+int jary_compile_file(struct jary *jary, const char *path)
+{
+	struct sc_mem sc = { .buf = NULL };
+	char	     *src;
+	uint32_t      srcsz;
+
+	int   ret  = JARY_OK;
+	FILE *file = fopen(path, "rb");
+
+	if (file == NULL)
+		goto OPEN_FAIL;
+
+	fseek(file, 0L, SEEK_END);
+	srcsz = ftell(file);
+	rewind(file);
+
+	src		    = sc_alloc(&sc, srcsz + 1);
+	uint32_t bytes_read = fread(src, sizeof(char), srcsz, file);
+
+	if (bytes_read < srcsz)
+		goto READ_FAIL;
+
+	src[bytes_read] = '\0';
+
+	ret = jary_compile(jary, srcsz, src);
+	goto FINISH;
+
+OPEN_FAIL:
+	jary->errmsg = "unable to open jary file";
+	return JARY_ERROR;
+
+READ_FAIL:
+	jary->errmsg = "unable to read jary file";
+	ret	     = JARY_ERROR;
+FINISH:
+	sc_free(&sc);
+	fclose(file);
+	return ret;
+}
+
+int jary_compile(struct jary *jary, size_t length, const char *source)
+{
+	if (jary->code != NULL) {
+		jary->errmsg = "jary context already compiled";
 		return JARY_ERR_COMPILE;
+	}
 
-	struct sb_mem *sb = sc_alloc(&jary->sc, sizeof(*sb));
+	struct sb_mem *sb = &jary->sb;
 
-	if (sb == NULL)
-		return JARY_ERR_OOM;
+	struct exec *code = sc_alloc(&jary->sc, sizeof(*code));
 
-	if (sc_reap(&jary->sc, sb, (free_t) sb_free))
-		return JARY_ERR_OOM;
-
-	struct jarycode *code = sc_alloc(&jary->sc, sizeof(*code));
-
-	size_t mdirsz = strlen(modulepath) + 1;
-	size_t memsz  = mdirsz;
-	memsz += sizeof(*code->asts) + sizeof(*code->tkns) + sizeof(*code->jay)
-	       + sizeof(*code->errs);
+	size_t memsz = sizeof(*code->asts) + sizeof(*code->tkns)
+		     + sizeof(*code->jay) + sizeof(*code->errs);
 
 	if (sb_reserve(sb, SB_NOGROW, memsz) == NULL)
 		return JARY_ERR_OOM;
 
-	int flag   = SB_NOREGEN;
-	code->tkns = sb_append(sb, flag, sizeof(*code->tkns));
-	assert(code->tkns != NULL);
+	struct jy_tkns	*tkns;
+	struct jy_asts	*asts;
+	struct jy_jay	*jay;
+	struct tkn_errs *errs;
 
-	code->asts = sb_append(sb, flag, sizeof(*code->asts));
-	assert(code->asts != NULL);
+	int flag = SB_NOREGEN;
 
-	code->jay = sb_append(sb, flag, sizeof(*code->jay));
-	assert(code->jay != NULL);
+	tkns = sb_append(sb, flag, sizeof(*code->tkns));
+	assert(tkns != NULL);
 
-	code->errs = sb_append(sb, flag, sizeof(*code->errs));
-	assert(code->jay != NULL);
+	asts = sb_append(sb, flag, sizeof(*code->asts));
+	assert(asts != NULL);
 
-	code->mdir = sb_append(sb, flag, mdirsz);
-	assert(code->mdir != NULL);
+	jay = sb_append(sb, flag, sizeof(*code->jay));
+	assert(jay != NULL);
 
-	code->sb = sb;
+	errs = sb_append(sb, flag, sizeof(*code->errs));
+	assert(errs != NULL);
 
-	jry_parse(&jary->sc, code->asts, code->tkns, code->errs, source,
-		  length);
+	code->tkns = tkns;
+	code->asts = asts;
+	code->jay  = jay;
+	code->errs = errs;
+
+	jry_parse(&jary->sc, asts, tkns, errs, source, length);
 
 	if (code->errs->size)
 		return JARY_ERR_COMPILE;
 
-	jry_compile(&jary->sc, code->jay, code->errs, modulepath, code->asts,
-		    code->tkns);
+	jry_compile(&jary->sc, jay, errs, jary->mdir, asts, tkns);
 
 	if (code->errs->size)
 		return JARY_ERR_COMPILE;
@@ -321,7 +568,7 @@ int jary_compile(struct jary *restrict jary,
 	}
 
 	for (size_t i = 0; i < eventsz; ++i)
-		if (event_table(jary->db, table[i], events[i]))
+		if (create_event_table(jary->db, table[i], events[i]))
 			return JARY_ERROR;
 
 	jary->code = code;
@@ -329,17 +576,198 @@ int jary_compile(struct jary *restrict jary,
 	return JARY_OK;
 }
 
+void jary_output_len(const struct jyOutput *output, unsigned int *length)
+{
+	*length = output->size;
+}
+
+int jary_output_str(const struct jyOutput *output,
+		    unsigned int	   index,
+		    const char		 **str)
+{
+	if (index >= output->size)
+		return JARY_ERR_NOTEXIST;
+
+	*str = output->values[index].str->cstr;
+
+	return JARY_OK;
+}
+
+int jary_output_long(const struct jyOutput *output,
+		     unsigned int	    index,
+		     long		   *num)
+{
+	if (index >= output->size)
+		return JARY_ERR_NOTEXIST;
+
+	*num = output->values[index].i64;
+
+	return JARY_OK;
+}
+
+int jary_output_ulong(const struct jyOutput *output,
+		      unsigned int	     index,
+		      unsigned long	    *num)
+{
+	if (index >= output->size)
+		return JARY_ERR_NOTEXIST;
+
+	*num = output->values[index].u64;
+
+	return JARY_OK;
+}
+
+int jary_output_bool(const struct jyOutput *output,
+		     unsigned int	    index,
+		     bool		   *boolean)
+{
+	if (index >= output->size)
+		return JARY_ERR_NOTEXIST;
+
+	*boolean = output->values[index].u64;
+
+	return JARY_OK;
+}
+
+int jary_rule_clbk(struct jary *jary,
+		   const char  *name,
+		   int (*callback)(void *, const struct jyOutput *),
+		   void *data)
+{
+	uint32_t	ordinal = 0;
+	struct jy_defs *names	= jary->code->jay->names;
+	union jy_value	view;
+	enum jy_ktype	type;
+
+	if (def_get(names, name, &view, &type))
+		return JARY_ERR_NOTEXIST;
+
+	if (type != JY_K_RULE)
+		return JARY_ERR_NOTEXIST;
+
+	ordinal = view.ofs;
+
+	jry_mem_push(jary->r_clbks, jary->r_clbk_sz, callback);
+
+	if (jary->r_clbks == NULL)
+		return JARY_ERR_OOM;
+
+	jry_mem_push(jary->r_clbk_ords, jary->r_clbk_sz, ordinal);
+
+	if (jary->r_clbk_ords == NULL)
+		return JARY_ERR_OOM;
+
+	jry_mem_push(jary->r_clbk_datas, jary->r_clbk_sz, data);
+
+	if (jary->r_clbk_datas == NULL)
+		return JARY_ERR_OOM;
+
+	jary->r_clbk_sz += 1;
+	return JARY_OK;
+}
+
+int jary_execute(struct jary *jary)
+{
+	assert(jary->code != NULL);
+
+	int ret = JARY_OK;
+
+	const struct jy_jay *jay    = jary->code->jay;
+	struct sc_mem	     sc	    = { .buf = NULL };
+	struct sb_mem	     outmem = { .buf = NULL };
+
+	if (sc_reap(&sc, &outmem, (free_t) sb_free))
+		goto OUT_OF_MEMORY;
+
+	for (unsigned int i = 0; i < jary->ev_sz; ++i) {
+		const char  *table = jary->ev_tables[i];
+		const char **cols  = jary->ev_cols[i];
+		const char **vals  = jary->ev_vals[i];
+		uint8_t	     colsz = jary->ev_colsz[i];
+
+		if (insert_event(jary->db, table, colsz, cols, vals))
+			goto INSERT_FAIL;
+	}
+
+	const uint16_t *ords   = jary->r_clbk_ords;
+	void *const    *datas  = jary->r_clbk_datas;
+	size_t		clbksz = jary->r_clbk_sz;
+	int (*const *clbks)(void *, const struct jyOutput *) = jary->r_clbks;
+
+	for (size_t i = 0; i < jay->rulesz; ++i) {
+		struct jy_state state = { .buf = &sc, .outm = &outmem };
+		size_t		ofs   = jay->rulecofs[i];
+		uint8_t	       *code  = jay->codes + ofs;
+
+		switch (jry_exec(jary->db, jay, code, &state)) {
+		case 1:
+			goto OUT_OF_MEMORY;
+		case 2:
+			goto QUERY_FAILED;
+		}
+
+		struct jyOutput output = {
+			.size	= state.outsz,
+			.values = state.out,
+		};
+
+		switch (rule_clbks(i, &output, clbksz, ords, datas, clbks)) {
+		case JARY_INT_CRASH:
+			goto FINISH;
+		};
+	}
+
+	goto FINISH;
+
+OUT_OF_MEMORY:
+	jary->errmsg = "out of memory";
+	ret	     = JARY_ERR_OOM;
+	goto FINISH;
+
+INSERT_FAIL:
+	jary->errmsg = "unable to process event queue";
+	ret	     = JARY_ERR_EXEC;
+	goto FINISH;
+
+QUERY_FAILED:
+	jary->errmsg = "unable to perform query. report this bug";
+	ret	     = JARY_ERR_EXEC;
+
+FINISH:
+	for (uint32_t i = 0; i < jary->ev_sz; ++i) {
+		free(jary->ev_cols[i]);
+		free(jary->ev_vals[i]);
+	}
+
+	jary->ev_sz = 0;
+
+	sc_free(&sc);
+	return ret;
+}
+
 int jary_close(struct jary *restrict jary)
 {
-	// TODO: handle each error accordingly
 	switch (sqlite3_close_v2(jary->db)) {
 	case SQLITE_OK:
 		break;
 	default:
+		jary->errmsg = sqlite3_errmsg(jary->db);
 		return JARY_ERROR;
 	};
 
+	for (uint32_t i = 0; i < jary->ev_sz; ++i) {
+		free(jary->ev_cols[i]);
+		free(jary->ev_vals[i]);
+	}
+
 	sc_free(&jary->sc);
 
+	free(jary);
+
 	return JARY_OK;
+}
+
+const char *jary_errmsg(struct jary *jary)
+{
+	return jary->errmsg;
 }

@@ -65,26 +65,29 @@ struct stack {
 	struct sb_mem	m;
 };
 
-struct match_cb_data {
+struct match_data {
 	struct jy_defs	     *names;
-	uint8_t		     *code;
+	const uint8_t	     *codes;
 	struct sc_mem	     *alloc;
 	const union jy_value *vals;
+	struct jy_state *restrict state;
 };
 
 // TODO: This is so ugly.... but im in a hurry.
 struct runtime {
-	union flag8	      flag;
-	struct sqlite3	     *db;
+	union flag8 flag;
+	struct sqlite3 *restrict db;
 	const union jy_value *vals;
 	struct jy_defs	     *names;
 	const uint8_t	    **pc;
+	const uint8_t	     *fcodes;
 	// runtime memory scratch
 	struct sc_mem	      buf;
 	struct stack	      stack;
 };
 
-static inline int interpret(struct runtime *ctx);
+static inline int interpret(struct runtime *ctx,
+			    struct jy_state *restrict state);
 
 static inline void free_runtime(struct runtime *restrict ctx)
 {
@@ -159,15 +162,15 @@ INV_VALUE:
 	return 2;
 }
 
-static inline int match_clbk(struct match_cb_data *data,
-			     int		   colsz,
-			     char		 **values,
-			     char		 **columns)
+static inline int match_clbk(struct match_data *data,
+			     int		colsz,
+			     char	      **values,
+			     char	      **columns)
 {
 	int		      ret   = SQLITE_OK;
 	struct jy_defs	     *names = data->names;
 	struct sc_mem	     *alloc = data->alloc;
-	const uint8_t	     *chunk = data->code;
+	const uint8_t	     *codes = data->codes;
 	const union jy_value *vals  = data->vals;
 
 	for (int i = 0; i < colsz; ++i) {
@@ -208,11 +211,12 @@ static inline int match_clbk(struct match_cb_data *data,
 	struct runtime ctx = {
 		.names = names,
 		.vals  = vals,
-		.pc    = &chunk,
+		.pc    = &codes,
 	};
 
+	struct jy_state *state = data->state;
 	for (; **ctx.pc != JY_OP_END;)
-		switch (interpret(&ctx)) {
+		switch (interpret(&ctx, state)) {
 		case 0:
 			continue;
 		default:
@@ -229,24 +233,28 @@ FINISH:
 	return ret;
 }
 
-static inline int interpret(struct runtime *ctx)
+static inline int interpret(struct runtime *ctx,
+			    struct jy_state *restrict state)
 {
+	assert(ctx->vals != NULL);
+	assert(ctx->pc != NULL);
+	assert(*ctx->pc != NULL);
+	assert(ctx->names != NULL);
+
 	int		      ret    = 0;
 	struct sqlite3	     *db     = ctx->db;
 	const union jy_value *vals   = ctx->vals;
 	const uint8_t	    **code   = ctx->pc;
+	const uint8_t	     *fcodes = ctx->fcodes;
 	struct jy_defs	     *names  = ctx->names;
-	struct stack	     *stack  = &ctx->stack;
-	union flag8	     *flag   = &ctx->flag;
-	struct sc_mem	     *rbuf   = &ctx->buf;
-	struct sc_mem	      bump   = { .buf = NULL };
-	const uint8_t	     *pc     = *code;
-	enum jy_opcode	      opcode = *pc;
 
-	assert(vals != NULL);
-	assert(names != NULL);
-	assert(code != NULL);
-	assert(*code != NULL);
+	struct stack  *stack  = &ctx->stack;
+	union flag8   *flag   = &ctx->flag;
+	struct sc_mem *rbuf   = &ctx->buf;
+	struct sc_mem *sbuf   = state ? state->buf : rbuf;
+	struct sc_mem  bump   = { .buf = NULL };
+	const uint8_t *pc     = *code;
+	enum jy_opcode opcode = *pc;
 
 	union {
 		const uint8_t  *bytes;
@@ -257,6 +265,10 @@ static inline int interpret(struct runtime *ctx)
 	} arg = { .bytes = pc + 1 };
 
 	switch (opcode) {
+	case JY_OP_END:
+		// shouldnt come here
+		assert(opcode != JY_OP_END);
+		break;
 	case JY_OP_PUSH8: {
 		union jy_value v = vals[*arg.u8];
 
@@ -303,6 +315,7 @@ static inline int interpret(struct runtime *ctx)
 
 		break;
 	}
+
 	case JY_OP_JMPF:
 		if (!flag->bits.b8)
 			pc += *arg.i16;
@@ -320,9 +333,9 @@ static inline int interpret(struct runtime *ctx)
 		pc	      += 1;
 		break;
 	case JY_OP_LOAD: {
-		struct jy_descriptor d	   = pop(stack).dscptr;
-		struct jy_defs	    *event = vals[d.name].def;
-		union jy_value	     v	   = event->vals[d.member];
+		struct jy_desc	d     = pop(stack).dscptr;
+		struct jy_defs *event = vals[d.name].def;
+		union jy_value	v     = event->vals[d.member];
 
 		if (push(stack, v))
 			goto OUT_OF_MEMORY;
@@ -330,11 +343,30 @@ static inline int interpret(struct runtime *ctx)
 		pc += 1;
 		break;
 	}
+
+	case JY_OP_OUTPUT: {
+		uint64_t       length = pop(stack).u64;
+		union jy_value values[length];
+
+		for (uint64_t i = 0; i < length; ++i)
+			values[i] = pop(stack);
+
+		for (uint64_t i = length; i > 0; --i) {
+			union jy_value v = values[i - 1];
+			state->out	 = sb_add(state->outm, 0, sizeof(v));
+
+			state->out[state->outsz]  = v;
+			state->outsz		 += 1;
+		}
+
+		pc += 1;
+		break;
+	}
 	case JY_OP_BETWEEN: {
-		long		     max   = pop(stack).i64;
-		long		     min   = pop(stack).i64;
-		struct jy_descriptor d	   = pop(stack).dscptr;
-		struct jy_defs	    *event = vals[d.name].def;
+		long		max   = pop(stack).i64;
+		long		min   = pop(stack).i64;
+		struct jy_desc	d     = pop(stack).dscptr;
+		struct jy_defs *event = vals[d.name].def;
 
 		struct QMbetween *Q = sc_alloc(rbuf, sizeof *Q);
 		uint32_t	  namefield;
@@ -356,9 +388,9 @@ static inline int interpret(struct runtime *ctx)
 		break;
 	}
 	case JY_OP_WITHIN: {
-		struct jy_time_ofs   timeofs = pop(stack).timeofs;
-		struct jy_descriptor d	     = pop(stack).dscptr;
-		struct jy_defs	    *names   = vals[d.name].def;
+		struct jy_time_ofs timeofs = pop(stack).timeofs;
+		struct jy_desc	   d	   = pop(stack).dscptr;
+		struct jy_defs	  *names   = vals[d.name].def;
 
 		struct QMwithin *Q = sc_alloc(rbuf, sizeof *Q);
 
@@ -379,10 +411,10 @@ static inline int interpret(struct runtime *ctx)
 		break;
 	}
 	case JY_OP_JOIN: {
-		struct jy_descriptor d2	    = pop(stack).dscptr;
-		struct jy_descriptor d1	    = pop(stack).dscptr;
-		struct jy_defs	    *event2 = vals[d2.name].def;
-		struct jy_defs	    *event1 = vals[d1.name].def;
+		struct jy_desc	d2     = pop(stack).dscptr;
+		struct jy_desc	d1     = pop(stack).dscptr;
+		struct jy_defs *event2 = vals[d2.name].def;
+		struct jy_defs *event1 = vals[d1.name].def;
 
 		uint32_t field2;
 		uint32_t field1;
@@ -409,21 +441,48 @@ static inline int interpret(struct runtime *ctx)
 		pc += 1;
 		break;
 	}
+	case JY_OP_REGEX: {
+		struct jy_str  *regexstr = pop(stack).str;
+		struct jy_desc	d	 = pop(stack).dscptr;
+		struct jy_defs *event	 = vals[d.name].def;
+		uint32_t	field;
+
+		struct QMbinary *Q = sc_alloc(rbuf, sizeof *Q);
+		assert(def_find(event, "__name__", &field));
+
+		if (Q == NULL)
+			goto OUT_OF_MEMORY;
+
+		Q->type		  = QM_BINARY;
+		Q->table	  = event->vals[field].str->cstr;
+		Q->column	  = event->keys[d.member];
+		Q->value.type	  = QME_REGEXP;
+		Q->value.as.regex = regexstr->cstr;
+
+		union jy_value view = { .handle = Q };
+
+		if (push(stack, view))
+			goto OUT_OF_MEMORY;
+
+		pc += 1;
+
+		break;
+	}
 	case JY_OP_EQUAL: {
-		union jy_value	     right  = pop(stack);
-		struct jy_descriptor dscptr = pop(stack).dscptr;
-		struct jy_defs	    *event  = vals[dscptr.name].def;
+		union jy_value	right  = pop(stack);
+		struct jy_desc	dscptr = pop(stack).dscptr;
+		struct jy_defs *event  = vals[dscptr.name].def;
 
 		uint32_t field;
 
 		assert(def_find(event, "__name__", &field));
 
-		struct QMequal *Q = sc_alloc(rbuf, sizeof *Q);
+		struct QMbinary *Q = sc_alloc(rbuf, sizeof *Q);
 
 		if (Q == NULL)
 			goto OUT_OF_MEMORY;
 
-		Q->type	  = QM_EXACT;
+		Q->type	  = QM_BINARY;
 		Q->table  = event->vals[field].str->cstr;
 		Q->column = event->keys[dscptr.member];
 
@@ -449,7 +508,8 @@ static inline int interpret(struct runtime *ctx)
 		break;
 	}
 	case JY_OP_QUERY: {
-		uint8_t	      *chunk = pop(stack).code;
+		unsigned long  ofs   = pop(stack).ofs;
+		const uint8_t *chunk = fcodes + ofs;
 		long	       qlen  = pop(stack).i64;
 		struct QMbase *qs[qlen];
 
@@ -462,16 +522,17 @@ static inline int interpret(struct runtime *ctx)
 			.names = names,
 		};
 
-		q_callback_t clbk = (q_callback_t) match_clbk;
+		q_clbk *callback = (q_clbk *) match_clbk;
 
-		struct match_cb_data data = {
+		struct match_data data = {
 			.names = names,
 			.alloc = &bump,
-			.code  = chunk,
+			.codes = chunk,
 			.vals  = vals,
+			.state = state,
 		};
 
-		switch (q_match(db, NULL, clbk, &data, Q)) {
+		switch (q_match(db, NULL, callback, &data, Q)) {
 		case -1:
 			goto OUT_OF_MEMORY;
 		case -2:
@@ -572,7 +633,7 @@ static inline int interpret(struct runtime *ctx)
 		strcat(buf, v2->cstr);
 
 		uint32_t allocsz = sizeof(struct jy_str) + strsz + 1;
-		result.str	 = sc_alloc(rbuf, allocsz);
+		result.str	 = sc_alloc(sbuf, allocsz);
 
 		if (result.str == NULL)
 			goto OUT_OF_MEMORY;
@@ -587,44 +648,48 @@ static inline int interpret(struct runtime *ctx)
 	}
 	}
 
-	// PC is not moving...
-	assert(pc != *code);
-
-FINISH:
-	sc_free(&bump);
-	*code = pc;
-	return ret;
+	goto FINISH;
 
 OUT_OF_MEMORY:
 	ret = 1;
 	goto FINISH;
 QUERY_FAILED:
 	ret = 2;
-	goto FINISH;
+
+FINISH:
+	sc_free(&bump);
+
+	// PC is not moving...
+	assert(pc != *code);
+	*code = pc;
+	return ret;
 }
 
-int jry_exec(struct sqlite3 *db, const struct jy_jay *jay)
+int jry_exec(struct sqlite3	 *db,
+	     const struct jy_jay *jay,
+	     const uint8_t	 *codes,
+	     struct jy_state	 *state)
 {
-	int		      ret   = 0;
-	const union jy_value *vals  = jay->vals;
-	const uint8_t	     *codes = jay->codes;
-	const uint8_t	     *pc    = codes;
+	int		      ret  = 0;
+	const union jy_value *vals = jay->vals;
+	const uint8_t	     *pc   = codes;
 
 	struct runtime ctx = {
-		.db    = db,
-		.names = jay->names,
-		.vals  = vals,
-		.pc    = &pc,
+		.db	= db,
+		.names	= jay->names,
+		.vals	= vals,
+		.pc	= &pc,
+		.fcodes = jay->fcodes,
 	};
 
 	for (; *pc != JY_OP_END;) {
-		switch (interpret(&ctx)) {
+		switch (interpret(&ctx, state)) {
 		case 0:
 			continue;
 		case 1:
 			goto OUT_OF_MEMORY;
-		default:
-			goto EXEC_FAIL;
+		case 2:
+			goto QUERY_FAILED;
 		}
 	}
 
@@ -634,7 +699,7 @@ OUT_OF_MEMORY:
 	ret = 1;
 	goto FINISH;
 
-EXEC_FAIL:
+QUERY_FAILED:
 	ret = 2;
 
 FINISH:

@@ -1,0 +1,41 @@
+import mark
+
+// define the expected structure of the user event
+ingress user {
+  field:
+     name string
+     activity string
+}
+
+rule count_root_fail_login {
+  match:
+    // Match only if the name of the user is root
+    $user.name exact "root"
+    // Match for any activity containing the string "failed"
+    $user.activity exact "failed login" 
+
+    // only check for user event within the last 10 seconds
+    $user within 10s 
+
+  action:
+    // increment failed_root counter by 1
+    mark.mark("failed_root")
+}
+
+rule auth_brute_force {
+  match:
+    $user.activity exact "failed login" 
+    $user within 10s
+
+  condition:
+    // check if failed_<user> counter > 5
+    mark.count("failed_" .. $user.name) > 5
+
+  output: // The values here will be returned to the callback
+    "must've been the wind" // 0th index
+    mark.count("failed_" .. $user.name)
+
+  action:
+    // reset the counter to 0
+    mark.unmark("failed_" .. $user.name)
+}

@@ -42,7 +42,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdbool.h>
 #include <string.h>
 
-typedef int (*q_callback_t)(void *, int, char **, char **);
+typedef int(q_clbk)(void *, int, char **, char **);
 
 struct sqlite3;
 struct jy_defs;
@@ -50,7 +50,7 @@ struct jy_time_ofs;
 
 enum QMtag {
 	QM_NONE = 0,
-	QM_EXACT,
+	QM_BINARY,
 	QM_JOIN,
 	QM_WITHIN,
 	QM_BETWEEN,
@@ -62,7 +62,7 @@ struct QMbase {
 	const char *column;
 };
 
-struct QMequal {
+struct QMbinary {
 	enum QMtag  type;
 	const char *table;
 	const char *column;
@@ -71,11 +71,13 @@ struct QMequal {
 		enum {
 			QME_LONG,
 			QME_CSTR,
+			QME_REGEXP,
 		} type;
 
 		union {
 			int64_t	    i64;
 			const char *cstr;
+			const char *regex;
 		} as;
 	} value;
 };
@@ -122,7 +124,7 @@ static inline bool exists(int			 length,
 
 static inline int q_match(struct sqlite3 *db,
 			  char		**errmsg,
-			  q_callback_t	  callback,
+			  q_clbk	 *callback,
 			  void		 *data,
 			  struct Qmatch	  Q)
 {
@@ -135,7 +137,7 @@ static inline int q_match(struct sqlite3 *db,
 
 	char		       *sql;
 	const struct QMjoin    *joins[qlen];
-	const struct QMequal   *exacts[qlen];
+	const struct QMbinary  *binary[qlen];
 	const struct QMbetween *between[qlen];
 	const struct QMwithin  *within[qlen];
 	const struct jy_defs   *events[qlen * 2];
@@ -143,12 +145,12 @@ static inline int q_match(struct sqlite3 *db,
 
 	int eventsz   = 0;
 	int joinsz    = 0;
-	int exactsz   = 0;
+	int binsz     = 0;
 	int withinsz  = 0;
 	int betweensz = 0;
 
 	memset(joins, 0, sizeof(joins));
-	memset(exacts, 0, sizeof(exacts));
+	memset(binary, 0, sizeof(binary));
 	memset(events, 0, sizeof(events));
 
 	for (int i = 0; i < qlen; ++i) {
@@ -170,9 +172,9 @@ static inline int q_match(struct sqlite3 *db,
 		case QM_NONE:
 			assert(Q->type != QM_NONE);
 			break;
-		case QM_EXACT:
-			exacts[exactsz]	 = (struct QMequal *) Q;
-			exactsz		+= 1;
+		case QM_BINARY:
+			binary[binsz]  = (struct QMbinary *) Q;
+			binsz	      += 1;
 			break;
 		case QM_JOIN:
 			joins[joinsz]  = (struct QMjoin *) Q;
@@ -205,7 +207,7 @@ static inline int q_match(struct sqlite3 *db,
 		}
 	}
 
-	assert(joinsz > 0 || exactsz > 0 || withinsz > 0 || betweensz > 0);
+	assert(joinsz > 0 || binsz > 0 || withinsz > 0 || betweensz > 0);
 
 	sc_strfmt(&buf, &sql, "SELECT");
 
@@ -219,7 +221,7 @@ static inline int q_match(struct sqlite3 *db,
 		const char *t	= eventnames[i];
 		int	    len = def_keys(event, event->size, keys);
 
-		const char fmt[] = "%s %s.%s AS \"%s.%s\",";
+		const char fmt[] = "%s %s.%s AS '%s.%s',";
 
 		for (int j = 0; j < len; ++j) {
 			const char *c = keys[j];
@@ -264,13 +266,21 @@ static inline int q_match(struct sqlite3 *db,
 			goto OUT_OF_MEMORY;
 	}
 
-	for (int i = 0; i < exactsz; ++i) {
-		const struct QMequal *Q	 = exacts[i];
-		const char	     *lt = Q->table;
-		const char	     *lc = Q->column;
-		const char	     *fmt;
+	for (int i = 0; i < binsz; ++i) {
+		const struct QMbinary *Q  = binary[i];
+		const char	      *lt = Q->table;
+		const char	      *lc = Q->column;
+		const char	      *fmt;
 
 		switch (Q->value.type) {
+		case QME_REGEXP: {
+			const char *r = Q->value.as.regex;
+			// TODO: potential SQL injection? maybe later...
+			fmt	      = "%s %s.%s REGEXP '%s' AND";
+			sz = sc_strfmt(&buf, &sql, fmt, sql, lt, lc, r);
+			break;
+		}
+
 		case QME_CSTR: {
 			const char *r = Q->value.as.cstr;
 			// TODO: potential SQL injection? maybe later...

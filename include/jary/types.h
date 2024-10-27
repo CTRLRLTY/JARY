@@ -48,16 +48,18 @@ enum jy_ktype {
 
 	JY_K_EVENT,
 
+	JY_K_REGEX,
 	JY_K_TIME,
 	JY_K_LONG,
+	JY_K_ULONG,
+	JY_K_OFS = JY_K_ULONG,
 	JY_K_STR,
 	JY_K_BOOL,
-	JY_K_CHUNK,
 
 	JY_K_HANDLE,
 };
 
-struct jy_descriptor {
+struct jy_desc {
 	uint32_t name;
 	uint32_t member;
 };
@@ -80,19 +82,19 @@ struct jy_time_ofs {
 
 // generic view for all qualified Jary values
 union jy_value {
-	void		    *obj;
-	void		    *handle;
-	struct jy_func	    *func;
-	struct jy_str	    *str;
-	char		    *cstr;
-	struct jy_defs	    *def;
-	struct jy_defs	    *module;
-	struct jy_field	    *field;
-	uint8_t		    *code;
-	struct jy_descriptor dscptr;
-	long		     i64;
-	long		     ofs;
-	struct jy_time_ofs   timeofs;
+	void		  *obj;
+	void		  *handle;
+	struct jy_func	  *func;
+	struct jy_str	  *str;
+	char		  *cstr;
+	struct jy_defs	  *def;
+	struct jy_defs	  *module;
+	struct jy_field	  *field;
+	struct jy_desc	   dscptr;
+	long		   i64;
+	unsigned long	   u64;
+	unsigned long	   ofs;
+	struct jy_time_ofs timeofs;
 };
 
 typedef int (*jy_funcptr_t)(int, union jy_value *, union jy_value *);

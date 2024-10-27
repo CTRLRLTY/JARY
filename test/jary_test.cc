@@ -29,72 +29,64 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <gtest/gtest.h>
+
+extern "C" {
 #include "jary/jary.h"
-#include "jary/memory.h"
-
-#include <sys/socket.h>
-
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-static inline uint32_t read_file(struct sc_mem *alloc,
-				 const char    *path,
-				 char	      **dst)
-{
-	FILE *file = fopen(path, "rb");
-
-	if (file == NULL) {
-		fprintf(stderr, "Could not open file \"%s\".\n", path);
-		exit(74);
-	}
-
-	fseek(file, 0L, SEEK_END);
-	uint32_t file_size = ftell(file);
-	rewind(file);
-
-	char	*buffer	    = sc_alloc(alloc, file_size + 1);
-	uint32_t bytes_read = fread(buffer, sizeof(char), file_size, file);
-
-	if (bytes_read < file_size) {
-		fprintf(stderr, "could not read file \"%s\".\n", path);
-		exit(74);
-	}
-
-	buffer[bytes_read] = '\0';
-	*dst		   = buffer;
-
-	fclose(file);
-	return file_size + 1;
 }
 
-static void run_file(const char *path, const char *dirpath)
+struct simple_cb_data {
+	char *msg;
+	long  count;
+};
+
+static int callback(void *data, const struct jyOutput *output)
 {
-	struct sc_mem alloc  = { .buf = NULL };
-	char	     *src    = NULL;
-	uint32_t      length = read_file(&alloc, path, &src);
-	struct jary  *jary;
+	auto	    view = (simple_cb_data *) data;
+	const char *value;
+	long	    count = 0;
 
-	jary_open(&jary);
+	if (jary_output_str(output, 0, &value) != JARY_OK)
+		return JARY_INT_CRASH; // crash the runtime
 
-	jary_compile(jary, length, src, dirpath);
+	if (jary_output_long(output, 1, &count) != JARY_OK)
+		return JARY_INT_CRASH; // crash the runtime
 
-	const char *keys[]   = { "nein" };
-	const char *values[] = { "\"goodbye\"" };
-	jary_insert_event(jary, "data2", 1, keys, values);
+	view->msg   = strdup(value);
+	view->count = count;
 
-	jary_close(jary);
-
-	sc_free(&alloc);
+	return JARY_OK;
 }
 
-int main(int argc, const char **argv)
+TEST(JaryModuleTest, Simple)
 {
-	if (argc == 3)
-		run_file(argv[1], argv[2]);
-	else
-		fprintf(stderr, "jaryd [file] [modulepath]");
+	const char   expect[] = "must've been the wind";
+	const char   rule[]   = "auth_brute_force";
+	struct jary *J;
+	unsigned int ev;
 
-	return 0;
+	ASSERT_EQ(jary_open(&J, NULL), JARY_OK);
+	ASSERT_EQ(jary_modulepath(J, MODULE_DIR), JARY_OK);
+
+	ASSERT_EQ(jary_compile_file(J, SIMPLE_JARY_PATH), JARY_OK);
+
+	for (int i = 0; i < 10; ++i) {
+		ASSERT_EQ(jary_event(J, "user", &ev), JARY_OK);
+		ASSERT_EQ(jary_field_str(J, ev, "name", "root"), JARY_OK);
+		ASSERT_EQ(jary_field_str(J, ev, "activity", "failed login"),
+			  JARY_OK);
+	}
+
+	struct simple_cb_data data = { .msg = NULL };
+
+	ASSERT_EQ(jary_rule_clbk(J, rule, callback, &data), JARY_OK);
+
+	ASSERT_EQ(jary_execute(J), JARY_OK);
+
+	ASSERT_STREQ(data.msg, expect);
+	ASSERT_EQ(data.count, 10);
+
+	free(data.msg);
+
+	ASSERT_EQ(jary_close(J), JARY_OK);
 }

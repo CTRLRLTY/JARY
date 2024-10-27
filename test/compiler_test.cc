@@ -39,7 +39,6 @@ extern "C" {
 #include "token.h"
 
 #include "jary/memory.h"
-#include "jary/types.h"
 }
 
 static size_t read_file(const char *path, char **dst)

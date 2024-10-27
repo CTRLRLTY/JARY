@@ -47,6 +47,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 static const char *tkn2string(enum jy_tkn type)
 {
 	switch (type) {
+	case TKN_OUTPUT:
+		return "TKN_OUTPUT";
+	case TKN_REGEX:
+		return "TKN_REGEX";
+	case TKN_COMMENT:
+		return "TKN_COMMENT";
 	case TKN_EQUAL:
 		return "TKN_EQUAL";
 	case TKN_BETWEEN:
@@ -170,10 +176,16 @@ static const char *tkn2string(enum jy_tkn type)
 static const char *ast2string(enum jy_ast type)
 {
 	switch (type) {
+	case AST_REGEX:
+		return "REGEX";
+	case AST_OUTPUT_SECT:
+		return "OUTPUT_SECT";
 	case AST_NONE:
 		return "NONE";
 	case AST_WITHIN:
 		return "WITHIN";
+	case AST_EQUAL:
+		return "EQUAL";
 	case AST_BETWEEN:
 		return "BETWEEN";
 	case AST_HOUR:
@@ -272,6 +284,8 @@ static const char *ast2string(enum jy_ast type)
 static const char *k2string(enum jy_ktype type)
 {
 	switch (type) {
+	case JY_K_REGEX:
+		return "[REGEX]";
 	case JY_K_TIME:
 		return "[TIME]";
 	case JY_K_ACTION:
@@ -282,6 +296,8 @@ static const char *k2string(enum jy_ktype type)
 		return "[MODULE]";
 	case JY_K_LONG:
 		return "[LONG]";
+	case JY_K_ULONG:
+		return "[ULONG]";
 	case JY_K_STR:
 		return "[STR]";
 	case JY_K_FUNC:
@@ -294,8 +310,6 @@ static const char *k2string(enum jy_ktype type)
 		return "[INGRESS]";
 	case JY_K_RULE:
 		return "[RULE]";
-	case JY_K_CHUNK:
-		return "[CHUNK]";
 	case JY_K_HANDLE:
 		return "[HANDLE]";
 	case JY_K_DESCRIPTOR:
@@ -308,6 +322,10 @@ static const char *k2string(enum jy_ktype type)
 static const char *codestring(enum jy_opcode code)
 {
 	switch (code) {
+	case JY_OP_REGEX:
+		return "OP_REGEX";
+	case JY_OP_OUTPUT:
+		return "OP_OUTPUT";
 	case JY_OP_WITHIN:
 		return "OP_WITHIN";
 	case JY_OP_BETWEEN:
@@ -560,12 +578,14 @@ static inline void print_value(enum jy_ktype type, const union jy_value value)
 	case JY_K_HANDLE:
 	case JY_K_FUNC:
 	case JY_K_EVENT:
-	case JY_K_CHUNK:
 	case JY_K_MODULE:
 		printf("[PTR:%p]", value.handle);
 		return;
 	case JY_K_LONG:
 		printf("%ld", value.i64);
+		return;
+	case JY_K_ULONG:
+		printf("%ld", value.u64);
 		return;
 	case JY_K_TIME:
 		printf("%d ", value.timeofs.offset);
@@ -701,9 +721,12 @@ static void print_kpool(const enum jy_ktype  *types,
 	}
 }
 
-static void print_chunk(uint8_t *codes, int indent)
+static uint32_t print_chunk(uint8_t *codes, uint32_t pc, int indent)
 {
-	for (uint32_t pc = 0; codes[pc] != JY_OP_END;) {
+	for (bool end = false; !end;) {
+		if (codes[pc] == JY_OP_END)
+			end = true;
+
 		if (indent)
 			printf("%*c", indent, '\t');
 
@@ -723,6 +746,27 @@ static void print_chunk(uint8_t *codes, int indent)
 		} arg = { .bytes = codes + pc + 1 };
 
 		switch (opcode) {
+		case JY_OP_OUTPUT:
+		case JY_OP_REGEX:
+		case JY_OP_LOAD:
+		case JY_OP_WITHIN:
+		case JY_OP_BETWEEN:
+		case JY_OP_QUERY:
+		case JY_OP_NOT:
+		case JY_OP_CMPSTR:
+		case JY_OP_CMP:
+		case JY_OP_LT:
+		case JY_OP_GT:
+		case JY_OP_ADD:
+		case JY_OP_CONCAT:
+		case JY_OP_SUB:
+		case JY_OP_MUL:
+		case JY_OP_DIV:
+		case JY_OP_JOIN:
+		case JY_OP_EQUAL:
+		case JY_OP_END:
+			pc += 1;
+			break;
 		case JY_OP_PUSH8:
 			printf(" %d", *arg.u8);
 			pc += 2;
@@ -742,27 +786,12 @@ static void print_chunk(uint8_t *codes, int indent)
 			pc += 2;
 			break;
 		}
-		default:
-			pc += 1;
-			break;
 		}
 
 		printf("\n");
 	}
-}
 
-static inline void print_chunks(const union jy_value *vals,
-				const enum jy_ktype  *types,
-				uint16_t	      valsz)
-{
-	for (uint32_t i = 0; i < valsz; ++i) {
-		if (types[i] != JY_K_CHUNK)
-			continue;
-
-		union jy_value m = vals[i];
-		printf("%5u [CHUNK] (%p) \n", i, m.handle);
-		print_chunk(vals[i].code, 1);
-	}
+	return pc;
 }
 
 static uint32_t read_file(struct sc_mem *alloc, const char *path, char **dst)
@@ -855,7 +884,6 @@ static void run_file(const char *path, const char *dirpath)
 
 	uint32_t modulesz = 0;
 	uint32_t eventsz  = 0;
-	uint32_t chunksz  = 0;
 
 	for (uint32_t i = 0; i < jay.valsz; ++i) {
 		switch (jay.types[i]) {
@@ -864,9 +892,6 @@ static void run_file(const char *path, const char *dirpath)
 			break;
 		case JY_K_EVENT:
 			eventsz += 1;
-			break;
-		case JY_K_CHUNK:
-			chunksz += 1;
 			break;
 		default:
 			continue;
@@ -877,7 +902,6 @@ static void run_file(const char *path, const char *dirpath)
 	printf("Constant Pool : %u\n", jay.valsz);
 	printf("Total Names   : %u\n", jay.names->size);
 	printf("Total Events  : %u\n", eventsz);
-	printf("Total Chunk   : %u\n", chunksz);
 
 	printf("\n");
 
@@ -912,19 +936,20 @@ static void run_file(const char *path, const char *dirpath)
 	       "\n"
 	       "__________________\n\n");
 
-	if (chunksz) {
-		print_chunks(jay.vals, jay.types, jay.valsz);
+	for (unsigned int i = 0; i < jay.fcodesz;)
+		i = print_chunk(jay.fcodes, i, 0);
+
+	if (jay.fcodesz)
 		printf("\n");
-	}
 
 	printf("ENTRY CHUNK"
 	       "\n"
 	       "__________________\n\n");
 
-	if (jay.codesz) {
-		print_chunk(jay.codes, 0);
-		printf("\n");
-	}
+	for (unsigned int i = 0; i < jay.codesz;)
+		i = print_chunk(jay.codes, i, 0);
+
+	printf("\n");
 
 	if (errs.size) {
 		print_errors(&errs, &tkns, path);

@@ -170,7 +170,7 @@ TEST(ExecTest, MarkModule)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	ASSERT_EQ(jry_exec(db, &jay), 0);
+	ASSERT_EQ(jry_exec(db, &jay, jay.codes, NULL), 0);
 
 	{
 		uint32_t	id;
@@ -258,7 +258,7 @@ TEST(ExecTest, Join)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	ASSERT_EQ(jry_exec(db, &jay), 0);
+	ASSERT_EQ(jry_exec(db, &jay, jay.codes, NULL), 0);
 
 	{
 		uint32_t	id;
@@ -335,7 +335,7 @@ TEST(ExecTest, Within)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	ASSERT_EQ(jry_exec(db, &jay), 0);
+	ASSERT_EQ(jry_exec(db, &jay, jay.codes, NULL), 0);
 
 	union jy_value	result;
 	struct jy_func *ofunc;
@@ -408,7 +408,7 @@ TEST(ExecTest, Between)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	ASSERT_EQ(jry_exec(db, &jay), 0);
+	ASSERT_EQ(jry_exec(db, &jay, jay.codes, NULL), 0);
 
 	union jy_value	result;
 	struct jy_func *ofunc;

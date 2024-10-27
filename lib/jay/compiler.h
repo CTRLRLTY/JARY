@@ -53,7 +53,9 @@ enum jy_opcode {
 	JY_OP_CALL,
 
 	JY_OP_QUERY,
+	JY_OP_REGEX,
 	JY_OP_BETWEEN,
+	JY_OP_OUTPUT,
 	JY_OP_WITHIN,
 
 	JY_OP_NOT,
@@ -74,20 +76,27 @@ enum jy_opcode {
 struct jy_jay {
 	// global names
 	struct jy_defs *names;
-	// code chunk array
 	uint8_t	       *codes;
+	uint8_t	       *fcodes;
+
+	// rule offset within the main chunk;
+	uint32_t       *rulecofs;
+	// rule ordinal from the name table;
+	uint16_t       *rulenids;
 	// constant table
 	union jy_value *vals;
 	enum jy_ktype  *types;
 	uint32_t	codesz;
+	uint32_t	fcodesz;
 	uint16_t	valsz;
+	uint16_t	rulesz;
 };
 
-void jry_compile(struct sc_mem	      *alloc,
-		 struct jy_jay	      *ctx,
-		 struct tkn_errs      *errs,
-		 const char	      *mdir,
-		 const struct jy_asts *asts,
-		 const struct jy_tkns *tkns);
+int jry_compile(struct sc_mem	     *alloc,
+		struct jy_jay	     *ctx,
+		struct tkn_errs	     *errs,
+		const char	     *mdir,
+		const struct jy_asts *asts,
+		const struct jy_tkns *tkns);
 
 #endif // JAYVM_COMPILER_H

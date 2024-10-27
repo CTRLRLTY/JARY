@@ -67,6 +67,22 @@ OUT_OF_MEMORY:
 	return NULL;
 }
 
+void *sb_add(struct sb_mem *sb, int flag, uint32_t nmemb)
+{
+	if (sb_reserve(sb, flag, nmemb) == NULL)
+		goto OUT_OF_MEMORY;
+
+	char *mem  = sb->buf;
+	mem	  += sb->size;
+	memset(mem, 0, nmemb);
+
+	sb->size += nmemb;
+
+	return sb->buf;
+OUT_OF_MEMORY:
+	return NULL;
+}
+
 void *sb_reserve(struct sb_mem *sb, int flag, uint32_t nmemb)
 {
 	const uint32_t growth = 1
@@ -251,6 +267,10 @@ void sc_free(struct sc_mem *alloc)
 
 		free(temp);
 	}
+
+	alloc->buf    = NULL;
+	alloc->back   = NULL;
+	alloc->expire = NULL;
 }
 
 void su_free(struct su_mem *alloc)

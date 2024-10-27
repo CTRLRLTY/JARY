@@ -50,7 +50,8 @@ TKN_INPUT:                                                                     \
 	case TKN_MATCH:                                                        \
 	case TKN_JUMP:                                                         \
 	case TKN_CONDITION:                                                    \
-	case TKN_FIELD
+	case TKN_FIELD:                                                        \
+	case TKN_OUTPUT
 
 #define CASE_TKN_DECL                                                          \
 TKN_RULE:                                                                      \
@@ -73,7 +74,6 @@ static const char msg_expect_regex[]	     = "not a regex";
 static const char msg_expect_ident[]	     = "not an identifier";
 static const char msg_expect_type[]	     = "not a type";
 static const char msg_expect_semicolon[]     = "missing ':'";
-static const char msg_expect_newline[]	     = "missing newline '\\n'";
 static const char msg_expect_open_brace[]    = "missing '{'";
 static const char msg_expect_close_brace[]   = "missing '}'";
 static const char msg_expect_paren_close[]   = "missing ')'";
@@ -288,8 +288,16 @@ static inline void next(struct jy_tkns *tkns,
 	if (push_tkn(tkns, type, line, ofs, lex, lexsz) != 0)
 		goto PANIC;
 
-	if (type == TKN_SPACES)
+	switch (type) {
+	case TKN_SPACES:
 		next(tkns, src, srcsz, tkn);
+		break;
+	case TKN_COMMENT:
+		next(tkns, src, srcsz, tkn);
+		break;
+	default:
+		break;
+	}
 
 	return;
 
@@ -435,6 +443,9 @@ static bool _literal(struct parser   *p,
 		break;
 	case TKN_TRUE:
 		root_type = AST_TRUE;
+		break;
+	case TKN_REGEXP:
+		root_type = AST_REGEXP;
 		break;
 
 	default: {
@@ -597,7 +608,7 @@ static bool _call(struct parser	  *p,
 
 		next(tkns, &p->src, &p->srcsz, &p->tkn);
 
-		if (tkns->types[p->tkn] == TKN_NEWLINE)
+		while (tkns->types[p->tkn] == TKN_NEWLINE)
 			next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 		param = tkns->types[p->tkn];
@@ -640,6 +651,7 @@ static bool _dot(struct parser	 *p,
 
 	switch (p->section) {
 	case TKN_CONDITION:
+	case TKN_OUTPUT:
 	case TKN_JUMP:
 		access = AST_EACCESS;
 		break;
@@ -810,6 +822,9 @@ static bool _binary(struct parser   *p,
 		break;
 	case TKN_WITHIN:
 		root_type = AST_WITHIN;
+		break;
+	case TKN_REGEX:
+		root_type = AST_REGEX;
 		break;
 
 	default:
@@ -1002,6 +1017,12 @@ static bool _section(struct parser   *p,
 		asts->types[sectast] = AST_CONDITION_SECT;
 		listfn		     = _expression;
 		break;
+	case TKN_OUTPUT:
+		if (decltype != AST_RULE_DECL)
+			goto INVALID_SECTION;
+		asts->types[sectast] = AST_OUTPUT_SECT;
+		listfn		     = _expression;
+		break;
 	case TKN_FIELD:
 		if (decltype != AST_INGRESS_DECL)
 			goto INVALID_SECTION;
@@ -1021,7 +1042,7 @@ static bool _section(struct parser   *p,
 	// consume colon
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
-	if (tkns->types[p->tkn] == TKN_NEWLINE)
+	while (tkns->types[p->tkn] == TKN_NEWLINE)
 		next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 	enum jy_tkn listype = tkns->types[p->tkn];
@@ -1038,7 +1059,7 @@ static bool _section(struct parser   *p,
 			break;
 		}
 
-		uint32_t root;
+		uint32_t root  = sectast;
 		bool	 panic = false;
 
 		if (listfn(p, asts, tkns, errs, &root))
@@ -1050,12 +1071,13 @@ static bool _section(struct parser   *p,
 			goto PANIC;
 
 		if (tkns->types[p->tkn] != TKN_NEWLINE) {
-			tkn_error(errs, msg_expect_newline, secttkn, p->tkn);
+			tkn_error(errs, "missing newline", secttkn, p->tkn);
 			goto PANIC;
 		}
 
 		// consume NEWLINE
-		next(tkns, &p->src, &p->srcsz, &p->tkn);
+		while (tkns->types[p->tkn] == TKN_NEWLINE)
+			next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 		listype = tkns->types[p->tkn];
 	}
@@ -1167,14 +1189,14 @@ static bool _declstmt(struct parser   *p,
 		      struct jy_tkns  *tkns,
 		      struct tkn_errs *errs)
 {
-	uint32_t declast     = asts->size - 1;
-	uint32_t decltkn     = p->tkn;
-	enum jy_tkn decltype = tkns->types[decltkn];
+	uint32_t    declast = asts->size - 1;
+	uint32_t    decltkn = p->tkn;
+	enum jy_tkn dcltype = tkns->types[decltkn];
 
 	// consume decl tkn
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
-	switch (decltype) {
+	switch (dcltype) {
 	case TKN_IMPORT:
 		asts->types[declast] = AST_IMPORT_STMT;
 		if (_identifier(p, asts, tkns, errs, declast))
@@ -1259,7 +1281,7 @@ static int _entry(struct parser	  *p,
 
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
-	if (tkns->types[p->tkn] == TKN_NEWLINE)
+	while (tkns->types[p->tkn] == TKN_NEWLINE)
 		next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 	while (!ended(tkns->types, tkns->size)) {
@@ -1280,7 +1302,7 @@ static int _entry(struct parser	  *p,
 		if (status != 0)
 			return status;
 
-		if (tkns->types[p->tkn] == TKN_NEWLINE)
+		while (tkns->types[p->tkn] == TKN_NEWLINE)
 			next(tkns, &p->src, &p->srcsz, &p->tkn);
 	}
 
@@ -1306,6 +1328,7 @@ static struct rule rules[TOTAL_TKN_TYPES] = {
 	[TKN_EXACT]   = { NULL, _binary, PREC_EQUALITY },
 	[TKN_BETWEEN] = { NULL, _binary, PREC_EQUALITY },
 	[TKN_WITHIN]  = { NULL, _binary, PREC_EQUALITY },
+	[TKN_REGEX]   = { NULL, _binary, PREC_EQUALITY },
 	[TKN_EQUAL]   = { NULL, _binary, PREC_EQUALITY },
 
 	[TKN_EQ]	  = { NULL, _binary, PREC_EQUALITY },
@@ -1319,6 +1342,7 @@ static struct rule rules[TOTAL_TKN_TYPES] = {
 
 	[TKN_STRING] = { _literal, NULL, PREC_NONE },
 	[TKN_NUMBER] = { _literal, NULL, PREC_NONE },
+	[TKN_REGEXP] = { _literal, NULL, PREC_NONE },
 	[TKN_FALSE]  = { _literal, NULL, PREC_NONE },
 	[TKN_TRUE]   = { _literal, NULL, PREC_NONE },
 	[TKN_HOUR]   = { _literal, NULL, PREC_NONE },

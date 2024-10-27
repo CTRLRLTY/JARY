@@ -37,6 +37,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 struct sqlite3;
 struct jy_jay;
 
-int jry_exec(struct sqlite3 *db, const struct jy_jay *jay);
+struct jy_state {
+	union jy_value *out;
+	struct sc_mem  *buf;
+	struct sb_mem  *outm;
+	uint16_t	outsz;
+};
+
+int jry_exec(struct sqlite3	 *db,
+	     const struct jy_jay *jay,
+	     const uint8_t	 *codes,
+	     struct jy_state	 *state);
 
 #endif // JAYVM_EXEC_H

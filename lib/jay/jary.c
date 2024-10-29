@@ -254,7 +254,7 @@ int jary_open(struct jary **jary, struct sqlite3 *db)
 	if (J == NULL)
 		goto OUT_OF_MEMORY;
 
-	J->mdir = "./";
+	J->mdir = "";
 
 	if (db == NULL) {
 		int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE

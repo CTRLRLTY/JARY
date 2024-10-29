@@ -148,7 +148,7 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 
 		if (CURRENT() == '/') {
 			while (CURRENT() != '\n')
-				NEXT();
+				(void) NEXT();
 			*type = TKN_COMMENT;
 			goto FINISH;
 		}

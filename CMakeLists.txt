@@ -65,3 +65,8 @@ endif()
 if ( BUILD_TEST )
         add_subdirectory( test )
 endif()
+
+install( TARGETS jary LIBRARY COMPONENT jary )
+install( FILES ${CMAKE_SOURCE_DIR}/include/jary/jary.h TYPE INCLUDE COMPONENT jary )        
+
+

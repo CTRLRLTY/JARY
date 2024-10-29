@@ -16,17 +16,16 @@ ingress person {
     age long
 }
 
-rule myrule
-{
+rule myrule {
   match:
-    $data.name join $duty.person
-    $data.name exact "John Doe"
-    $data.age between 18..30
+    $person.name join $duty.person
+    $person.name exact "John Doe"
+    $person.age between 18..30
     $duty.task exact "cleaning"
-    $data within 10m
+    $person within 10m
 
   action:
-      log.info($data.name .. " is working on " .. $duty.task .. " duty")
+      log.info($person.name .. " is working on " .. $duty.task .. " duty")
 }
 ```
 

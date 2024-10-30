@@ -64,12 +64,6 @@ struct jy_desc {
 	uint32_t member;
 };
 
-struct jy_field {
-	int		size;
-	enum jy_ktype	type;
-	union jy_value *as;
-};
-
 struct jy_time_ofs {
 	enum {
 		JY_TIME_HOUR   = 3600,
@@ -82,14 +76,12 @@ struct jy_time_ofs {
 
 // generic view for all qualified Jary values
 union jy_value {
-	void		  *obj;
 	void		  *handle;
 	struct jy_func	  *func;
 	struct jy_str	  *str;
 	char		  *cstr;
 	struct jy_defs	  *def;
 	struct jy_defs	  *module;
-	struct jy_field	  *field;
 	struct jy_desc	   dscptr;
 	long		   i64;
 	unsigned long	   u64;

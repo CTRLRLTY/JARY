@@ -76,6 +76,96 @@ struct jary {
 	uint16_t  r_clbk_sz;
 };
 
+static inline int prtknln(char	  **lexemes,
+			  uint32_t *lines,
+			  uint32_t  lexn,
+			  uint32_t  line,
+			  int	    bufsz,
+			  char	   *buf)
+{
+#define SIZE() bufsz ? bufsz - count : 0
+#define PTR()  count ? buf + count : buf
+	int count = 0;
+	// start from 1 to ignore ..root
+	for (uint32_t i = 1; i < lexn; ++i) {
+		uint32_t l = lines[i];
+
+		if (line < l)
+			goto FINISH;
+
+		if (l != line)
+			continue;
+
+		const char *lexeme = lexemes[i];
+
+		if (lexeme == NULL)
+			continue;
+
+		if (*lexeme == '\n')
+			continue;
+
+		count += snprintf(PTR(), SIZE(), "%s", lexeme);
+	}
+
+FINISH:
+	return count;
+
+#undef SIZE
+#undef PTR
+}
+
+static inline int prerrors(const struct tkn_errs *errs,
+			   const struct jy_tkns	 *tkns,
+			   const char		 *path,
+			   int			  bufsz,
+			   char			 *buf)
+{
+#define SIZE() bufsz ? bufsz - sz : 0
+#define PTR()  sz ? buf + sz : buf
+	int sz = 0;
+
+	for (uint32_t i = 0; i < errs->size; ++i) {
+		uint32_t    from       = errs->from[i];
+		uint32_t    to	       = errs->to[i];
+		uint32_t    start_line = tkns->lines[to];
+		uint32_t    ofs	       = tkns->ofs[to];
+		const char *msg	       = errs->msgs[i];
+
+		sz += snprintf(PTR(), SIZE(), "%s:%d:%d error: %s\n", path,
+			       start_line, ofs, msg);
+
+		uint32_t pline = tkns->lines[from];
+
+		sz += snprintf(PTR(), SIZE(), "%5d | ", pline);
+
+		sz += prtknln(tkns->lexemes, tkns->lines, tkns->size, pline,
+			      SIZE(), PTR());
+
+		sz += snprintf(PTR(), SIZE(), "\n");
+
+		for (uint32_t j = from; j <= to; ++j) {
+			uint32_t line = tkns->lines[j];
+
+			if (line == pline)
+				goto NEXT_TKN;
+
+			sz += snprintf(PTR(), SIZE(), "%5d | ", line);
+
+			sz += prtknln(tkns->lexemes, tkns->lines, tkns->size,
+				      line, SIZE(), PTR());
+			sz += snprintf(PTR(), SIZE(), "\n");
+NEXT_TKN:
+			pline = line;
+		}
+
+		sz += snprintf(PTR(), SIZE(), "%5c | %*c\n", ' ', ofs, '^');
+	}
+
+	return sz;
+#undef SIZE
+#undef PTR
+}
+
 static inline int create_event_table(struct sqlite3	  *db,
 				     const char		  *name,
 				     const struct jy_defs *event)
@@ -507,12 +597,14 @@ int jary_compile(struct jary *jary,
 		 const char  *source,
 		 char	    **errmsg)
 {
+	int	       ret  = JARY_OK;
+	struct sc_mem  bump = { .buf = NULL };
+	struct sb_mem *sb   = &jary->sb;
+
 	if (jary->code != NULL) {
 		jary->errmsg = "jary context already compiled";
 		return JARY_ERR_COMPILE;
 	}
-
-	struct sb_mem *sb = &jary->sb;
 
 	struct exec *code = sc_alloc(&jary->sc, sizeof(*code));
 
@@ -520,7 +612,7 @@ int jary_compile(struct jary *jary,
 		     + sizeof(*code->jay) + sizeof(*code->errs);
 
 	if (sb_reserve(sb, SB_NOGROW, memsz) == NULL)
-		return JARY_ERR_OOM;
+		goto OUT_OF_MEMORY;
 
 	struct jy_tkns	*tkns;
 	struct jy_asts	*asts;
@@ -549,17 +641,24 @@ int jary_compile(struct jary *jary,
 	jry_parse(&jary->sc, asts, tkns, errs, source, length);
 
 	if (code->errs->size)
-		return JARY_ERR_COMPILE;
+		goto COMPILE_FAIL;
 
 	jry_compile(&jary->sc, jay, errs, jary->mdir, asts, tkns);
 
 	if (code->errs->size)
-		return JARY_ERR_COMPILE;
+		goto COMPILE_FAIL;
 
 	struct jy_defs *names	= code->jay->names;
 	size_t		eventsz = 0;
-	const char     *table[names->size];
-	struct jy_defs *events[names->size];
+	const char    **table	= sc_alloc(&bump, sizeof(void *) * names->size);
+
+	if (table == NULL)
+		goto OUT_OF_MEMORY;
+
+	struct jy_defs **events = sc_alloc(&bump, sizeof(void *) * names->size);
+
+	if (events == NULL)
+		goto OUT_OF_MEMORY;
 
 	for (size_t i = 0; i < names->capacity; ++i) {
 		switch (names->types[i]) {
@@ -575,11 +674,43 @@ int jary_compile(struct jary *jary,
 
 	for (size_t i = 0; i < eventsz; ++i)
 		if (create_event_table(jary->db, table[i], events[i]))
-			return JARY_ERROR;
+			goto CREATE_TABLE_FAIL;
 
 	jary->code = code;
 
-	return JARY_OK;
+	goto FINISH;
+
+COMPILE_FAIL: {
+	jary->errmsg = "failed to compile";
+	ret	     = JARY_ERR_COMPILE;
+
+	if (errmsg == NULL)
+		goto FINISH;
+
+	int   bufsz = prerrors(errs, tkns, "source", 0, NULL);
+	char *buf   = calloc(bufsz, 1);
+
+	if (buf == NULL)
+		goto OUT_OF_MEMORY;
+
+	prerrors(errs, tkns, "source", bufsz, buf);
+	*errmsg = buf;
+
+	goto FINISH;
+}
+
+OUT_OF_MEMORY:
+	jary->errmsg = "out of memory";
+	ret	     = JARY_ERR_OOM;
+	goto FINISH;
+
+CREATE_TABLE_FAIL:
+	jary->errmsg = "failed to create event tables";
+	ret	     = JARY_ERROR;
+
+FINISH:
+	sc_free(&bump);
+	return ret;
 }
 
 void jary_output_len(const struct jyOutput *output, unsigned int *length)
@@ -776,4 +907,9 @@ int jary_close(struct jary *restrict jary)
 const char *jary_errmsg(struct jary *jary)
 {
 	return jary->errmsg;
+}
+
+void jary_free(void *ptr)
+{
+	free(ptr);
 }

@@ -505,14 +505,18 @@ static void print_asts(struct jy_asts *asts,
 		print_ast(asts, lexemes, length, midpoint, idsz, 0, 0);
 }
 
-static inline int print_line(char    **lexemes,
-			     uint32_t *lines,
-			     uint32_t  size,
-			     uint32_t  line)
+static inline int prtknln(char	  **lexemes,
+			  uint32_t *lines,
+			  uint32_t  lexn,
+			  uint32_t  line,
+			  int	    bufsz,
+			  char	   *buf)
 {
-	int printed = 0;
+#define SIZE() bufsz ? bufsz - count : 0
+#define PTR()  count ? buf + count : buf
+	int count = 0;
 	// start from 1 to ignore ..root
-	for (uint32_t i = 1; i < size; ++i) {
+	for (uint32_t i = 1; i < lexn; ++i) {
 		uint32_t l = lines[i];
 
 		if (line < l)
@@ -529,17 +533,26 @@ static inline int print_line(char    **lexemes,
 		if (*lexeme == '\n')
 			continue;
 
-		printed += printf("%s", lexeme);
+		count += snprintf(PTR(), SIZE(), "%s", lexeme);
 	}
 
 FINISH:
-	return printed;
+	return count;
+
+#undef SIZE
+#undef PTR
 }
 
-static inline void print_errors(struct tkn_errs *errs,
-				struct jy_tkns	*tkns,
-				const char	*path)
+static inline int prerrors(const struct tkn_errs *errs,
+			   const struct jy_tkns	 *tkns,
+			   const char		 *path,
+			   int			  bufsz,
+			   char			 *buf)
 {
+#define SIZE() bufsz ? bufsz - sz : 0
+#define PTR()  sz ? buf + sz : buf
+	int sz = 0;
+
 	for (uint32_t i = 0; i < errs->size; ++i) {
 		uint32_t    from       = errs->from[i];
 		uint32_t    to	       = errs->to[i];
@@ -547,29 +560,39 @@ static inline void print_errors(struct tkn_errs *errs,
 		uint32_t    ofs	       = tkns->ofs[to];
 		const char *msg	       = errs->msgs[i];
 
-		printf("%s:%d:%d error: %s\n", path, start_line, ofs, msg);
+		sz += snprintf(PTR(), SIZE(), "%s:%d:%d error: %s\n", path,
+			       start_line, ofs, msg);
 
-		uint32_t last_line = tkns->lines[from];
-		printf("%5d | ", last_line);
-		print_line(tkns->lexemes, tkns->lines, tkns->size, last_line);
-		printf("\n");
+		uint32_t pline = tkns->lines[from];
+
+		sz += snprintf(PTR(), SIZE(), "%5d | ", pline);
+
+		sz += prtknln(tkns->lexemes, tkns->lines, tkns->size, pline,
+			      SIZE(), PTR());
+
+		sz += snprintf(PTR(), SIZE(), "\n");
 
 		for (uint32_t j = from; j <= to; ++j) {
-			uint32_t current_line = tkns->lines[j];
+			uint32_t line = tkns->lines[j];
 
-			if (current_line == last_line)
+			if (line == pline)
 				goto NEXT_TKN;
 
-			printf("%5d | ", current_line);
-			print_line(tkns->lexemes, tkns->lines, tkns->size,
-				   current_line);
-			printf("\n");
+			sz += snprintf(PTR(), SIZE(), "%5d | ", line);
+
+			sz += prtknln(tkns->lexemes, tkns->lines, tkns->size,
+				      line, SIZE(), PTR());
+			sz += snprintf(PTR(), SIZE(), "\n");
 NEXT_TKN:
-			last_line = current_line;
+			pline = line;
 		}
 
-		printf("%5c | %*c\n", ' ', ofs, '^');
+		sz += snprintf(PTR(), SIZE(), "%5c | %*c\n", ' ', ofs, '^');
 	}
+
+	return sz;
+#undef SIZE
+#undef PTR
 }
 
 static inline void print_value(enum jy_ktype type, const union jy_value value)
@@ -952,7 +975,13 @@ static void run_file(const char *path, const char *dirpath)
 	printf("\n");
 
 	if (errs.size) {
-		print_errors(&errs, &tkns, path);
+		/*int sz	= print_errors(&errs, &tkns, path);*/
+		int sz = prerrors(&errs, &tkns, path, 0, NULL);
+
+		char buf[sz];
+
+		prerrors(&errs, &tkns, path, sz, buf);
+		printf("%s", buf);
 		printf("\n");
 	}
 

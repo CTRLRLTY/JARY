@@ -59,27 +59,6 @@ TKN_RULE:                                                                      \
 	case TKN_INGRESS:                                                      \
 	case TKN_INCLUDE
 
-static const char msg_inv_token[]	     = "unrecognized token";
-static const char msg_inv_section[]	     = "invalid section";
-static const char msg_inv_decl[]	     = "invalid declaration";
-static const char msg_inv_string[]	     = "unterminated string";
-static const char msg_inv_literal[]	     = "invalid literal";
-static const char msg_inv_invoc[]	     = "inappropriate invocation";
-static const char msg_inv_access[]	     = "inappropriate accesor usage";
-static const char msg_inv_expression[]	     = "invalid expression";
-static const char msg_inv_type_decl[]	     = "invalid type declaration";
-static const char msg_inv_regex[]	     = "invalid regex match expression";
-static const char msg_expect_name_or_event[] = "not a name or event";
-static const char msg_expect_regex[]	     = "not a regex";
-static const char msg_expect_ident[]	     = "not an identifier";
-static const char msg_expect_type[]	     = "not a type";
-static const char msg_expect_semicolon[]     = "missing ':'";
-static const char msg_expect_open_brace[]    = "missing '{'";
-static const char msg_expect_close_brace[]   = "missing '}'";
-static const char msg_expect_paren_close[]   = "missing ')'";
-static const char msg_expect_string[]	     = "expected string";
-static const char msg_args_limit[]	     = "too many arguments";
-
 struct parser {
 	const char *src;
 	// currect section type
@@ -100,7 +79,6 @@ enum prec {
 	PREC_FACTOR,	 // * /
 	PREC_UNARY,	 // ! -
 	PREC_CALL,	 // . () ~
-	PREC_LAST,
 };
 
 typedef bool (*parsefn_t)(struct parser *,
@@ -397,7 +375,7 @@ static bool _err(struct parser	 *p,
 		 struct tkn_errs *errs,
 		 uint32_t	 *__unused(root))
 {
-	tkn_error(errs, msg_inv_token, p->tkn, p->tkn);
+	tkn_error(errs, "not a token", p->tkn, p->tkn);
 
 	return true;
 }
@@ -408,7 +386,7 @@ static bool _err_str(struct parser   *p,
 		     struct tkn_errs *errs,
 		     uint32_t	     *__unused(root))
 {
-	tkn_error(errs, msg_inv_string, p->tkn, p->tkn);
+	tkn_error(errs, "unterminated string", p->tkn, p->tkn);
 
 	return true;
 }
@@ -449,7 +427,7 @@ static bool _literal(struct parser   *p,
 		break;
 
 	default: {
-		tkn_error(errs, msg_inv_literal, p->tkn, p->tkn);
+		tkn_error(errs, "not a literal", p->tkn, p->tkn);
 		goto PANIC;
 	}
 	}
@@ -519,7 +497,7 @@ static bool _event(struct parser   *p,
 	enum jy_tkn type = tkns->types[p->tkn];
 
 	if (type != TKN_IDENTIFIER) {
-		tkn_error(errs, msg_expect_ident, dlrtkn, p->tkn);
+		tkn_error(errs, "not an identifier", dlrtkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -548,7 +526,7 @@ static bool _grouping(struct parser   *p,
 		goto PANIC;
 
 	if (tkns->types[p->tkn] != TKN_RIGHT_PAREN) {
-		tkn_error(errs, msg_expect_paren_close, grptkn, p->tkn);
+		tkn_error(errs, "missing ')'", grptkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -571,7 +549,7 @@ static bool _call(struct parser	  *p,
 	uint32_t    nametkn = p->tkn;
 
 	if (type != AST_EACCESS) {
-		tkn_error(errs, msg_inv_invoc, p->tkn, p->tkn);
+		tkn_error(errs, "invalid invocation", p->tkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -593,7 +571,7 @@ static bool _call(struct parser	  *p,
 
 		// > 2 bytes
 		if ((paramsz + 1) & 0x10000) {
-			tkn_error(errs, msg_args_limit, nametkn, p->tkn);
+			tkn_error(errs, "too many arguments", nametkn, p->tkn);
 			goto PANIC;
 		}
 
@@ -615,7 +593,7 @@ static bool _call(struct parser	  *p,
 	}
 
 	if (tkns->types[p->tkn] != TKN_RIGHT_PAREN) {
-		tkn_error(errs, msg_expect_paren_close, nametkn, p->tkn);
+		tkn_error(errs, "missing ')'", nametkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -642,7 +620,7 @@ static bool _dot(struct parser	 *p,
 	case AST_EVENT:
 		break;
 	default: {
-		tkn_error(errs, msg_inv_access, p->tkn, p->tkn);
+		tkn_error(errs, "invalid accessor", p->tkn, p->tkn);
 		goto PANIC;
 	}
 	}
@@ -672,7 +650,7 @@ static bool _dot(struct parser	 *p,
 	enum jy_tkn type = tkns->types[p->tkn];
 
 	if (type != TKN_IDENTIFIER) {
-		tkn_error(errs, msg_expect_ident, asts->tkns[*root], p->tkn);
+		tkn_error(errs, "not an identifier", asts->tkns[*root], p->tkn);
 		goto PANIC;
 	}
 
@@ -697,65 +675,6 @@ static bool _dot(struct parser	 *p,
 	default:
 		break;
 	}
-
-	return ended(tkns->types, tkns->size);
-
-PANIC:
-	return true;
-}
-
-static bool _tilde(struct parser   *p,
-		   struct jy_asts  *asts,
-		   struct jy_tkns  *tkns,
-		   struct tkn_errs *errs,
-		   uint32_t	   *root)
-{
-	uint32_t    optkn   = p->tkn;
-	uint32_t    left    = *root;
-	uint32_t    lefttkn = asts->tkns[*root];
-	enum jy_ast leftype = asts->types[left];
-
-	if (leftype != AST_NAME && leftype != AST_EVENT) {
-		tkn_error(errs, msg_expect_name_or_event, lefttkn, p->tkn);
-		goto PANIC;
-	}
-
-	// consume ~
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	uint32_t    regextkn = p->tkn;
-	enum jy_tkn ttype    = tkns->types[p->tkn];
-
-	if (ttype != TKN_REGEXP) {
-		tkn_error(errs, msg_expect_regex, lefttkn, regextkn);
-		goto PANIC;
-	}
-
-	// consume regexp
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	ttype = tkns->types[p->tkn];
-
-	if (ttype != TKN_NEWLINE) {
-		tkn_error(errs, msg_inv_regex, lefttkn, p->tkn);
-		goto PANIC;
-	}
-
-	uint32_t optast;
-	uint32_t right;
-
-	if (push_ast(asts, AST_REGMATCH, optkn, &optast) != 0)
-		goto PANIC;
-
-	if (push_ast(asts, AST_REGEXP, regextkn, &right) != 0)
-		goto PANIC;
-
-	if (push_child(asts, optast, left) != 0)
-		goto PANIC;
-	if (push_child(asts, optast, right) != 0)
-		goto PANIC;
-
-	*root = optast;
 
 	return ended(tkns->types, tkns->size);
 
@@ -826,6 +745,9 @@ static bool _binary(struct parser   *p,
 	case TKN_REGEX:
 		root_type = AST_REGEX;
 		break;
+	case TKN_TILDE:
+		root_type = AST_REGMATCH;
+		break;
 
 	default:
 		goto PANIC;
@@ -864,7 +786,7 @@ static bool _precedence(struct parser	*p,
 	parsefn_t    prefixfn	= prefixrule->prefix;
 
 	if (prefixfn == NULL) {
-		tkn_error(errs, msg_inv_expression, asts->tkns[*root], p->tkn);
+		tkn_error(errs, "not an expression", asts->tkns[*root], p->tkn);
 		goto PANIC;
 	}
 
@@ -921,7 +843,7 @@ static bool _types(struct parser   *p,
 	enum jy_tkn type    = tkns->types[nametkn];
 
 	if (type != TKN_IDENTIFIER) {
-		tkn_error(errs, msg_inv_type_decl, sectkn, nametkn);
+		tkn_error(errs, "invalid identifier", sectkn, nametkn);
 		goto PANIC;
 	}
 
@@ -945,7 +867,7 @@ static bool _types(struct parser   *p,
 		name_type = AST_BOOL_TYPE;
 		break;
 	default:
-		tkn_error(errs, msg_expect_type, sectkn, p->tkn);
+		tkn_error(errs, "not a type", sectkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -1035,7 +957,7 @@ static bool _section(struct parser   *p,
 	}
 
 	if (tkns->types[p->tkn] != TKN_COLON) {
-		tkn_error(errs, msg_expect_semicolon, secttkn, p->tkn);
+		tkn_error(errs, "missing ':'", secttkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -1085,7 +1007,7 @@ static bool _section(struct parser   *p,
 	goto FINISH;
 
 INVALID_SECTION: {
-	tkn_error(errs, msg_inv_section, asts->tkns[declast], p->tkn);
+	tkn_error(errs, "not a section", asts->tkns[declast], p->tkn);
 }
 PANIC:
 	// remove all node up to sectast (inclusive)
@@ -1107,7 +1029,7 @@ static bool _block(struct parser   *p,
 	uint32_t decltkn = asts->tkns[declast];
 
 	if (tkns->types[p->tkn] != TKN_LEFT_BRACE) {
-		tkn_error(errs, msg_expect_open_brace, decltkn, p->tkn);
+		tkn_error(errs, "missing '{'", decltkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -1145,7 +1067,7 @@ static bool _block(struct parser   *p,
 
 CLOSING:
 	if (tkns->types[p->tkn] != TKN_RIGHT_BRACE) {
-		tkn_error(errs, msg_expect_close_brace, decltkn, p->tkn);
+		tkn_error(errs, "missing '}'", decltkn, p->tkn);
 		goto PANIC;
 	}
 
@@ -1171,7 +1093,7 @@ static inline bool _identifier(struct parser   *p,
 	enum jy_tkn type = tkns->types[p->tkn];
 
 	if (type != TKN_IDENTIFIER) {
-		tkn_error(errs, msg_expect_ident, asts->tkns[ast], p->tkn);
+		tkn_error(errs, "not an identifier", asts->tkns[ast], p->tkn);
 		goto PANIC;
 	}
 
@@ -1228,7 +1150,7 @@ static bool _declstmt(struct parser   *p,
 		uint32_t pattkn	     = p->tkn;
 
 		if (tkns->types[pattkn] != TKN_STRING) {
-			tkn_error(errs, msg_expect_string, decltkn, pattkn);
+			tkn_error(errs, "expected a string", decltkn, pattkn);
 			goto PANIC;
 		}
 
@@ -1247,7 +1169,7 @@ static bool _declstmt(struct parser   *p,
 	}
 
 	default: {
-		tkn_error(errs, msg_inv_decl, decltkn, decltkn);
+		tkn_error(errs, "not a declaration", decltkn, decltkn);
 		goto PANIC;
 	}
 	}
@@ -1316,8 +1238,6 @@ static struct rule rules[TOTAL_TKN_TYPES] = {
 	[TKN_LEFT_PAREN] = { _grouping, _call, PREC_CALL },
 	[TKN_DOT]	 = { NULL, _dot, PREC_CALL },
 
-	[TKN_TILDE] = { NULL, _tilde, PREC_LAST },
-
 	[TKN_PLUS]   = { NULL, _binary, PREC_TERM },
 	[TKN_CONCAT] = { NULL, _binary, PREC_TERM },
 	[TKN_MINUS]  = { NULL, _binary, PREC_TERM },
@@ -1330,6 +1250,7 @@ static struct rule rules[TOTAL_TKN_TYPES] = {
 	[TKN_WITHIN]  = { NULL, _binary, PREC_EQUALITY },
 	[TKN_REGEX]   = { NULL, _binary, PREC_EQUALITY },
 	[TKN_EQUAL]   = { NULL, _binary, PREC_EQUALITY },
+	[TKN_TILDE]   = { NULL, _binary, PREC_EQUALITY },
 
 	[TKN_EQ]	  = { NULL, _binary, PREC_EQUALITY },
 	[TKN_LESSTHAN]	  = { NULL, _binary, PREC_COMPARISON },

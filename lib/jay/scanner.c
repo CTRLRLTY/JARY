@@ -56,10 +56,10 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 	case '"': {
 		const char *old = current;
 
-		while (!ENDED() && CURRENT() != '"')
+		while (!ENDED() && CURRENT() != '"' && CURRENT() != '\n')
 			(void) NEXT();
 
-		if (ENDED()) {
+		if (ENDED() || CURRENT() == '\n') {
 			current = old;
 			*type	= TKN_ERR_STR;
 			goto FINISH;

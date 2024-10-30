@@ -60,6 +60,7 @@ int jary_field_str(struct jary *,
 		   const char  *field,
 		   const char  *value);
 
+// TODO: implement this...
 int jary_field_long(struct jary *,
 		    unsigned int event,
 		    const char	*field,
@@ -87,4 +88,6 @@ int  jary_output_bool(const struct jyOutput *,
 		      bool	  *boolean);
 
 const char *jary_errmsg(struct jary *);
+
+void jary_free(void *);
 #endif

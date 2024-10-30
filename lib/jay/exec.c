@@ -75,15 +75,15 @@ struct match_data {
 
 // TODO: This is so ugly.... but im in a hurry.
 struct runtime {
-	union flag8 flag;
+	// runtime memory scratch
+	struct sc_mem buf;
+	struct stack  stack;
 	struct sqlite3 *restrict db;
 	const union jy_value *vals;
 	struct jy_defs	     *names;
 	const uint8_t	    **pc;
 	const uint8_t	     *fcodes;
-	// runtime memory scratch
-	struct sc_mem	      buf;
-	struct stack	      stack;
+	union flag8	      flag;
 };
 
 static inline int interpret(struct runtime *ctx,

@@ -139,6 +139,32 @@ OUT_OF_MEMORY:
 	return NULL;
 }
 
+void *sc_allocf(struct sc_mem *alloc, uint32_t nmemb, free_t expire)
+{
+	void	      *block = calloc(nmemb, 1);
+	struct sc_mem *back  = NULL;
+
+	if (block == NULL)
+		goto OUT_OF_MEMORY;
+
+	back = malloc(sizeof *alloc);
+
+	if (back == NULL)
+		goto OUT_OF_MEMORY;
+
+	back->buf    = block;
+	back->expire = expire;
+	back->back   = alloc->back;
+	alloc->back  = back;
+
+	return block;
+
+OUT_OF_MEMORY:
+	free(block);
+	free(alloc->back);
+	return NULL;
+}
+
 void *su_alloc(struct su_mem *alloc, void *scptr, uint32_t nmemb)
 {
 	struct su_w *buf = NULL;
@@ -178,26 +204,6 @@ void *su_alloc(struct su_mem *alloc, void *scptr, uint32_t nmemb)
 	return buf->ptr;
 FAIL:
 	return NULL;
-}
-
-void *sc_allocf(struct sc_mem *alloc, uint32_t nmemb, free_t expire)
-{
-	void *block = calloc(nmemb, 1);
-
-	if (block == NULL)
-		return NULL;
-
-	struct sc_mem *temp = alloc->back;
-	alloc->back	    = calloc(sizeof *alloc, 1);
-
-	if (alloc->back == NULL)
-		return NULL;
-
-	alloc->back->buf    = block;
-	alloc->back->expire = expire;
-	alloc->back->back   = temp;
-
-	return block;
 }
 
 int sc_strfmt(struct sc_mem *alloc, char **str, const char *fmt, ...)

@@ -394,7 +394,10 @@ int jary_field_str(struct jary *jary,
 	union jy_value	view;
 	enum jy_ktype	type;
 
-	assert(def_get(names, table, &view, NULL) == JARY_OK);
+	if (def_get(names, table, &view, NULL)) {
+		jary->errmsg = "event not expected";
+		return JARY_ERR_NOTEXIST;
+	}
 
 	if (def_get(view.def, field, NULL, &type)) {
 		jary->errmsg = "field not expected";
@@ -459,7 +462,7 @@ FINISH:
 	return JARY_OK;
 }
 
-int jary_compile_file(struct jary *jary, const char *path)
+int jary_compile_file(struct jary *jary, const char *path, char **errmsg)
 {
 	struct sc_mem sc = { .buf = NULL };
 	char	     *src;
@@ -483,7 +486,7 @@ int jary_compile_file(struct jary *jary, const char *path)
 
 	src[bytes_read] = '\0';
 
-	ret = jary_compile(jary, srcsz, src);
+	ret = jary_compile(jary, srcsz, src, errmsg);
 	goto FINISH;
 
 OPEN_FAIL:
@@ -499,7 +502,10 @@ FINISH:
 	return ret;
 }
 
-int jary_compile(struct jary *jary, size_t length, const char *source)
+int jary_compile(struct jary *jary,
+		 size_t	      length,
+		 const char  *source,
+		 char	    **errmsg)
 {
 	if (jary->code != NULL) {
 		jary->errmsg = "jary context already compiled";

@@ -192,20 +192,25 @@ static inline int match_clbk(struct match_data *data,
 		key    = buf;
 		member = sep + 1;
 
-		assert(def_get(names, key, &view, NULL) == 0);
+		if (def_get(names, key, &view, NULL))
+			goto PANIC;
 
 		event = view.def;
 
-		assert(event != NULL);
+		if (event == NULL)
+			goto PANIC;
+
 		enum jy_ktype type;
 
-		assert(def_get(event, member, &view, &type) == 0);
+		if (def_get(event, member, &view, &type))
+			goto PANIC;
 
 		// TODO: Handle error message
 		if (value_from_cstr(alloc, &view, type, values[i]))
 			goto PANIC;
 
-		assert(def_set(event, member, view, type) == 0);
+		if (def_set(event, member, view, type))
+			goto PANIC;
 	}
 
 	struct runtime ctx = {
@@ -355,6 +360,9 @@ static inline int interpret(struct runtime *ctx,
 			union jy_value v = values[i - 1];
 			state->out	 = sb_add(state->outm, 0, sizeof(v));
 
+			if (state->out == NULL)
+				goto OUT_OF_MEMORY;
+
 			state->out[state->outsz]  = v;
 			state->outsz		 += 1;
 		}
@@ -371,7 +379,8 @@ static inline int interpret(struct runtime *ctx,
 		struct QMbetween *Q = sc_alloc(rbuf, sizeof *Q);
 		uint32_t	  namefield;
 
-		assert(def_find(event, "__name__", &namefield));
+		if (!def_find(event, "__name__", &namefield))
+			goto INVARIANT;
 
 		Q->type	  = QM_BETWEEN;
 		Q->max	  = max;
@@ -419,8 +428,11 @@ static inline int interpret(struct runtime *ctx,
 		uint32_t field2;
 		uint32_t field1;
 
-		assert(def_find(event1, "__name__", &field1));
-		assert(def_find(event2, "__name__", &field2));
+		if (!def_find(event1, "__name__", &field1))
+			goto INVARIANT;
+
+		if (!def_find(event2, "__name__", &field2))
+			goto INVARIANT;
 
 		struct QMjoin *Q = sc_alloc(rbuf, sizeof *Q);
 
@@ -448,7 +460,9 @@ static inline int interpret(struct runtime *ctx,
 		uint32_t	field;
 
 		struct QMbinary *Q = sc_alloc(rbuf, sizeof *Q);
-		assert(def_find(event, "__name__", &field));
+
+		if (!def_find(event, "__name__", &field))
+			goto INVARIANT;
 
 		if (Q == NULL)
 			goto OUT_OF_MEMORY;
@@ -475,7 +489,8 @@ static inline int interpret(struct runtime *ctx,
 
 		uint32_t field;
 
-		assert(def_find(event, "__name__", &field));
+		if (!def_find(event, "__name__", &field))
+			goto INVARIANT;
 
 		struct QMbinary *Q = sc_alloc(rbuf, sizeof *Q);
 
@@ -533,9 +548,9 @@ static inline int interpret(struct runtime *ctx,
 		};
 
 		switch (q_match(db, NULL, callback, &data, Q)) {
-		case -1:
+		case 1:
 			goto OUT_OF_MEMORY;
-		case -2:
+		case 2:
 			goto QUERY_FAILED;
 		}
 
@@ -655,6 +670,10 @@ OUT_OF_MEMORY:
 	goto FINISH;
 QUERY_FAILED:
 	ret = 2;
+	goto FINISH;
+
+INVARIANT:
+	ret = 3;
 
 FINISH:
 	sc_free(&bump);

@@ -68,7 +68,7 @@ TEST(JaryModuleTest, Simple)
 	ASSERT_EQ(jary_open(&J, NULL), JARY_OK);
 	ASSERT_EQ(jary_modulepath(J, MODULE_DIR), JARY_OK);
 
-	ASSERT_EQ(jary_compile_file(J, SIMPLE_JARY_PATH), JARY_OK);
+	ASSERT_EQ(jary_compile_file(J, SIMPLE_JARY_PATH, NULL), JARY_OK);
 
 	for (int i = 0; i < 10; ++i) {
 		ASSERT_EQ(jary_event(J, "user", &ev), JARY_OK);

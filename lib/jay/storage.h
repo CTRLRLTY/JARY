@@ -128,6 +128,7 @@ static inline int q_match(struct sqlite3 *db,
 			  void		 *data,
 			  struct Qmatch	  Q)
 {
+	int	      ret = 0;
 	int	      sz  = 0;
 	struct sc_mem buf = { .buf = NULL };
 
@@ -159,8 +160,11 @@ static inline int q_match(struct sqlite3 *db,
 		union jy_value event;
 		enum jy_ktype  type;
 
-		assert(def_get(names, Q->table, &event, &type) == 0);
-		assert(type == JY_K_EVENT);
+		if (def_get(names, Q->table, &event, &type))
+			goto INV_QUERY;
+
+		if (type != JY_K_EVENT)
+			goto INV_QUERY;
 
 		if (!exists(eventsz, events, event.def)) {
 			events[eventsz]	     = event.def;
@@ -197,8 +201,11 @@ static inline int q_match(struct sqlite3 *db,
 		union jy_value event;
 		enum jy_ktype  type;
 
-		assert(def_get(names, J->tbl_right, &event, &type) == 0);
-		assert(type == JY_K_EVENT);
+		if (def_get(names, J->tbl_right, &event, &type))
+			goto INV_QUERY;
+
+		if (type != JY_K_EVENT)
+			goto INV_QUERY;
 
 		if (!exists(eventsz, events, event.def)) {
 			events[eventsz]	     = event.def;
@@ -331,16 +338,20 @@ static inline int q_match(struct sqlite3 *db,
 	sql[sz - 3] = '\0';
 
 	if (sqlite3_exec(db, sql, callback, data, errmsg) != SQLITE_OK)
-		goto TX_FAILED;
+		goto INV_QUERY;
 
-	sc_free(&buf);
-	return 0;
+	goto FINISH;
+
 OUT_OF_MEMORY:
+	ret = 1;
+	goto FINISH;
+
+INV_QUERY:
+	ret = 2;
+
+FINISH:
 	sc_free(&buf);
-	return -1;
-TX_FAILED:
-	sc_free(&buf);
-	return -2;
+	return ret;
 }
 
 #endif // JAYVM_Q_H

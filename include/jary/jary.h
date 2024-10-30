@@ -70,8 +70,8 @@ int jary_rule_clbk(struct jary *jary,
 		   int (*callback)(void *, const struct jyOutput *),
 		   void *data);
 
-int jary_compile_file(struct jary *, const char *path);
-int jary_compile(struct jary *, size_t size, const char *source);
+int jary_compile_file(struct jary *, const char *path, char **errmsg);
+int jary_compile(struct jary *, size_t size, const char *source, char **errmsg);
 int jary_execute(struct jary *);
 
 void jary_output_len(const struct jyOutput *output, unsigned int *length);

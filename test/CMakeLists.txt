@@ -91,6 +91,7 @@ target_compile_options( jary_test
 
 if ( SANITIZE AND UNIX AND CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$" )
         target_link_options( jary_test BEFORE PRIVATE -fsanitize=address -fno-omit-frame-pointer )
+        target_link_options( exec_test BEFORE PRIVATE -fsanitize=address -fno-omit-frame-pointer )
 endif()
 
 

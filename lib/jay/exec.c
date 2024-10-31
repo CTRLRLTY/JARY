@@ -304,7 +304,7 @@ static inline int interpret(struct runtime *ctx,
 
 		union jy_value retval;
 
-		func->func(paramsz, args, &retval);
+		func->func(state, paramsz, args, &retval);
 
 		switch (func->return_type) {
 		case JY_K_LONG:

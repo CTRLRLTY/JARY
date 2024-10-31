@@ -29,6 +29,12 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#ifdef __GNUC__
+#	define JARY_API __attribute__((visibility("default")))
+#else
+#	define JARY_API
+#endif // __GNUC__
+
 #include "jary/jary.h"
 
 #include "ast.h"
@@ -51,6 +57,7 @@ struct exec {
 	const struct jy_asts  *asts;
 	const struct jy_jay   *jay;
 	const struct tkn_errs *errs;
+	char		      *path;
 };
 
 struct jyOutput {
@@ -166,9 +173,9 @@ NEXT_TKN:
 #undef PTR
 }
 
-static inline int create_event_table(struct sqlite3	  *db,
-				     const char		  *name,
-				     const struct jy_defs *event)
+static inline int crt_evtbl(struct sqlite3	 *db,
+			    const char		 *name,
+			    const struct jy_defs *event)
 {
 	int	      ret = JARY_OK;
 	struct sc_mem m	  = { .buf = NULL };
@@ -235,11 +242,11 @@ FINISH:
 	return ret;
 }
 
-static inline int insert_event(struct sqlite3 *db,
-			       const char     *name,
-			       uint32_t	       length,
-			       const char    **keys,
-			       const char    **values)
+static inline int ins_evt(struct sqlite3 *db,
+			  const char	 *name,
+			  uint32_t	  length,
+			  const char	**keys,
+			  const char	**values)
 {
 	int	      ret = JARY_OK;
 	struct sc_mem m	  = { .buf = NULL };
@@ -354,6 +361,13 @@ int jary_open(struct jary **jary, struct sqlite3 *db)
 	} else {
 		J->db = db;
 	}
+
+	J->code = sc_alloc(&J->sc, sizeof(*J->code));
+
+	if (J->code == NULL)
+		goto OUT_OF_MEMORY;
+
+	J->code->path = "source";
 
 	if (sc_reap(&J->sc, &J->sb, (free_t) sb_free))
 		goto OUT_OF_MEMORY;
@@ -568,7 +582,11 @@ int jary_compile_file(struct jary *jary, const char *path, char **errmsg)
 	srcsz = ftell(file);
 	rewind(file);
 
-	src		    = sc_alloc(&sc, srcsz + 1);
+	src = sc_alloc(&sc, srcsz + 1);
+
+	if (src == NULL)
+		goto OUT_OF_MEMORY;
+
 	uint32_t bytes_read = fread(src, sizeof(char), srcsz, file);
 
 	if (bytes_read < srcsz)
@@ -576,12 +594,22 @@ int jary_compile_file(struct jary *jary, const char *path, char **errmsg)
 
 	src[bytes_read] = '\0';
 
+	sc_strfmt(&jary->sc, &jary->code->path, "%s", path);
+
+	if (jary->code->path == NULL)
+		goto OUT_OF_MEMORY;
+
 	ret = jary_compile(jary, srcsz, src, errmsg);
 	goto FINISH;
 
 OPEN_FAIL:
 	jary->errmsg = "unable to open jary file";
 	return JARY_ERROR;
+
+OUT_OF_MEMORY:
+	jary->errmsg = "out of memory";
+	ret	     = JARY_ERR_OOM;
+	goto FINISH;
 
 READ_FAIL:
 	jary->errmsg = "unable to read jary file";
@@ -601,12 +629,7 @@ int jary_compile(struct jary *jary,
 	struct sc_mem  bump = { .buf = NULL };
 	struct sb_mem *sb   = &jary->sb;
 
-	if (jary->code != NULL) {
-		jary->errmsg = "jary context already compiled";
-		return JARY_ERR_COMPILE;
-	}
-
-	struct exec *code = sc_alloc(&jary->sc, sizeof(*code));
+	struct exec *code = jary->code;
 
 	size_t memsz = sizeof(*code->asts) + sizeof(*code->tkns)
 		     + sizeof(*code->jay) + sizeof(*code->errs);
@@ -673,10 +696,8 @@ int jary_compile(struct jary *jary,
 	}
 
 	for (size_t i = 0; i < eventsz; ++i)
-		if (create_event_table(jary->db, table[i], events[i]))
+		if (crt_evtbl(jary->db, table[i], events[i]))
 			goto CREATE_TABLE_FAIL;
-
-	jary->code = code;
 
 	goto FINISH;
 
@@ -687,13 +708,13 @@ COMPILE_FAIL: {
 	if (errmsg == NULL)
 		goto FINISH;
 
-	int   bufsz = prerrors(errs, tkns, "source", 0, NULL);
+	int   bufsz = prerrors(errs, tkns, code->path, 0, NULL);
 	char *buf   = calloc(bufsz, 1);
 
 	if (buf == NULL)
 		goto OUT_OF_MEMORY;
 
-	prerrors(errs, tkns, "source", bufsz, buf);
+	prerrors(errs, tkns, code->path, bufsz, buf);
 	*errmsg = buf;
 
 	goto FINISH;
@@ -822,7 +843,7 @@ int jary_execute(struct jary *jary)
 		const char **vals  = jary->ev_vals[i];
 		uint8_t	     colsz = jary->ev_colsz[i];
 
-		if (insert_event(jary->db, table, colsz, cols, vals))
+		if (ins_evt(jary->db, table, colsz, cols, vals))
 			goto INSERT_FAIL;
 	}
 

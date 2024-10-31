@@ -124,7 +124,7 @@ TEST(ExecTest, MarkModule)
 		ofunc = mark->vals[id].func;
 
 		// calling mark function -> mark.mark()
-		ASSERT_EQ(ofunc->func(1, &key, NULL), 0);
+		ASSERT_EQ(ofunc->func(NULL, 1, &key, NULL), 0);
 	}
 
 	{
@@ -137,7 +137,7 @@ TEST(ExecTest, MarkModule)
 		ofunc = mark->vals[id].func;
 
 		// calling count function -> mark.count()
-		ASSERT_EQ(ofunc->func(1, &key, &result), 0);
+		ASSERT_EQ(ofunc->func(NULL, 1, &key, &result), 0);
 		ASSERT_EQ(result.i64, 1);
 	}
 
@@ -150,7 +150,7 @@ TEST(ExecTest, MarkModule)
 		ofunc = mark->vals[id].func;
 
 		// calling count function -> mark.unmark()
-		ASSERT_EQ(ofunc->func(1, &key, NULL), 0);
+		ASSERT_EQ(ofunc->func(NULL, 1, &key, NULL), 0);
 	}
 
 	int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE
@@ -182,7 +182,7 @@ TEST(ExecTest, MarkModule)
 		ofunc = mark->vals[id].func;
 
 		// calling count function -> mark.count()
-		ASSERT_EQ(ofunc->func(1, &key, &result), 0);
+		ASSERT_EQ(ofunc->func(NULL, 1, &key, &result), 0);
 		ASSERT_EQ(result.i64, 1);
 	}
 
@@ -270,7 +270,7 @@ TEST(ExecTest, Join)
 		ofunc = mark->vals[id].func;
 
 		// calling count function -> mark.count()
-		ASSERT_EQ(ofunc->func(1, &key, &result), 0);
+		ASSERT_EQ(ofunc->func(NULL, 1, &key, &result), 0);
 		ASSERT_EQ(result.i64, 2);
 	}
 
@@ -345,7 +345,7 @@ TEST(ExecTest, Within)
 	ofunc = mark->vals[id].func;
 
 	// calling count function -> mark.count()
-	ASSERT_EQ(ofunc->func(1, &key, &result), 0);
+	ASSERT_EQ(ofunc->func(NULL, 1, &key, &result), 0);
 	ASSERT_EQ(result.i64, 1);
 
 	sqlite3_close_v2(db);
@@ -418,7 +418,7 @@ TEST(ExecTest, Between)
 	ofunc = mark->vals[id].func;
 
 	// calling count function -> mark.count()
-	ASSERT_EQ(ofunc->func(1, &key, &result), 0);
+	ASSERT_EQ(ofunc->func(NULL, 1, &key, &result), 0);
 	ASSERT_EQ(result.i64, 1);
 
 	sqlite3_close_v2(db);

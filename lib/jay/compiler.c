@@ -1789,10 +1789,10 @@ static inline bool _import_stmt(struct sc_mem	     *alloc,
 	strncat(path, lexeme, lexsz);
 
 	struct jy_defs def     = { .keys = NULL };
-	int	       errcode = jry_module_load(path, &def);
+	const char    *msg     = NULL;
+	int	       errcode = jry_dlload(path, &def, &msg);
 
 	if (errcode != 0) {
-		const char *msg = jry_module_error(errcode);
 		tkn_error(errs, msg, tkn, tkn);
 		goto PANIC;
 	}
@@ -1902,7 +1902,8 @@ static void free_jay(struct jy_jay *ctx)
 
 		switch (type) {
 		case JY_K_MODULE:
-			jry_module_unload(v.module);
+			// TODO: seperate unloading from free
+			jry_dlunload(v.module, NULL);
 			break;
 		default:
 			continue;

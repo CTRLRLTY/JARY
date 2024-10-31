@@ -138,7 +138,10 @@ OUT_OF_MEMORY:
 	return -1;
 }
 
-static int mark(int argc, union jy_value *argv, union jy_value *result)
+static int mark(struct jy_state *state,
+		int		 argc,
+		union jy_value	*argv,
+		union jy_value	*result)
 {
 	(void) argc;
 	(void) result;
@@ -175,7 +178,10 @@ static int mark(int argc, union jy_value *argv, union jy_value *result)
 	return 0;
 }
 
-static int unmark(int argc, union jy_value *argv, union jy_value *result)
+static int unmark(struct jy_state *state,
+		  int		   argc,
+		  union jy_value  *argv,
+		  union jy_value  *result)
 {
 	(void) argc;
 	(void) result;
@@ -197,7 +203,10 @@ static int unmark(int argc, union jy_value *argv, union jy_value *result)
 	return 0;
 }
 
-static int count(int argc, union jy_value *argv, union jy_value *result)
+static int count(struct jy_state *state,
+		 int		  argc,
+		 union jy_value	 *argv,
+		 union jy_value	 *result)
 {
 	(void) argc;
 
@@ -214,22 +223,22 @@ static int count(int argc, union jy_value *argv, union jy_value *result)
 	return 0;
 }
 
-int module_load(struct jy_module *ctx)
+int module_load(struct jy_module *ctx, const char **errmsg)
 {
 	enum jy_ktype params = JY_K_STR;
 
-	def_func(ctx, "mark", JY_K_ACTION, 1, &params, (jy_funcptr_t) mark);
-	def_func(ctx, "unmark", JY_K_ACTION, 1, &params, (jy_funcptr_t) unmark);
-	def_func(ctx, "count", JY_K_LONG, 1, &params, (jy_funcptr_t) count);
+	jay_def_func(ctx, "mark", JY_K_ACTION, 1, &params, mark);
+	jay_def_func(ctx, "unmark", JY_K_ACTION, 1, &params, unmark);
+	jay_def_func(ctx, "count", JY_K_LONG, 1, &params, count);
 
 	return 0;
 }
 
-int module_unload(struct jy_module *ctx)
+int module_unload(struct jy_module *ctx, const char **errmsg)
 {
-	del_func(ctx, "mark");
-	del_func(ctx, "unmark");
-	del_func(ctx, "count");
+	jay_del_func(ctx, "mark");
+	jay_del_func(ctx, "unmark");
+	jay_del_func(ctx, "count");
 
 	free_table(marked);
 

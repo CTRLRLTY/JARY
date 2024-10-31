@@ -34,9 +34,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 struct jy_defs;
 
-int jry_module_load(const char *path, struct jy_defs *def);
+int jry_dlload(const char *path, struct jy_defs *def, const char **errmsg);
 
-int jry_module_unload(struct jy_defs *def);
+int jry_dlunload(struct jy_defs *def, const char **errmsg);
 
-const char *jry_module_error(int err);
 #endif // JAYVM_DLOAD_H

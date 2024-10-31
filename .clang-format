@@ -60,6 +60,8 @@ AlwaysBreakTemplateDeclarations: MultiLine
 AttributeMacros:
   - __capability
   - __use_result
+  - JAY_API
+  - JARY_API
 BinPackArguments: true
 BinPackParameters: false
 BitFieldColonSpacing: Both

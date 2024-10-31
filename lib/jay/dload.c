@@ -29,47 +29,37 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#ifdef __GNUC__
+#	define JAY_API __attribute__((visibility("default")))
+#else
+#	define JAY_API
+#endif // __GNUC__
+
 #include "dload.h"
 
 #include "jary/defs.h"
 #include "jary/memory.h"
+#include "jary/modules.h"
 
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define ERROR_MSG_COUNT_LIMIT 128
-
-#define TO_INDEX(__status)    ((0x7F000000 & (__status)) >> 24)
-#define TO_ERROR(__status)    (((__status) << 24) | 0x80000000)
-
-#define MSG_UNKNOWN	      0
-#define MSG_INV_MODULE	      1
-#define MSG_LOAD_FAIL	      2
-#define MSG_DYNAMIC	      (ERROR_MSG_COUNT_LIMIT - 1)
-
-static const char *error_reason[ERROR_MSG_COUNT_LIMIT] = {
-	[MSG_UNKNOWN]	 = "unknown",
-	[MSG_INV_MODULE] = "module does not exist",
-	[MSG_LOAD_FAIL]	 = "load failed",
-
-	// reserved for dynamic error
-	[MSG_DYNAMIC] = NULL,
-};
-
 struct jy_module {
 	struct jy_defs *def;
+	const char     *errmsg;
 };
 
-typedef int (*loadfn_t)(struct jy_module *);
-typedef int (*unloadfn_t)(struct jy_module *);
+typedef int (*loadfn_t)(struct jy_module *, const char **errmsg);
+typedef int (*unloadfn_t)(struct jy_module *, const char **errmsg);
 
 #ifdef __unix__
 #	include <dlfcn.h>
 
-int jry_module_load(const char *path, struct jy_defs *def)
+int jry_dlload(const char *path, struct jy_defs *def, const char **msg)
 {
+	int	 ret = 0;
 	loadfn_t load;
 
 	int  pathsz   = strlen(path);
@@ -94,22 +84,33 @@ int jry_module_load(const char *path, struct jy_defs *def)
 	const char k[] = "__handle__";
 
 	if (def_add(def, k, handle, JY_K_HANDLE) != 0)
-		goto DLOAD_ERROR;
+		goto OUT_OF_MEMORY;
 
-	struct jy_module ctx	= { .def = def };
-	int		 status = load(&ctx);
+	struct jy_module ctx = { .def = def, .errmsg = "not an error" };
 
-	if (status != 0)
-		return TO_ERROR(MSG_LOAD_FAIL);
+	if (load(&ctx, msg) != JAY_OK)
+		goto LOAD_FAIL;
 
-	return 0;
+	goto FINISH;
+
+OUT_OF_MEMORY:
+	ret  = 1;
+	*msg = "out of memory";
+	goto FINISH;
+
+LOAD_FAIL:
+	ret = 2;
+	goto FINISH;
 
 DLOAD_ERROR:
-	error_reason[MSG_DYNAMIC] = dlerror();
-	return TO_ERROR(MSG_DYNAMIC);
+	*msg = dlerror();
+	ret  = 3;
+
+FINISH:
+	return ret;
 }
 
-int jry_module_unload(struct jy_defs *def)
+int jry_dlunload(struct jy_defs *def, const char **errmsg)
 {
 	int status = 0;
 
@@ -134,7 +135,7 @@ int jry_module_unload(struct jy_defs *def)
 		goto CLOSE;
 
 	struct jy_module ctx = { .def = def };
-	status		     = unload(&ctx);
+	status		     = unload(&ctx, errmsg);
 
 CLOSE: {
 	dlclose(handle.handle);
@@ -143,27 +144,20 @@ FINISH:
 	return status;
 }
 
-const char *jry_module_error(int errcode)
-{
-	int	    err = TO_INDEX(errcode);
-	const char *msg = error_reason[err];
-
-	if (msg == NULL)
-		return error_reason[MSG_UNKNOWN];
-
-	return msg;
-}
-
 #endif // __unix__
 
 // > user modules API
-int def_func(struct jy_module	 *ctx,
-	     const char		 *key,
-	     enum jy_ktype	  return_type,
-	     uint8_t		  param_size,
-	     const enum jy_ktype *param_types,
-	     jy_funcptr_t	  func)
+JAY_API int jay_def_func(struct jy_module    *ctx,
+			 const char	     *key,
+			 enum jy_ktype	      return_type,
+			 uint8_t	      param_size,
+			 const enum jy_ktype *param_types,
+			 int (*func)(struct jy_state *,
+				     int,
+				     union jy_value *,
+				     union jy_value *))
 {
+	int	       ret = JAY_OK;
 	union jy_value v;
 
 	size_t parambytes = sizeof(*param_types) * param_size;
@@ -171,7 +165,7 @@ int def_func(struct jy_module	 *ctx,
 	v.func		  = jry_alloc(bytes);
 
 	if (v.func == NULL)
-		return TO_ERROR(MSG_UNKNOWN);
+		goto OUT_OF_MEMORY;
 
 	v.func->return_type = return_type;
 	v.func->param_size  = param_size;
@@ -180,29 +174,53 @@ int def_func(struct jy_module	 *ctx,
 	memcpy(v.func->param_types, param_types, parambytes);
 
 	if (def_add(ctx->def, key, v, JY_K_FUNC) != 0)
-		return TO_ERROR(MSG_UNKNOWN);
+		goto OUT_OF_MEMORY;
 
-	return 0;
+	ctx->errmsg = "not an error";
+	goto FINISH;
+
+OUT_OF_MEMORY:
+	ctx->errmsg = "out of memory";
+	ret	    = JAY_ERR_OOM;
+	goto FINISH;
+
+FINISH:
+	return ret;
 }
 
-int del_func(struct jy_module *ctx, const char *key)
+JAY_API int jay_del_func(struct jy_module *ctx, const char *key)
 {
+	int	 ret = JAY_OK;
 	uint32_t id;
 
 	if (!def_find(ctx->def, key, &id))
-		return TO_ERROR(MSG_UNKNOWN);
+		goto OUT_OF_MEMORY;
 
 	if (ctx->def->types[id] != JY_K_FUNC)
-		return TO_ERROR(MSG_UNKNOWN);
+		goto INV_FUNC;
 
 	jry_free(ctx->def->vals[id].func);
 
-	return 0;
+	ctx->errmsg = "not an error";
+	goto FINISH;
+
+INV_FUNC:
+	ctx->errmsg = "not function";
+	ret	    = JAY_ERR_MISMATCH;
+	goto FINISH;
+
+OUT_OF_MEMORY:
+	ctx->errmsg = "out of memory";
+	ret	    = JAY_ERR_OOM;
+	goto FINISH;
+
+FINISH:
+	return ret;
 }
 
-const char *error_message(int status)
+JAY_API const char *jay_errmsg(struct jy_module *ctx)
 {
-	return jry_module_error(status);
+	return ctx->errmsg;
 }
 
 // < user modules API

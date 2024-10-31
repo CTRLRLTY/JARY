@@ -31,11 +31,10 @@ set( MODULE_SOURCES
         mark.c
 )
 
-
 foreach( SOURCE_PATH IN LISTS MODULE_SOURCES )
         cmake_path( GET SOURCE_PATH STEM LIBRARY_NAME )
         add_library(${LIBRARY_NAME} SHARED ${SOURCE_PATH})
-        install( TARGETS ${LIBRARY_NAME} LIBRARY COMPONENT jary )
+        install( TARGETS ${LIBRARY_NAME} LIBRARY COMPONENT ${LIBRARY_NAME} )
 
         target_include_directories( ${LIBRARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/include/ )
 

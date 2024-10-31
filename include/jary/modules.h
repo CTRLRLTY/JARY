@@ -36,17 +36,32 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
 
+#ifndef JAY_API
+#	define JAY_API
+#endif
+
+#define JAY_OK		 0x0
+#define JAY_ERR_OOM	 0x101
+#define JAY_ERR_MISMATCH 0x102
+
 struct jy_module;
 
-extern int def_func(struct jy_module	*ctx,
-		    const char		*key,
-		    enum jy_ktype	 return_type,
-		    uint8_t		 param_size,
-		    const enum jy_ktype *param_types,
-		    jy_funcptr_t	 func);
+JAY_API int jay_def_func(struct jy_module    *ctx,
+			 const char	     *key,
+			 enum jy_ktype	      return_type,
+			 uint8_t	      param_size,
+			 const enum jy_ktype *param_types,
+			 int (*func)(struct jy_state *,
+				     int,
+				     union jy_value *,
+				     union jy_value *));
 
-extern int del_func(struct jy_module *ctx, const char *key);
+JAY_API int jay_del_func(struct jy_module *ctx, const char *key);
 
-extern const char *error_message(int status);
+JAY_API const char *jay_errmsg(struct jy_module *ctx);
+
+int module_load(struct jy_module *ctx, const char **errmsg);
+
+int module_unload(struct jy_module *ctx, const char **errmsg);
 
 #endif // JAYVM_MODULES_H

@@ -85,11 +85,10 @@ union jy_value {
 	struct jy_desc	   dscptr;
 	long		   i64;
 	unsigned long	   u64;
+	uint8_t		   boolean;
 	unsigned long	   ofs;
 	struct jy_time_ofs timeofs;
 };
-
-typedef int (*jy_funcptr_t)(int, union jy_value *, union jy_value *);
 
 struct jy_str {
 	// size does not include '\0'
@@ -98,10 +97,12 @@ struct jy_str {
 	char	 cstr[];
 };
 
+struct jy_state;
+
 struct jy_func {
 	enum jy_ktype return_type;
 	uint8_t	      param_size;
-	jy_funcptr_t  func;
+	int (*func)(struct jy_state *, int, union jy_value *, union jy_value *);
 	enum jy_ktype param_types[];
 };
 

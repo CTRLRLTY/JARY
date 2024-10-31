@@ -136,23 +136,43 @@ static inline int q_match(struct sqlite3 *db,
 	struct QMbase **qs    = Q.qlist;
 	struct jy_defs *names = Q.names;
 
-	char		       *sql;
-	const struct QMjoin    *joins[qlen];
-	const struct QMbinary  *binary[qlen];
-	const struct QMbetween *between[qlen];
-	const struct QMwithin  *within[qlen];
-	const struct jy_defs   *events[qlen * 2];
-	const char	       *eventnames[qlen * 2];
+	char		     *sql;
+	size_t		      arsz  = sizeof(void *) * qlen;
+	const struct QMjoin **joins = sc_alloc(&buf, arsz);
+
+	if (joins == NULL)
+		goto OUT_OF_MEMORY;
+
+	const struct QMbinary **binary = sc_alloc(&buf, arsz);
+
+	if (binary == NULL)
+		goto OUT_OF_MEMORY;
+
+	const struct QMbetween **between = sc_alloc(&buf, arsz);
+
+	if (between == NULL)
+		goto OUT_OF_MEMORY;
+
+	const struct QMwithin **within = sc_alloc(&buf, arsz);
+
+	if (within == NULL)
+		goto OUT_OF_MEMORY;
+
+	const struct jy_defs **events = sc_alloc(&buf, arsz * 2);
+
+	if (events == NULL)
+		goto OUT_OF_MEMORY;
+
+	const char **eventnames = sc_alloc(&buf, arsz * 2);
+
+	if (eventnames == NULL)
+		goto OUT_OF_MEMORY;
 
 	int eventsz   = 0;
 	int joinsz    = 0;
 	int binsz     = 0;
 	int withinsz  = 0;
 	int betweensz = 0;
-
-	memset(joins, 0, sizeof(joins));
-	memset(binary, 0, sizeof(binary));
-	memset(events, 0, sizeof(events));
 
 	for (int i = 0; i < qlen; ++i) {
 		const struct QMbase *Q = qs[i];
@@ -223,7 +243,7 @@ static inline int q_match(struct sqlite3 *db,
 
 	for (int i = 0; i < eventsz; ++i) {
 		const struct jy_defs *event = events[i];
-		char		     *keys[eventsz];
+		char **keys = sc_alloc(&buf, sizeof(void *) * event->size);
 
 		const char *t	= eventnames[i];
 		int	    len = def_keys(event, event->size, keys);

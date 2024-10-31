@@ -83,12 +83,12 @@ struct jary {
 	uint16_t  r_clbk_sz;
 };
 
-static inline int prtknln(char	  **lexemes,
-			  uint32_t *lines,
-			  uint32_t  lexn,
-			  uint32_t  line,
-			  int	    bufsz,
-			  char	   *buf)
+static inline int prtknln(char		**lexemes,
+			  const uint32_t *lines,
+			  uint32_t	  lexn,
+			  uint32_t	  line,
+			  int		  bufsz,
+			  char		 *buf)
 {
 #define SIZE() bufsz ? bufsz - count : 0
 #define PTR()  count ? buf + count : buf
@@ -131,35 +131,39 @@ static inline int prerrors(const struct tkn_errs *errs,
 #define PTR()  sz ? buf + sz : buf
 	int sz = 0;
 
+	char	      **lexemes = tkns->lexemes;
+	const uint32_t *lines	= tkns->lines;
+	const uint32_t *lineofs = tkns->ofs;
+	size_t		tknsz	= tkns->size;
+
 	for (uint32_t i = 0; i < errs->size; ++i) {
-		uint32_t    from       = errs->from[i];
-		uint32_t    to	       = errs->to[i];
-		uint32_t    start_line = tkns->lines[to];
-		uint32_t    ofs	       = tkns->ofs[to];
-		const char *msg	       = errs->msgs[i];
+		uint32_t    from   = errs->from[i];
+		uint32_t    to	   = errs->to[i];
+		uint32_t    startl = lines[to];
+		uint32_t    ofs	   = lineofs[to];
+		const char *msg	   = errs->msgs[i];
 
 		sz += snprintf(PTR(), SIZE(), "%s:%d:%d error: %s\n", path,
-			       start_line, ofs, msg);
+			       startl, ofs, msg);
 
-		uint32_t pline = tkns->lines[from];
+		uint32_t pline = lines[from];
 
 		sz += snprintf(PTR(), SIZE(), "%5d | ", pline);
 
-		sz += prtknln(tkns->lexemes, tkns->lines, tkns->size, pline,
-			      SIZE(), PTR());
+		sz += prtknln(lexemes, lines, tknsz, pline, SIZE(), PTR());
 
 		sz += snprintf(PTR(), SIZE(), "\n");
 
 		for (uint32_t j = from; j <= to; ++j) {
-			uint32_t line = tkns->lines[j];
+			uint32_t line = lines[j];
 
 			if (line == pline)
 				goto NEXT_TKN;
 
 			sz += snprintf(PTR(), SIZE(), "%5d | ", line);
 
-			sz += prtknln(tkns->lexemes, tkns->lines, tkns->size,
-				      line, SIZE(), PTR());
+			sz += prtknln(lexemes, lines, tknsz, line, SIZE(),
+				      PTR());
 			sz += snprintf(PTR(), SIZE(), "\n");
 NEXT_TKN:
 			pline = line;
@@ -201,6 +205,8 @@ static inline int crt_evtbl(struct sqlite3	 *db,
 		case JY_K_STR:
 			type = "TEXT";
 			break;
+		case JY_K_BOOL:
+		case JY_K_ULONG:
 		case JY_K_LONG:
 			type = "INTEGER";
 			break;
@@ -393,22 +399,21 @@ int jary_open(struct jary **jary, struct sqlite3 *db)
 	if (sc_reap(&J->sc, &J->r_clbks, (free_t) ifree))
 		goto OUT_OF_MEMORY;
 
-	*jary = J;
-	return JARY_OK;
+	ret = JARY_OK;
+	goto FINISH;
 
 OPEN_ERROR:
 	ret = JARY_ERROR;
+
 	// TODO: Handle close?
 	sqlite3_close_v2(J->db);
-	goto PANIC;
+	goto FINISH;
 
 OUT_OF_MEMORY:
 	ret = JARY_ERR_OOM;
 
-PANIC:
-	free(J);
-	*jary = NULL;
-
+FINISH:
+	*jary = J;
 	return ret;
 }
 
@@ -425,6 +430,7 @@ int jary_modulepath(struct jary *jary, const char *path)
 		return JARY_ERR_OOM;
 	}
 
+	jary->errmsg = "not an error";
 	return JARY_OK;
 }
 
@@ -432,8 +438,10 @@ int jary_event(struct jary *J, const char *name, unsigned int *event)
 {
 	int ret = JARY_OK;
 
-	if (J->code == NULL)
+	if (J->code == NULL) {
+		J->errmsg = "missing code in context";
 		return JARY_ERR_NOTEXIST;
+	}
 
 	assert(J->code->jay);
 	assert(J->code->jay->names);
@@ -473,16 +481,255 @@ int jary_event(struct jary *J, const char *name, unsigned int *event)
 	if (J->ev_vals == NULL)
 		goto OUT_OF_MEMORY;
 
+	J->errmsg = "not an error";
 	goto FINISH;
 
 OUT_OF_MEMORY:
-	ret = JARY_ERR_OOM;
+	J->errmsg = "out of memory";
+	ret	  = JARY_ERR_OOM;
 
 FINISH:
 	*event	  = J->ev_sz;
 	J->ev_sz += 1;
 
 	return ret;
+}
+
+JARY_API int jary_field_long(struct jary *jary,
+			     unsigned int event,
+			     const char	 *field,
+			     long	  number)
+{
+	assert(event <= jary->ev_sz);
+
+	const char     *table = jary->ev_tables[event];
+	struct sc_mem  *sc    = &jary->sc;
+	struct jy_defs *names = jary->code->jay->names;
+	union jy_value	view;
+	enum jy_ktype	type;
+
+	if (def_get(names, table, &view, NULL)) {
+		jary->errmsg = "event not expected";
+		return JARY_ERR_NOTEXIST;
+	}
+
+	if (def_get(view.def, field, NULL, &type)) {
+		jary->errmsg = "field not expected";
+		return JARY_ERR_NOTEXIST;
+	}
+
+	if (type != JY_K_LONG) {
+		jary->errmsg = "not a field string";
+		return JARY_ERR_MISMATCH;
+	}
+
+	char *col;
+	char *val;
+
+	uint8_t	     colsz = jary->ev_colsz[event];
+	const char **cols  = jary->ev_cols[event];
+	const char **vals  = jary->ev_vals[event];
+
+	sc_strfmt(sc, &col, "%s", field);
+
+	if (col == NULL)
+		goto OUT_OF_MEMORY;
+
+	sc_strfmt(sc, &val, "%ld", number);
+
+	if (val == NULL)
+		goto OUT_OF_MEMORY;
+
+	for (size_t i = 0; i < colsz; ++i) {
+		const char *f = cols[i];
+
+		if (*f == *field && strcmp(field, f) == 0) {
+			cols[i] = col;
+			vals[i] = val;
+			goto FINISH;
+		}
+	}
+
+	jry_mem_push(vals, colsz, val);
+
+	if (vals == NULL)
+		goto OUT_OF_MEMORY;
+
+	jry_mem_push(cols, colsz, col);
+
+	if (cols == NULL)
+		goto OUT_OF_MEMORY;
+
+	jary->errmsg = "not an error";
+	goto FINISH;
+
+OUT_OF_MEMORY:
+	jary->errmsg = "out of memory";
+
+FINISH:
+	colsz		      += 1;
+	jary->ev_colsz[event]  = colsz;
+	jary->ev_cols[event]   = cols;
+	jary->ev_vals[event]   = vals;
+	return JARY_OK;
+}
+
+JARY_API int jary_field_ulong(struct jary  *jary,
+			      unsigned int  event,
+			      const char   *field,
+			      unsigned long number)
+{
+	assert(event <= jary->ev_sz);
+
+	const char     *table = jary->ev_tables[event];
+	struct sc_mem  *sc    = &jary->sc;
+	struct jy_defs *names = jary->code->jay->names;
+	union jy_value	view;
+	enum jy_ktype	type;
+
+	if (def_get(names, table, &view, NULL)) {
+		jary->errmsg = "event not expected";
+		return JARY_ERR_NOTEXIST;
+	}
+
+	if (def_get(view.def, field, NULL, &type)) {
+		jary->errmsg = "field not expected";
+		return JARY_ERR_NOTEXIST;
+	}
+
+	if (type != JY_K_ULONG) {
+		jary->errmsg = "not a field string";
+		return JARY_ERR_MISMATCH;
+	}
+
+	char *col;
+	char *val;
+
+	uint8_t	     colsz = jary->ev_colsz[event];
+	const char **cols  = jary->ev_cols[event];
+	const char **vals  = jary->ev_vals[event];
+
+	sc_strfmt(sc, &col, "%s", field);
+
+	if (col == NULL)
+		goto OUT_OF_MEMORY;
+
+	sc_strfmt(sc, &val, "%lu", number);
+
+	if (val == NULL)
+		goto OUT_OF_MEMORY;
+
+	for (size_t i = 0; i < colsz; ++i) {
+		const char *f = cols[i];
+
+		if (*f == *field && strcmp(field, f) == 0) {
+			cols[i] = col;
+			vals[i] = val;
+			goto FINISH;
+		}
+	}
+
+	jry_mem_push(vals, colsz, val);
+
+	if (vals == NULL)
+		goto OUT_OF_MEMORY;
+
+	jry_mem_push(cols, colsz, col);
+
+	if (cols == NULL)
+		goto OUT_OF_MEMORY;
+
+	jary->errmsg = "not an error";
+	goto FINISH;
+
+OUT_OF_MEMORY:
+	jary->errmsg = "out of memory";
+
+FINISH:
+	colsz		      += 1;
+	jary->ev_colsz[event]  = colsz;
+	jary->ev_cols[event]   = cols;
+	jary->ev_vals[event]   = vals;
+	return JARY_OK;
+}
+
+JARY_API int jary_field_bool(struct jary *jary,
+			     unsigned int event,
+			     const char	 *field,
+			     long	  boolv)
+{
+	assert(event <= jary->ev_sz);
+
+	const char     *table = jary->ev_tables[event];
+	struct sc_mem  *sc    = &jary->sc;
+	struct jy_defs *names = jary->code->jay->names;
+	union jy_value	view;
+	enum jy_ktype	type;
+
+	if (def_get(names, table, &view, NULL)) {
+		jary->errmsg = "event not expected";
+		return JARY_ERR_NOTEXIST;
+	}
+
+	if (def_get(view.def, field, NULL, &type)) {
+		jary->errmsg = "field not expected";
+		return JARY_ERR_NOTEXIST;
+	}
+
+	if (type != JY_K_BOOL) {
+		jary->errmsg = "not a field string";
+		return JARY_ERR_MISMATCH;
+	}
+
+	char *col;
+	char *val;
+
+	uint8_t	     colsz = jary->ev_colsz[event];
+	const char **cols  = jary->ev_cols[event];
+	const char **vals  = jary->ev_vals[event];
+
+	sc_strfmt(sc, &col, "%s", field);
+
+	if (col == NULL)
+		goto OUT_OF_MEMORY;
+
+	sc_strfmt(sc, &val, "%ld", boolv && boolv);
+
+	if (val == NULL)
+		goto OUT_OF_MEMORY;
+
+	for (size_t i = 0; i < colsz; ++i) {
+		const char *f = cols[i];
+
+		if (*f == *field && strcmp(field, f) == 0) {
+			cols[i] = col;
+			vals[i] = val;
+			goto FINISH;
+		}
+	}
+
+	jry_mem_push(vals, colsz, val);
+
+	if (vals == NULL)
+		goto OUT_OF_MEMORY;
+
+	jry_mem_push(cols, colsz, col);
+
+	if (cols == NULL)
+		goto OUT_OF_MEMORY;
+
+	jary->errmsg = "not an error";
+	goto FINISH;
+
+OUT_OF_MEMORY:
+	jary->errmsg = "out of memory";
+
+FINISH:
+	colsz		      += 1;
+	jary->ev_colsz[event]  = colsz;
+	jary->ev_cols[event]   = cols;
+	jary->ev_vals[event]   = vals;
+	return JARY_OK;
 }
 
 int jary_field_str(struct jary *jary,
@@ -536,9 +783,9 @@ int jary_field_str(struct jary *jary,
 	for (size_t i = 0; i < colsz; ++i) {
 		const char *f = cols[i];
 
-		if (*f == *field && strcmp(field, f)) {
-			cols[i] = field;
-			vals[i] = value;
+		if (*f == *field && strcmp(field, f) == 0) {
+			cols[i] = col;
+			vals[i] = val;
 			goto FINISH;
 		}
 	}
@@ -553,6 +800,7 @@ int jary_field_str(struct jary *jary,
 	if (cols == NULL)
 		goto OUT_OF_MEMORY;
 
+	jary->errmsg = "not an error";
 	goto FINISH;
 
 OUT_OF_MEMORY:
@@ -600,6 +848,10 @@ int jary_compile_file(struct jary *jary, const char *path, char **errmsg)
 		goto OUT_OF_MEMORY;
 
 	ret = jary_compile(jary, srcsz, src, errmsg);
+
+	if (ret == JARY_OK)
+		jary->errmsg = "not an error";
+
 	goto FINISH;
 
 OPEN_FAIL:
@@ -621,7 +873,7 @@ FINISH:
 }
 
 int jary_compile(struct jary *jary,
-		 size_t	      length,
+		 unsigned int length,
 		 const char  *source,
 		 char	    **errmsg)
 {
@@ -777,12 +1029,12 @@ int jary_output_ulong(const struct jyOutput *output,
 
 int jary_output_bool(const struct jyOutput *output,
 		     unsigned int	    index,
-		     bool		   *boolean)
+		     long		   *truthy)
 {
 	if (index >= output->size)
 		return JARY_ERR_NOTEXIST;
 
-	*boolean = output->values[index].u64;
+	*truthy = output->values[index].i64;
 
 	return JARY_OK;
 }
@@ -927,6 +1179,9 @@ int jary_close(struct jary *restrict jary)
 
 const char *jary_errmsg(struct jary *jary)
 {
+	if (jary == NULL)
+		return "missing no context";
+
 	return jary->errmsg;
 }
 

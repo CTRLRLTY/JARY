@@ -32,8 +32,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef JARY_H
 #define JARY_H
 
-#include <stdbool.h>
-#include <stdlib.h>
 #define JARY_OK		  0
 // generic error, which need to be updated later!
 #define JARY_ERROR	  0x2
@@ -64,8 +62,17 @@ JARY_API int jary_field_str(struct jary *,
 			    const char	*field,
 			    const char	*value);
 
-// TODO: implement this...
 JARY_API int jary_field_long(struct jary *,
+			     unsigned int event,
+			     const char	 *field,
+			     long	  value);
+
+JARY_API int jary_field_ulong(struct jary *,
+			      unsigned int  event,
+			      const char   *field,
+			      unsigned long value);
+
+JARY_API int jary_field_bool(struct jary *,
 			     unsigned int event,
 			     const char	 *field,
 			     long	  value);
@@ -77,9 +84,9 @@ JARY_API int jary_rule_clbk(struct jary *jary,
 
 JARY_API int jary_compile_file(struct jary *, const char *path, char **errmsg);
 JARY_API int jary_compile(struct jary *,
-			  size_t      size,
-			  const char *source,
-			  char	    **errmsg);
+			  unsigned int size,
+			  const char  *source,
+			  char	     **errmsg);
 JARY_API int jary_execute(struct jary *);
 
 JARY_API void jary_output_len(const struct jyOutput *output,
@@ -95,7 +102,7 @@ JARY_API int  jary_output_ulong(const struct jyOutput *,
 				unsigned long *num);
 JARY_API int  jary_output_bool(const struct jyOutput *,
 			       unsigned int index,
-			       bool	   *boolean);
+			       long	   *truthy);
 
 JARY_API const char *jary_errmsg(struct jary *);
 

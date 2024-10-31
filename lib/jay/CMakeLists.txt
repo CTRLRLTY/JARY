@@ -88,6 +88,7 @@ if ( CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$" )
         target_compile_options( jary BEFORE PRIVATE -fvisibility=hidden )
 endif()
 
+
 if ( SCRUTINY AND CMAKE_C_COMPILER_ID STREQUAL "GNU" )
         target_compile_options( parser BEFORE PRIVATE -fanalyzer )
         target_compile_options( scanner BEFORE PRIVATE -fanalyzer )
@@ -95,7 +96,6 @@ if ( SCRUTINY AND CMAKE_C_COMPILER_ID STREQUAL "GNU" )
         target_compile_options( exec BEFORE PRIVATE -fanalyzer )
         target_compile_options( jary BEFORE PRIVATE -fanalyzer )
 endif()
-
 
 
 add_subdirectory( modules ${CMAKE_BINARY_DIR}/modules )

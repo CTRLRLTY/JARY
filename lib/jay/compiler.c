@@ -148,6 +148,37 @@ static inline bool _expr(const struct jy_asts *asts,
 	return fn(asts, tkns, id, ctx, errs, scope, expr);
 }
 
+static bool _bool_expr(const struct jy_asts *asts,
+		       const struct jy_tkns *__unused(tkns),
+		       uint32_t		     ast,
+		       struct compiler	    *ctx,
+		       struct tkn_errs	    *__unused(errs),
+		       struct jy_defs	    *__unused(scope),
+		       struct expr	    *expr)
+{
+	enum jy_ast type = asts->types[ast];
+
+	switch (type) {
+	case AST_FALSE:
+		expr->id = 1;
+		break;
+	case AST_TRUE:
+		expr->id = 2;
+		break;
+	default:
+		goto PANIC;
+	}
+
+	if (emit_push(expr->id, ctx->codes, ctx->codesz) != 0)
+		goto PANIC;
+
+	expr->type = JY_K_BOOL;
+	return false;
+
+PANIC:
+	return true;
+}
+
 static bool _time_expr(const struct jy_asts *asts,
 		       const struct jy_tkns *tkns,
 		       uint32_t		     ast,
@@ -193,7 +224,7 @@ static bool _time_expr(const struct jy_asts *asts,
 
 		expr->id = i;
 
-		goto DONE;
+		goto EMIT;
 	}
 
 	expr->id = valsz;
@@ -201,7 +232,7 @@ static bool _time_expr(const struct jy_asts *asts,
 	if (emit_cnst(view, JY_K_TIME, ctx->vals, ctx->types, ctx->valsz))
 		goto PANIC;
 
-DONE:
+EMIT:
 	expr->type = JY_K_TIME;
 
 	if (emit_push(expr->id, ctx->codes, ctx->codesz) != 0)
@@ -1231,8 +1262,8 @@ static cmplfn_t rules[TOTAL_AST_TYPES] = {
 	[AST_HOUR]   = _time_expr,
 	[AST_MINUTE] = _time_expr,
 	[AST_SECOND] = _time_expr,
-	[AST_FALSE]  = NULL,
-	[AST_TRUE]   = NULL,
+	[AST_FALSE]  = _bool_expr,
+	[AST_TRUE]   = _bool_expr,
 	// < literal
 };
 
@@ -1282,6 +1313,11 @@ static inline bool _condition_sect(const struct jy_asts *asts,
 	uint32_t  sectkn  = asts->tkns[sect];
 	uint32_t *child	  = asts->child[sect];
 	uint32_t  childsz = asts->childsz[sect];
+
+	if (childsz > 255) {
+		tkn_error(errs, "too many conditions", sectkn, sectkn);
+		goto PANIC;
+	}
 
 	for (uint32_t i = 0; i < childsz; ++i) {
 		uint32_t    chid  = child[i];
@@ -1524,10 +1560,15 @@ static inline bool _rule_decl(const struct jy_asts *asts,
 	uint32_t *patchofs = NULL;
 	uint32_t  patchsz  = 0;
 
-	uint32_t matchs[childsz];
-	uint32_t actions[childsz];
-	uint32_t conds[childsz];
-	uint32_t outputs[childsz];
+	if (childsz >= 255) {
+		tkn_error(errs, "too many sections", ruletkn, ruletkn);
+		goto PANIC;
+	}
+
+	uint32_t matchs[255];
+	uint32_t actions[255];
+	uint32_t conds[255];
+	uint32_t outputs[255];
 
 	uint32_t	matchsz	 = 0;
 	uint32_t	actionsz = 0;
@@ -1539,7 +1580,7 @@ static inline bool _rule_decl(const struct jy_asts *asts,
 
 	if (def_find(names, rulelex, NULL)) {
 		tkn_error(errs, "duplicate definition", ruletkn, ruletkn);
-		goto OUT_OF_MEMORY;
+		goto PANIC;
 	}
 
 	union jy_value view = { .ofs = jay->rulesz };
@@ -1591,9 +1632,29 @@ static inline bool _rule_decl(const struct jy_asts *asts,
 		}
 	}
 
-	// TODO: describe error when target section is empty
-	if (actionsz == 0)
-		goto OUT_OF_MEMORY;
+	// TODO: implement multiple match section
+	if (matchsz > 1) {
+		tkn_error(errs, "too many match section", ruletkn, ruletkn);
+		goto PANIC;
+	}
+
+	// TODO: implement multiple condition section
+	if (condsz > 1) {
+		tkn_error(errs, "too many condition section", ruletkn, ruletkn);
+		goto PANIC;
+	}
+
+	// TODO: implement multiple action section
+	if (actionsz > 1) {
+		tkn_error(errs, "too many action section", ruletkn, ruletkn);
+		goto PANIC;
+	}
+
+	// TODO: implement multiple output section
+	if (outputsz > 1) {
+		tkn_error(errs, "too many output section", ruletkn, ruletkn);
+		goto PANIC;
+	}
 
 	struct compiler ctx = {
 		.names = jay->names,
@@ -1681,9 +1742,11 @@ EMIT_QUERY:
 
 	goto FINISH;
 
+PANIC:
 OUT_OF_MEMORY:
 	// TODO: write oom error
 	panic = true;
+	goto FINISH;
 
 FINISH:
 	sc_free(&scratch);
@@ -1938,6 +2001,16 @@ int jry_compile(struct sc_mem	     *alloc,
 	union jy_value val = { .def = ctx->names };
 
 	if (emit_cnst(val, JY_K_MODULE, &ctx->vals, &ctx->types, &ctx->valsz))
+		goto OUT_OF_MEMORY;
+
+	val.i64 = 0;
+
+	if (emit_cnst(val, JY_K_LONG, &ctx->vals, &ctx->types, &ctx->valsz))
+		goto OUT_OF_MEMORY;
+
+	val.i64 = 1;
+
+	if (emit_cnst(val, JY_K_LONG, &ctx->vals, &ctx->types, &ctx->valsz))
 		goto OUT_OF_MEMORY;
 
 	_root(alloc, asts, tkns, mdir, ctx, errs, root);

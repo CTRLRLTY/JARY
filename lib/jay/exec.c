@@ -128,7 +128,10 @@ static inline int value_from_cstr(struct sc_mem	 *alloc,
 	switch (type) {
 	case JY_K_STR: {
 		struct jy_str *ostr;
-		uint32_t       sz = strlen(str);
+		uint32_t       sz = 0;
+
+		if (str != NULL)
+			sz = strlen(str);
 
 		// +1 to include '\0'
 		ostr = sc_alloc(alloc, sizeof(*ostr) + sz + 1);
@@ -141,9 +144,16 @@ static inline int value_from_cstr(struct sc_mem	 *alloc,
 		value->str = ostr;
 		break;
 	}
+
+	case JY_K_BOOL:
+	case JY_K_ULONG:
 	case JY_K_LONG: {
-		errno	   = 0;
-		value->i64 = strtol(str, NULL, 10);
+		errno = 0;
+
+		if (str != NULL)
+			value->i64 = strtol(str, NULL, 10);
+		else
+			value->i64 = 0;
 
 		if (errno == EINVAL)
 			goto INV_VALUE;
@@ -172,6 +182,11 @@ static inline int match_clbk(struct match_data *data,
 	struct sc_mem	     *alloc = data->alloc;
 	const uint8_t	     *codes = data->codes;
 	const union jy_value *vals  = data->vals;
+	struct runtime	      ctx   = {
+			 .names = names,
+			 .vals	= vals,
+			 .pc	= &codes,
+	};
 
 	for (int i = 0; i < colsz; ++i) {
 		union jy_value	view  = { .handle = NULL };
@@ -212,12 +227,6 @@ static inline int match_clbk(struct match_data *data,
 		if (def_set(event, member, view, type))
 			goto PANIC;
 	}
-
-	struct runtime ctx = {
-		.names = names,
-		.vals  = vals,
-		.pc    = &codes,
-	};
 
 	struct jy_state *state = data->state;
 	for (; **ctx.pc != JY_OP_END;)
@@ -680,6 +689,7 @@ FINISH:
 
 	// PC is not moving...
 	assert(pc != *code);
+
 	*code = pc;
 	return ret;
 }

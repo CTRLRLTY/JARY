@@ -90,11 +90,11 @@ TEST(CompilerTest, Basic)
 	// clang-format off
 	uint8_t codes[] = {
                 //
-                JY_OP_PUSH8, 11,
-                JY_OP_PUSH8, 8,
-                JY_OP_EQUAL,
-                JY_OP_PUSH8, 3,
+                JY_OP_PUSH8, 12,
                 JY_OP_PUSH8, 9,
+                JY_OP_EQUAL,
+                JY_OP_PUSH8, 2,
+                JY_OP_PUSH8, 10,
                 JY_OP_QUERY,
                 JY_OP_END,
         };

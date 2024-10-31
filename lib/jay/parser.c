@@ -689,7 +689,7 @@ static bool _binary(struct parser   *p,
 		    uint32_t	    *root)
 {
 	uint32_t left  = *root;
-	uint32_t right = 0;
+	uint32_t right = left;
 	uint32_t optkn = p->tkn;
 
 	enum jy_tkn  optype = tkns->types[p->tkn];

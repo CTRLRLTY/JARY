@@ -85,7 +85,6 @@ union jy_value {
 	struct jy_desc	   dscptr;
 	long		   i64;
 	unsigned long	   u64;
-	uint8_t		   boolean;
 	unsigned long	   ofs;
 	struct jy_time_ofs timeofs;
 };

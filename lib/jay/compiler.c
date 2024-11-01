@@ -65,56 +65,76 @@ struct compiler {
 	uint16_t	*valsz;
 };
 
-// expression compile subroutine signature
-typedef bool (*cmplfn_t)(const struct jy_asts *,
-			 const struct jy_tkns *,
-			 uint32_t,
-			 struct compiler *,
-			 struct tkn_errs *,
-			 struct jy_defs *,
-			 struct expr *);
+static inline bool _expr(const struct jy_asts *asts,
+			 const struct jy_tkns *tkns,
+			 uint32_t	       id,
+			 struct compiler      *ctx,
+			 struct tkn_errs      *errs,
+			 struct jy_defs	      *scope,
+			 struct expr	      *expr);
 
-static inline cmplfn_t rule_expression(enum jy_ast type);
-
-static inline __use_result int emit_byte(uint8_t   code,
-					 uint8_t **codes,
-					 uint32_t *codesz)
+static inline int emit_byte(uint8_t code, uint8_t **codes, uint32_t *codesz)
 {
 	jry_mem_push(*codes, *codesz, code);
 
 	if (*codes == NULL)
-		return -1;
+		return 1;
 
 	*codesz += 1;
 
 	return 0;
 }
 
-static inline __use_result int emit_push(uint32_t  constant,
-					 uint8_t **code,
-					 uint32_t *codesz)
+static inline int emit_push(uint32_t constant, uint8_t **code, uint32_t *codesz)
 {
-	int res = 1;
+	int res = 0;
+
+	assert(constant <= 0xffff);
+
+	// TODO: figure out if bigger constant table is needed
+	if (constant > 0xffff)
+		goto INVARIANT;
 
 	if (constant <= 0xff) {
-		res = emit_byte(JY_OP_PUSH8, code, codesz);
-		res = emit_byte(constant, code, codesz);
+		if (emit_byte(JY_OP_PUSH8, code, codesz))
+			goto OUT_OF_MEMORY;
+
+		if (emit_byte(constant, code, codesz))
+			goto OUT_OF_MEMORY;
 
 	} else if (constant <= 0xffff) {
-		res = emit_byte(JY_OP_PUSH16, code, codesz);
-		res = emit_byte(constant & 0x00FF, code, codesz);
-		res = emit_byte(constant & 0xFF00, code, codesz);
+		if (emit_byte(JY_OP_PUSH16, code, codesz))
+			goto OUT_OF_MEMORY;
+
+		if (emit_byte(constant & 0x00FF, code, codesz))
+			goto OUT_OF_MEMORY;
+
+		if (emit_byte(constant & 0xFF00, code, codesz))
+			goto OUT_OF_MEMORY;
 	}
 
+	goto FINISH;
+
+OUT_OF_MEMORY:
+	res = 1;
+
+INVARIANT:
+	res = 2;
+
+FINISH:
 	return res;
 }
 
-static inline __use_result int emit_cnst(union jy_value	  value,
-					 enum jy_ktype	  type,
-					 union jy_value **vals,
-					 enum jy_ktype	**types,
-					 uint16_t	 *length)
+static inline int emit_cnst(union jy_value   value,
+			    enum jy_ktype    type,
+			    union jy_value **vals,
+			    enum jy_ktype  **types,
+			    uint16_t	    *length)
 {
+	// TODO: figure out whether bigger constant table is needed
+	if (*length + 1 > 0xffff)
+		goto OUT_OF_MEMORY;
+
 	jry_mem_push(*vals, *length, value);
 
 	if (*vals == NULL)
@@ -130,31 +150,13 @@ static inline __use_result int emit_cnst(union jy_value	  value,
 	return 0;
 
 OUT_OF_MEMORY:
-	return -1;
+	return 1;
 }
 
-static inline bool _expr(const struct jy_asts *asts,
-			 const struct jy_tkns *tkns,
-			 uint32_t	       id,
-			 struct compiler      *ctx,
-			 struct tkn_errs      *errs,
-			 struct jy_defs	      *scope,
-			 struct expr	      *expr)
-{
-	enum jy_ast type = asts->types[id];
-	cmplfn_t    fn	 = rule_expression(type);
-	assert(fn != NULL);
-
-	return fn(asts, tkns, id, ctx, errs, scope, expr);
-}
-
-static bool _bool_expr(const struct jy_asts *asts,
-		       const struct jy_tkns *__unused(tkns),
-		       uint32_t		     ast,
-		       struct compiler	    *ctx,
-		       struct tkn_errs	    *__unused(errs),
-		       struct jy_defs	    *__unused(scope),
-		       struct expr	    *expr)
+static inline bool _bool_expr(const struct jy_asts *asts,
+			      uint32_t		    ast,
+			      struct compiler	   *ctx,
+			      struct expr	   *expr)
 {
 	enum jy_ast type = asts->types[ast];
 
@@ -179,13 +181,12 @@ PANIC:
 	return true;
 }
 
-static bool _time_expr(const struct jy_asts *asts,
-		       const struct jy_tkns *tkns,
-		       uint32_t		     ast,
-		       struct compiler	    *ctx,
-		       struct tkn_errs	    *__unused(errs),
-		       struct jy_defs	    *__unused(scope),
-		       struct expr	    *expr)
+static inline bool _time_expr(const struct jy_asts *asts,
+			      const struct jy_tkns *tkns,
+			      uint32_t		    ast,
+			      struct compiler	   *ctx,
+			      struct tkn_errs	   *__unused(errs),
+			      struct expr	   *expr)
 {
 	uint32_t tkn	= asts->tkns[ast];
 	char	*lexeme = tkns->lexemes[tkn];
@@ -244,13 +245,12 @@ PANIC:
 	return true;
 }
 
-static bool _long_expr(const struct jy_asts *asts,
-		       const struct jy_tkns *tkns,
-		       uint32_t		     id,
-		       struct compiler	    *ctx,
-		       struct tkn_errs	    *__unused(errs),
-		       struct jy_defs	    *__unused(scope),
-		       struct expr	    *expr)
+static inline bool _long_expr(const struct jy_asts *asts,
+			      const struct jy_tkns *tkns,
+			      uint32_t		    id,
+			      struct compiler	   *ctx,
+			      struct tkn_errs	   *__unused(errs),
+			      struct expr	   *expr)
 {
 	uint32_t tkn	= asts->tkns[id];
 	char	*lexeme = tkns->lexemes[tkn];
@@ -289,13 +289,12 @@ PANIC:
 	return true;
 }
 
-static bool _string_expr(const struct jy_asts *asts,
-			 const struct jy_tkns *tkns,
-			 uint32_t	       id,
-			 struct compiler      *ctx,
-			 struct tkn_errs      *__unused(errs),
-			 struct jy_defs	      *__unused(scope),
-			 struct expr	      *expr)
+static inline bool _string_expr(const struct jy_asts *asts,
+				const struct jy_tkns *tkns,
+				uint32_t	      id,
+				struct compiler	     *ctx,
+				struct tkn_errs	     *__unused(errs),
+				struct expr	     *expr)
 {
 	uint32_t tkn	= asts->tkns[id];
 	char	*lexeme = tkns->lexemes[tkn];
@@ -341,22 +340,6 @@ EMIT:
 	return false;
 PANIC:
 	return true;
-}
-
-static bool _regexp_expr(const struct jy_asts *asts,
-			 const struct jy_tkns *tkns,
-			 uint32_t	       id,
-			 struct compiler      *ctx,
-			 struct tkn_errs      *errs,
-			 struct jy_defs	      *scope,
-			 struct expr	      *expr)
-{
-	if (_string_expr(asts, tkns, id, ctx, errs, scope, expr))
-		return true;
-
-	expr->type = JY_K_REGEX;
-
-	return false;
 }
 
 static bool _descriptor_expr(const struct jy_asts *asts,
@@ -829,11 +812,11 @@ static bool _equality_expr(const struct jy_asts *asts,
 		code = JY_OP_CMPSTR;
 		break;
 	default:
-		goto INV_EXP;
+		goto INV_LEFT;
 	}
 
 	if (leftx.type != rightx.type)
-		goto INV_EXP;
+		goto INV_RIGHT;
 
 	expr->id   = -1u;
 	expr->type = JY_K_BOOL;
@@ -843,10 +826,16 @@ static bool _equality_expr(const struct jy_asts *asts,
 
 	return false;
 
-INV_EXP: {
+INV_LEFT: {
+	uint32_t from = asts->tkns[left];
+	uint32_t to   = asts->tkns[left];
+	tkn_error(errs, "invalid lhs", from, to);
+}
+
+INV_RIGHT: {
 	uint32_t from = asts->tkns[left];
 	uint32_t to   = asts->tkns[right];
-	tkn_error(errs, "invalid expression", from, to);
+	tkn_error(errs, "invalid rhs", from, to);
 }
 PANIC:
 	return true;
@@ -1022,7 +1011,7 @@ static bool _within_expr(const struct jy_asts *asts,
 		goto PANIC;
 
 	if (rightx.type != JY_K_TIME)
-		goto INV_WITHIN;
+		goto INV_RIGHT;
 
 	if (emit_byte(JY_OP_WITHIN, ctx->codes, ctx->codesz))
 		goto PANIC;
@@ -1035,14 +1024,14 @@ static bool _within_expr(const struct jy_asts *asts,
 INV_LEFT: {
 	uint32_t from = asts->tkns[left];
 	uint32_t to   = asts->tkns[left];
-	tkn_error(errs, "invalid expression", from, to);
+	tkn_error(errs, "not an event expression", from, to);
 	goto PANIC;
 }
 
-INV_WITHIN: {
+INV_RIGHT: {
 	uint32_t from = asts->tkns[ast];
-	uint32_t to   = asts->tkns[ast];
-	tkn_error(errs, "invalid expression", from, to);
+	uint32_t to   = asts->tkns[right];
+	tkn_error(errs, "not a time expression", from, to);
 }
 PANIC:
 	return true;
@@ -1224,54 +1213,88 @@ PANIC:
 	return true;
 }
 
-static cmplfn_t rules[TOTAL_AST_TYPES] = {
-	[AST_CALL] = _call_expr,
-
-	[AST_NOT] = _not_expr,
-	[AST_AND] = _and_expr,
-	[AST_OR]  = _or_expr,
-
-	// > binaries
-	[AST_JOINX]   = _join_expr,
-	[AST_EXACT]   = _exact_expr,
-	[AST_EQUAL]   = _exact_expr,
-	[AST_BETWEEN] = _between_expr,
-	[AST_WITHIN]  = _within_expr,
-	[AST_REGEX]   = _regex_expr,
-
-	[AST_EQUALITY] = _equality_expr,
-	[AST_LESSER]   = _compare_expr,
-	[AST_GREATER]  = _compare_expr,
-
-	[AST_CONCAT]   = _concat_expr,
-	[AST_ADDITION] = _arith_expr,
-	[AST_SUBTRACT] = _arith_expr,
-	[AST_MULTIPLY] = _arith_expr,
-	[AST_DIVIDE]   = _arith_expr,
-	// < binaries
-
-	[AST_NAME]    = _descriptor_expr,
-	[AST_EVENT]   = _descriptor_expr,
-	[AST_QACCESS] = _qaccess_expr,
-	[AST_EACCESS] = _eaccess_expr,
-
-	// > literal
-	[AST_REGEXP] = _regexp_expr,
-	[AST_LONG]   = _long_expr,
-	[AST_STRING] = _string_expr,
-	[AST_HOUR]   = _time_expr,
-	[AST_MINUTE] = _time_expr,
-	[AST_SECOND] = _time_expr,
-	[AST_FALSE]  = _bool_expr,
-	[AST_TRUE]   = _bool_expr,
-	// < literal
-};
-
-static inline cmplfn_t rule_expression(enum jy_ast type)
+static inline bool _expr(const struct jy_asts *asts,
+			 const struct jy_tkns *tkns,
+			 uint32_t	       id,
+			 struct compiler      *ctx,
+			 struct tkn_errs      *errs,
+			 struct jy_defs	      *scope,
+			 struct expr	      *expr)
 {
-	assert(rules[type] != NULL);
+	enum jy_ast type = asts->types[id];
+	size_t	    tkn	 = asts->tkns[id];
 
-	return rules[type];
+	switch (type) {
+	case AST_CALL:
+		return _call_expr(asts, tkns, id, ctx, errs, scope, expr);
+	case AST_NOT:
+		return _not_expr(asts, tkns, id, ctx, errs, scope, expr);
+	case AST_AND:
+		return _and_expr(asts, tkns, id, ctx, errs, scope, expr);
+	case AST_OR:
+		return _or_expr(asts, tkns, id, ctx, errs, scope, expr);
+
+	case AST_JOINX:
+		return _join_expr(asts, tkns, id, ctx, errs, scope, expr);
+	case AST_EQUAL:
+	case AST_EXACT:
+		return _exact_expr(asts, tkns, id, ctx, errs, scope, expr);
+	case AST_BETWEEN:
+		return _between_expr(asts, tkns, id, ctx, errs, scope, expr);
+	case AST_WITHIN:
+		return _within_expr(asts, tkns, id, ctx, errs, scope, expr);
+	case AST_REGEX:
+		return _regex_expr(asts, tkns, id, ctx, errs, scope, expr);
+
+	case AST_EQUALITY:
+		return _equality_expr(asts, tkns, id, ctx, errs, scope, expr);
+	case AST_GREATER:
+	case AST_LESSER:
+		return _compare_expr(asts, tkns, id, ctx, errs, scope, expr);
+
+	case AST_CONCAT:
+		return _concat_expr(asts, tkns, id, ctx, errs, scope, expr);
+
+	case AST_MULTIPLY:
+	case AST_DIVIDE:
+	case AST_SUBTRACT:
+	case AST_ADDITION:
+		return _arith_expr(asts, tkns, id, ctx, errs, scope, expr);
+
+	case AST_EVENT:
+	case AST_NAME:
+		return _descriptor_expr(asts, tkns, id, ctx, errs, scope, expr);
+
+	case AST_QACCESS:
+		return _qaccess_expr(asts, tkns, id, ctx, errs, scope, expr);
+	case AST_EACCESS:
+		return _eaccess_expr(asts, tkns, id, ctx, errs, scope, expr);
+
+	case AST_LONG:
+		return _long_expr(asts, tkns, id, ctx, errs, expr);
+	case AST_STRING:
+		return _string_expr(asts, tkns, id, ctx, errs, expr);
+	case AST_REGEXP: {
+		bool ret = _string_expr(asts, tkns, id, ctx, errs, expr);
+
+		expr->type = JY_K_REGEX;
+
+		return ret;
+	}
+
+	case AST_HOUR:
+	case AST_MINUTE:
+	case AST_SECOND:
+		return _time_expr(asts, tkns, id, ctx, errs, expr);
+
+	case AST_TRUE:
+	case AST_FALSE:
+		return _bool_expr(asts, id, ctx, expr);
+
+	default:
+		tkn_error(errs, "not an expression", tkn, tkn);
+		return true;
+	}
 }
 
 static inline bool _match_sect(const struct jy_asts *asts,

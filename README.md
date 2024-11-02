@@ -26,7 +26,11 @@ rule work_activity {
     $person.name .. " is working on " .. $duty.task .. " duty"
 }
 ```
+
 The rule essentially states that when there's a person named John Doe between the age of 18-30 and is on a cleaning duty within the last 10 minutes, output the string "John Doe is working on cleaning duty".
+
+## Supported Platform
+- GNU/Linux on AMD64 
 
 ## How do I use it?
 At the time of writing, JARY is provided as a `.so` file which exposes multiple functions to interface with the JARY library. This `.so` file must then be link to your main program using the metode provided by the preferred language of your program. This means you have to create a binding to interface with the [ABI](https://en.wikipedia.org/wiki/Application_binary_interface). In the future I will provide an official binding for the `Python` language, in the meantime, only the C interface is usable as it is the language used to make this module. Read the [Get Started](https://github.com/CTRLRLTY/JARY/wiki/Get-Started) page to start using Jary.
@@ -90,14 +94,39 @@ execute_jary()
 ```
 This is the principle design of the library, which aim to stay out of the way of the user as much as possible by not doing alot. 
 ### Problem domain - 2
-The job of a computer language is to enable the programmer to vomit their creativity in written words. And there's a thing as being too creative. We can write rules in any computer language, like Python, but you'll find out later when you have to either read someone's code or having others read yours that it is always hard. 
+If I am working on a ship with 2 other people and the 3 of us speak different languages such that person `A` speaks english, person `B` italian, and I klingon, what is the likelihood of me and them surviving if there's an iceberg up ahead? 
 
-I do not care how many years your experience is in whatever field, practice, or cult you are in, there is no such thing as clean code. Beauty is subjective and so is readibility of written logic. 
+The answer would be **who knows!** And I'm not gonna wait to see myself in Titanic 2 to figure that out.
+
+The same goes when writing an automated script. I do not want to figure out your native language just to see this script running `rm -rf` on my root directory.
+
+The solution is to write in the same language, in the same way, in the same brain if we have to, or I won't allow your spooky code to fill a single bit on my hard drive.
 
 ### Jary as a solution - 2
-For the jary rules I chose a syntax that is popular in the malware analyst sphere, Yara. The reasoning for this is simple: **I'm familiar with it** plus its popular among security folks and they are the target audience for this tool. So if readibility or beauty of a language is subjective, just pick whichever is already common. That way that same people can just come right in.
+Here's a typical layout of a `jary` rule:
 
-Also for those who thinks "why not just use some small language like JSON or YAML to write the rules?" Well, have you actually tried writing conditional expression like `if/else` in JSON/Yaml? It is TOXIC and UNPRODUCTIVE. 
+```
+rule {
+  match:
+  condition:
+  output:
+  action:
+}
+```
+
+It provides structured layout for writing a rule. This way every rule is structured the same no matter how bad the logic or implementation is. 
+
+> uniformity and conformity is the goal here, to prevent anyone from being too creative in their ways
+
+#### Why borrow syntax from Yara?
+The reasoning for this is simple: **I'm familiar with it** plus its popular among security folks and they are the target audience for this tool. 
+
+> If the beauty/readibility of a language is subjective, just pick whichever that's more recognizable
+
+#### Why not just use JSON or YAML?
+If you thought "why not just use some small language like JSON or YAML to write the rules?" 
+
+Well, have you actually spent a significant amount of time writing predicates in JSON/Yaml? It is TOXIC and UNPRODUCTIVE. 
 
 Here's an example of what I meant:
 ```json
@@ -116,7 +145,9 @@ Here's an example of what I meant:
   }
 }
 ```
+
 compare it with the Jary rule:
+
 ```
 rule somerule {
   condition:
@@ -126,8 +157,11 @@ rule somerule {
     delete_me("soon")
 }
 ```
-If you think the JSON rule is much better, go away.
+
+If you don't see a problem with the `JSON` rule, just go away.
 
 ## Additional Resource
-Visit the project wiki [introduction](https://github.com/CTRLRLTY/JARY/wiki/) to learn more.
+- C API reference: [JARY/doc/c_api_reference.md](#)
+- Rule reference: [JARY/doc/rule_reference.md](https://github.com/CTRLRLTY/JARY/blob/master/doc/rule_reference.md)
+- Create a module: [JARY/doc/custom_module.md](#)
 

@@ -163,5 +163,6 @@ If you don't see a problem with the `JSON` rule, just go away.
 ## Additional Resource
 - C API reference: [JARY/doc/c_api_reference.md](#)
 - Rule reference: [JARY/doc/rule_reference.md](https://github.com/CTRLRLTY/JARY/blob/master/doc/rule_reference.md)
+- Get started: [Start writing Jary](https://github.com/CTRLRLTY/JARY/wiki/Get-Started)
 - Create a module: [JARY/doc/custom_module.md](#)
 

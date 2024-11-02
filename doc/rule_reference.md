@@ -306,7 +306,7 @@ The following is a list of common operators and its precedence:
 | /        | division       | 3 | `5 / 3` |
 | +     | addition | 4 | `5 + 3 ` |
 | -     | substractiona | 4 | `5 - 3` |
-| ..    | concat/range  | 4 | `"hello" .. "world"` |
+| ..    | concat/range  | 4 | `"hello" .. "world"`, `10..15` |
 | == | equality | 5 | `5 == 3` |
 | and | logical AND | 6 | `5 == 5 and 1 == 1`  |
 | or | logical OR | 7 | `5 == 2 or 1 == 1` |

@@ -16,7 +16,7 @@ This document contains all information needed to use the functions available in 
 | `int` | `jary_compile_file(struct jary *ctx, const char *path, char **errmsg)` |
 | `int` | `jary_compile(struct jary *ctx, unsigned int size, const char *source, char **errmsg)` |
 | `int` | `jary_execute(struct jary *ctx)` |
-| `int` | `jary_output_len(const struct jyOutput *output, unsigned int *length)` |
+| `void` | `jary_output_len(const struct jyOutput *output, unsigned int *length)` |
 | `int` | `jary_output_str(const struct jyOutput *output, unsigned int index, char **value)` |
 | `int` | `jary_output_long(const struct jyOutput *output, unsigned int index, long *value)` |
 | `int` | `jary_output_ulong(const struct jyOutput *output, unsigned int index, unsigned long *value)` |

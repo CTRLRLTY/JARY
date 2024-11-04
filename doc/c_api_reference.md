@@ -127,7 +127,7 @@ Define the field value for an event that has been queued. The `field` argument i
 
 #### Return value
 - `JARY_OK` everything went well, and no error.
-- `JARY_NOT_EXIST` either the `event` id or the identified `field` does not exist, check `jary_errmsg`.
+- `JARY_ERR_NOTEXIST` either the `event` id or the identified `field` does not exist, check `jary_errmsg`.
 - `JARY_ERR_MISMATCH` invalid `value` type for the identified `field`.
 - `JARY_ERR_OOM` out of memory.
 
@@ -152,3 +152,43 @@ case JARY_ERR_OOM:
 }
 ```
 
+## `int jary_rule_clbk`
+```c
+int jary_rule_clbk(struct jary *ctx, const char *name, int (*callback)(void *, const struct jyOutput *), void *data)
+```
+
+Attach a `callback` function to be called when rule identified by `name` is triggered. The `data` argument will be passed as the first argument of the `callback` function.
+
+The `callback` function can return an interrupt return code to effect the execution of the current rule. The following is all available interrupt code:
+- `JARY_INT_CRASH` crash the jary runtime, and exit the context. No more rules will be executed.
+- `JARY_INT_FINAL` stop the callback from being called for subsequent rows.
+
+#### Return value
+- `JARY_OK` everything went well, and no error
+- `JARY_ERR_NOTEXIST` no rule identified by `name` exist
+- `JARY_ERR_OOM` out of memory
+
+#### Example usage
+```c
+int callback(void *data, const struct jyOutput *output) {
+	// will print "hello world" whenever my_rule is triggered
+	printf("%s", (char*) data);
+
+	return JARY_OK;
+}
+
+if (jary_clbk(jary, "my_rule", callback, "hello world") != JARY_OK)
+	// handle this
+	;
+```
+
+## `int jary_compile_file`
+```c
+int jary_compile_file(struct jary *ctx, const char *path, char **errmsg)
+```
+Compile a jary rule specified by the `path` argument. This function must only be called once after opening a jary context. Once a rule has been compiled to a context it cannot compile any more files. Use a different context to compile a different rule file if needed, and not on a previously compiled context. 
+
+If the `errmsg` is not NULL, it will be allocated with an error message if there's a compiler error, and it must be freed using the `jary_free` function.
+
+#### Return value
+#### Example usage

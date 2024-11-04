@@ -191,4 +191,38 @@ Compile a jary rule specified by the `path` argument. This function must only be
 If the `errmsg` is not NULL, it will be allocated with an error message if there's a compiler error, and it must be freed using the `jary_free` function.
 
 #### Return value
+- `JARY_OK` everything went well, and no error
+- `JARY_ERROR` something went wrong when compiling the file, check `jary_errmsg()`
+- `JARY_ERR_COMPILE` rule compile/parsing error, `errmsg` will be allocated.
+- `JARY_ERR_OOM` out of memory
+  
 #### Example usage
+```c
+char *errmsg;
+
+switch (jary_compile_file(jary, "./rule.jary", &errmsg)) {
+case JARY_OK:
+	break;
+case JARY_ERROR:
+	printf("%s\n", jary_errmsg(jary));
+	break;
+case JARY_ERR_COMPILE:
+	printf("%s", errmsg);
+	jary_free(errmsg);
+	break;
+case JARY_ERR_OOM:
+	// handle this..
+}
+```
+
+## `int jary_compile`
+```c
+int jary_compile(struct jary *ctx, unsigned int size, const char *source, char **errmsg)
+```
+Compile the string within `source` as a jary rule file where `size` is the length of `source`. This function is actually called by `jary_compile_file` internally and just passed the entire content of the file into the `3rd` argument `source` when using that function. This can be used alternatively the main program wants to open the file itself. The 4th argument `errmsg` has the same behaviour as the `jary_compile_file` variant.
+
+#### Return value
+- `JARY_OK` everything went well, and no error
+- `JARY_ERROR` something went wrong when compiling the file, check `jary_errmsg()`
+- `JARY_ERR_COMPILE` rule compile/parsing error, `errmsg` will be allocated.
+- `JARY_ERR_OOM` out of memory

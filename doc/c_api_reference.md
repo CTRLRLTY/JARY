@@ -94,6 +94,8 @@ case JARY_ERR_OOM:
 ## `int jary_event`
 ```c
 int jary_event(struct jary *ctx, const char *name, unsigned int *event)
+```
+
 Create a new event of type `name` and push it into the event queue. The `name` argument is used to determine the type of event corresponding to the identified ingress declaration. The `event` argument will store the `id` of the of the newly queued event to be used in the `jary_field_*` function variant.
 
 #### Return value

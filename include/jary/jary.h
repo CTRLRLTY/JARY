@@ -52,7 +52,7 @@ struct jary;
 struct jyOutput;
 struct sqlite3;
 
-JARY_API int jary_open(struct jary **, struct sqlite3 *);
+JARY_API int jary_open(struct jary **);
 JARY_API int jary_close(struct jary *);
 JARY_API int jary_modulepath(struct jary *, const char *path);
 JARY_API int jary_event(struct jary *, const char *name, unsigned int *event);
@@ -73,9 +73,9 @@ JARY_API int jary_field_ulong(struct jary *,
 			      unsigned long value);
 
 JARY_API int jary_field_bool(struct jary *,
-			     unsigned int event,
-			     const char	 *field,
-			     long	  value);
+			     unsigned int  event,
+			     const char	  *field,
+			     unsigned char value);
 
 JARY_API int jary_rule_clbk(struct jary *jary,
 			    const char	*name,
@@ -101,8 +101,8 @@ JARY_API int  jary_output_ulong(const struct jyOutput *,
 				unsigned int   index,
 				unsigned long *num);
 JARY_API int  jary_output_bool(const struct jyOutput *,
-			       unsigned int index,
-			       long	   *truthy);
+			       unsigned int   index,
+			       unsigned char *truthy);
 
 JARY_API const char *jary_errmsg(struct jary *);
 

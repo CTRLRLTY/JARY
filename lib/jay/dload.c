@@ -71,6 +71,7 @@ int jry_dlload(const char *path, struct jy_defs *def, const char **msg)
 
 	union jy_value handle;
 
+	// TODO: use custom namespace
 	handle.handle = dlopen(modulepath, RTLD_LAZY);
 
 	if (handle.handle == NULL)

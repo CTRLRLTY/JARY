@@ -349,7 +349,7 @@ FINISH:
 	return JARY_OK;
 }
 
-int jary_open(struct jary **jary, struct sqlite3 *db)
+int jary_open(struct jary **jary)
 {
 	int	     ret;
 	struct jary *J = calloc(sizeof(struct jary), 1);
@@ -359,14 +359,11 @@ int jary_open(struct jary **jary, struct sqlite3 *db)
 
 	J->mdir = "";
 
-	if (db == NULL) {
-		int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE
-			 | SQLITE_OPEN_READWRITE;
-		if (sqlite3_open_v2("dumb.db", &J->db, flag, NULL))
-			goto OPEN_ERROR;
-	} else {
-		J->db = db;
-	}
+	int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE
+		 | SQLITE_OPEN_READWRITE;
+
+	if (sqlite3_open_v2("dumb.db", &J->db, flag, NULL))
+		goto OPEN_ERROR;
 
 	J->code = sc_alloc(&J->sc, sizeof(*J->code));
 
@@ -500,7 +497,10 @@ JARY_API int jary_field_long(struct jary *jary,
 			     const char	 *field,
 			     long	  number)
 {
-	assert(event <= jary->ev_sz);
+	if (event < jary->ev_sz && event > jary->ev_sz) {
+		jary->errmsg = "event not expected";
+		return JARY_ERR_NOTEXIST;
+	};
 
 	const char     *table = jary->ev_tables[event];
 	struct sc_mem  *sc    = &jary->sc;
@@ -579,7 +579,10 @@ JARY_API int jary_field_ulong(struct jary  *jary,
 			      const char   *field,
 			      unsigned long number)
 {
-	assert(event <= jary->ev_sz);
+	if (event < jary->ev_sz && event > jary->ev_sz) {
+		jary->errmsg = "event not expected";
+		return JARY_ERR_NOTEXIST;
+	};
 
 	const char     *table = jary->ev_tables[event];
 	struct sc_mem  *sc    = &jary->sc;
@@ -653,12 +656,15 @@ FINISH:
 	return JARY_OK;
 }
 
-JARY_API int jary_field_bool(struct jary *jary,
-			     unsigned int event,
-			     const char	 *field,
-			     long	  boolv)
+JARY_API int jary_field_bool(struct jary  *jary,
+			     unsigned int  event,
+			     const char	  *field,
+			     unsigned char boolv)
 {
-	assert(event <= jary->ev_sz);
+	if (event < jary->ev_sz && event > jary->ev_sz) {
+		jary->errmsg = "event not expected";
+		return JARY_ERR_NOTEXIST;
+	};
 
 	const char     *table = jary->ev_tables[event];
 	struct sc_mem  *sc    = &jary->sc;
@@ -737,7 +743,10 @@ int jary_field_str(struct jary *jary,
 		   const char  *field,
 		   const char  *value)
 {
-	assert(event <= jary->ev_sz);
+	if (event < jary->ev_sz && event > jary->ev_sz) {
+		jary->errmsg = "event not expected";
+		return JARY_ERR_NOTEXIST;
+	};
 
 	const char     *table = jary->ev_tables[event];
 	struct sc_mem  *sc    = &jary->sc;
@@ -1029,7 +1038,7 @@ int jary_output_ulong(const struct jyOutput *output,
 
 int jary_output_bool(const struct jyOutput *output,
 		     unsigned int	    index,
-		     long		   *truthy)
+		     unsigned char	   *truthy)
 {
 	if (index >= output->size)
 		return JARY_ERR_NOTEXIST;

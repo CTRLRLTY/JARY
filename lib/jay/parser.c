@@ -73,11 +73,11 @@ enum prec {
 	PREC_ASSIGNMENT,
 	PREC_OR,	 // or
 	PREC_AND,	 // and
-	PREC_EQUALITY,	 // == !=
+	PREC_EQUALITY,	 // ==
 	PREC_COMPARISON, // < > <= >=
-	PREC_TERM,	 // + -
+	PREC_TERM,	 // + - ..
 	PREC_FACTOR,	 // * /
-	PREC_UNARY,	 // ! -
+	PREC_UNARY,	 // not -
 	PREC_CALL,	 // . () ~
 };
 
@@ -469,7 +469,7 @@ static bool _not(struct parser	 *p,
 
 	uint32_t topast = 0;
 
-	// consume !
+	// consume not
 	next(tkns, &p->src, &p->srcsz, &p->tkn);
 
 	if (_precedence(p, asts, tkns, errs, &topast, PREC_UNARY))

@@ -65,7 +65,7 @@ TEST(JaryModuleTest, Simple)
 	struct jary *J;
 	unsigned int ev;
 
-	ASSERT_EQ(jary_open(&J, NULL), JARY_OK);
+	ASSERT_EQ(jary_open(&J), JARY_OK);
 	ASSERT_EQ(jary_modulepath(J, MODULE_DIR), JARY_OK);
 
 	ASSERT_EQ(jary_compile_file(J, SIMPLE_JARY_PATH, NULL), JARY_OK);

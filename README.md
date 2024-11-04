@@ -29,7 +29,7 @@ rule work_activity {
 }
 ```
 
-This rule essentially states that when there’s a person named John Doe, between the age of 18–30, who is on cleaning duty within the last 10 minutes, output the string "John Doe is working on cleaning duty".
+This rule essentially states that when there’s a person named John Doe, between the age of 9–30, who is on cleaning duty within the last 10 minutes, output the string "John Doe is working on cleaning duty".
 
 ## Supported Platform
 - GNU/Linux on AMD64 
@@ -105,7 +105,7 @@ If I am working on a ship with two other people and the three of us speak differ
 
 The answer would be **who knows!** And I'm not gonna wait to see myself in _Titanic 2_ to figure that out.
 
-The same goes for writing an automated script. I do not want to figure out your native language just to see this script running `rm -rf` on my root directory.
+The same goes for writing an automated script. I do not want to figure out your native language just to see the script running `rm -rf` on my root directory.
 
 The solution is to write in the same language, in the same way, in the same brain if we have to, or I won't allow your spooky code to fill a single bit on my hard drive.
 
@@ -158,7 +158,7 @@ compare it with the Jary rule:
 ```
 rule somerule {
   condition:
-    $braincell.count >= 10
+    $braincell.count > 9
 
   action:
     delete_me("soon")

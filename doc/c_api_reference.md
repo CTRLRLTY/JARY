@@ -295,7 +295,7 @@ union {
 	unsigned char u8;
 } view = { .str = output };
 
-long value = view.u64;
+long value = view.i64;
 
 ```
 

@@ -35,7 +35,7 @@ This function initialize the jary `ctx` and **must be called** before running ot
 #### Return value
 - `JARY_OK` everything went well, and no error.
 - `JARY_ERR_OOM` Out of memory
-- `JARY_ERROR` Generic error, check `jary_errmsg()` for detail, and then close it `jary_close()`.
+- `JARY_ERROR` Generic error, check `jary_errmsg()` for detail, and then close the `ctx` using `jary_close()`.
 
 #### Example usage:
 ```c
@@ -45,8 +45,8 @@ switch (jary_open(&jary)) {
 case JARY_OK:
 	break;
 case JARY_ERROR:
+	printf("%s\n", jary_errmsg(jary));
 	jary_close(jary);
-	printf("%s"\n, jary_errmsg(jary));
 	break;
 case JARY_ERR_OOM:
 	// handle this

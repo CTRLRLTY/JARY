@@ -226,3 +226,43 @@ Compile the string within `source` as a jary rule file where `size` is the lengt
 - `JARY_ERROR` something went wrong when compiling the file, check `jary_errmsg()`
 - `JARY_ERR_COMPILE` rule compile/parsing error, `errmsg` will be allocated.
 - `JARY_ERR_OOM` out of memory
+
+## `int jary_execute`
+```c
+int jary_execute(struct jary *ctx)
+```
+This function will ingest all queued event and subject it to all defined rules. After all compiled rules get executed, the function will exit, and all state within the context will be updated.
+
+It is a good idea to run `jary_execute` each time you queued an event so it get processed immediately after defining its field.
+
+#### Return value
+- `JARY_OK` everything went well, and no error
+- `JARY_ERR_EXEC` something went wrong executing the bytecode, check `jary_errmsg`.
+- `JARY_ERR_OOM` out of memory
+
+#### Example usage
+```c
+// defined somehow
+char *names[i] = ...
+
+// create and execute 10 events
+for (int i = 0; i < 10; ++i) {
+	unsigned int event;
+	
+	// assuming "user" ingress is declared
+	jary_event(jary, "user", &event);
+	
+	// set user.name = "John Doe"
+	jary_field_str(jary, event, "name", names[i]);
+	
+	switch(jary_execute(jary)) {
+	case JARY_OK:
+		break;
+	case JARY_ERR_EXEC:
+		printf("%s\n", jary_errmsg(jary))
+		break;
+	case JARY_ERR_OOM:
+		// handle this
+	}
+}
+```

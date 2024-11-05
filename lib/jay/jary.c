@@ -497,6 +497,8 @@ JARY_API int jary_field_long(struct jary *jary,
 			     const char	 *field,
 			     long	  number)
 {
+	int ret = JARY_OK;
+
 	if (event < jary->ev_sz && event > jary->ev_sz) {
 		jary->errmsg = "event not expected";
 		return JARY_ERR_NOTEXIST;
@@ -565,13 +567,14 @@ JARY_API int jary_field_long(struct jary *jary,
 
 OUT_OF_MEMORY:
 	jary->errmsg = "out of memory";
+	ret	     = JARY_ERR_OOM;
 
 FINISH:
 	colsz		      += 1;
 	jary->ev_colsz[event]  = colsz;
 	jary->ev_cols[event]   = cols;
 	jary->ev_vals[event]   = vals;
-	return JARY_OK;
+	return ret;
 }
 
 JARY_API int jary_field_ulong(struct jary  *jary,
@@ -579,6 +582,8 @@ JARY_API int jary_field_ulong(struct jary  *jary,
 			      const char   *field,
 			      unsigned long number)
 {
+	int ret = JARY_OK;
+
 	if (event < jary->ev_sz && event > jary->ev_sz) {
 		jary->errmsg = "event not expected";
 		return JARY_ERR_NOTEXIST;
@@ -647,13 +652,14 @@ JARY_API int jary_field_ulong(struct jary  *jary,
 
 OUT_OF_MEMORY:
 	jary->errmsg = "out of memory";
+	ret	     = JARY_ERR_OOM;
 
 FINISH:
 	colsz		      += 1;
 	jary->ev_colsz[event]  = colsz;
 	jary->ev_cols[event]   = cols;
 	jary->ev_vals[event]   = vals;
-	return JARY_OK;
+	return ret;
 }
 
 JARY_API int jary_field_bool(struct jary  *jary,
@@ -661,6 +667,8 @@ JARY_API int jary_field_bool(struct jary  *jary,
 			     const char	  *field,
 			     unsigned char boolv)
 {
+	int ret = JARY_OK;
+
 	if (event < jary->ev_sz && event > jary->ev_sz) {
 		jary->errmsg = "event not expected";
 		return JARY_ERR_NOTEXIST;
@@ -729,13 +737,13 @@ JARY_API int jary_field_bool(struct jary  *jary,
 
 OUT_OF_MEMORY:
 	jary->errmsg = "out of memory";
-
+	ret	     = JARY_ERR_OOM;
 FINISH:
 	colsz		      += 1;
 	jary->ev_colsz[event]  = colsz;
 	jary->ev_cols[event]   = cols;
 	jary->ev_vals[event]   = vals;
-	return JARY_OK;
+	return ret;
 }
 
 int jary_field_str(struct jary *jary,
@@ -743,6 +751,8 @@ int jary_field_str(struct jary *jary,
 		   const char  *field,
 		   const char  *value)
 {
+	int ret = JARY_OK;
+
 	if (event < jary->ev_sz && event > jary->ev_sz) {
 		jary->errmsg = "event not expected";
 		return JARY_ERR_NOTEXIST;
@@ -814,13 +824,14 @@ int jary_field_str(struct jary *jary,
 
 OUT_OF_MEMORY:
 	jary->errmsg = "out of memory";
+	ret	     = JARY_ERR_OOM;
 
 FINISH:
 	colsz		      += 1;
 	jary->ev_colsz[event]  = colsz;
 	jary->ev_cols[event]   = cols;
 	jary->ev_vals[event]   = vals;
-	return JARY_OK;
+	return ret;
 }
 
 int jary_compile_file(struct jary *jary, const char *path, char **errmsg)

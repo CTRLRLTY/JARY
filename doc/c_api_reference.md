@@ -323,6 +323,9 @@ const char* jary_errmsg(struct jary *ctx)
 ```
 Get the error message, if any, after calling a `jary_*` function that returns an error code.
 
+#### Return value
+Return the last error message.
+
 ## `void jary_free`
 ```c
 void jary_free(void *ptr)

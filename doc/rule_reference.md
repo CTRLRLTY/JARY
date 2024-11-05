@@ -4,7 +4,11 @@ The Jary language shares a similar syntax with another language called Yara. But
 The grammar is very simple, you only need to know these concepts: 
 - `import` 
 - `ingress` 
-- `rule` 
+- `rule`
+  - `match`
+  - `condition`
+  - `output`
+  - `action`
 - `section` 
 - `identifier`
 - `expressions`
@@ -54,7 +58,7 @@ it will try to locate the file `libmark.so` in my system resolution path:
 The `.so` object must define two mandatory function `module_load` and `module_unload` to be loadable by Jary. 
 
 ## Ingress declaration
-The `ingress` keyword is used to declare the structure of an expected event denoted by an `identifier`. If a user event is expected, which contain two data field called `name` and `age`, then it must have a corresponding `ingress` declaration like this:
+The `ingress` keyword is used to declare the structure of an expected event denoted by an `identifier`. If a `user` event is expected, which contain two data field called `name` and `age`, then it must have a corresponding `ingress` declaration like this:
 
 ```
 ingress user {
@@ -68,7 +72,7 @@ ingress user {
 
 The ingress declaration only have the `field` section used to declare a set of fields.
 
-A field declaration only compose of an `identifier` and a type:
+A field declaration is only composed of an `identifier` and a type:
 
 ```
 <identifier> <type>
@@ -102,9 +106,9 @@ A rule declaration accepts only the following sections:
 The flow of the rule starts from `match` and ends with `action`. But the written order of the section does not matter since it will be restructured internally. 
 
 ### `match:`
-A rule match section define a set of logic used to select events stored within an in-memory `sqlite3` database. It expects a unique value type called `match value`. 
+A rule's match section defines a set of logic used to select events stored within an in-memory `sqlite3` database. It expects a unique value type called `match value`. 
 
-A match value is only returned by these operators:
+A `match value` is only returned by these operators:
 | Operator | Description | Usage   |
 |----------|-------------|---------|
 |`between` | range check between integer | `$user.age between 10..19`|
@@ -116,9 +120,9 @@ A match value is only returned by these operators:
 
 > `regex` operator is still not stable yet, **DO NOT USE**
 
-Each of these operators only work with either an `event` or a `field` as its left hand side operand.
+Each of these operators only works with either an `event` or a `field` as its left hand side operand.
 
-An event is denoted by a `$` operator followed immediately by an `identifier` corresponding to an `ingress` declaration. 
+An `event` is denoted by a `$` operator followed immediately by an `identifier` corresponding to an `ingress` declaration. 
 
 ```
 // user event
@@ -140,7 +144,7 @@ match:
 ```
 
 ### `condition:`
-A rule condition section define a set of predicates used to determine if an event should cascade down to the `output` and `action` section. It only expects predicates, and can have up to `255` individual predicates. 
+A rule's condition section defines a set of predicates used to determine if an event should cascade down to the `output` and `action` section. It only expects predicates, and can have up to `255` individual predicates. 
 
 A predicate here just means an expression that returns a `boolean` value and delimited by a ****newline**** like:
 
@@ -181,7 +185,7 @@ is the equivalent to this `SQL` code.
 SELECT user AS 'user.name' WHERE user.name = 'root'
 ```
 
-Meanwhile, the `condition` section works on the resulted **rows** from the previous `SQL` query. And because the rows can be more than one, the `condition` is essentially performing a loop on each row to determine which row should be passed into the `output` and `action` section. 
+Meanwhile, the `condition` section works on the resulted **rows** from the previous `SQL` query. And because the obtained rows can be more than one, the `condition` section is essentially performing a loop on each row to determine which row should be passed into the `output` and `action` section. 
 
 So it would somewhat look like this in code:
 
@@ -196,10 +200,10 @@ for (data in rows) {
 }
 ```
 
-> In an attempt to differentiate them, Jary use two different set of operators. One is specifically in `match` section, and the other one to be used in any place that expect an expression.
+> In an attempt to differentiate them, Jary use two different set of operators. One designated specifically for the `match` section, and the other one to be used anywhere that expects an expression.
 
 ### `output:`
-A rule output section is used to pass an array of values to every callback function listening to the rule. It expects a list of expression which will be evaluated before the `action` section. 
+A rule's output section is used to pass an array of values to every callback function listening to the rule. It expects a list of expression which will be evaluated before the `action` section. 
 
 The output values are then passed in the exact order of the listed expression, where it starts from the 0th index, into the callback:
 
@@ -212,7 +216,7 @@ output:
 ```
 
 ### `action:`
-A rule action section is used to call a set of special functions. These functions are defined by module developers and can only be used within this section. 
+A rule's action section is used to call a set of special functions. These functions are defined by module developers and can only be used within this section. 
 
 Using an action function would look something like this:
 

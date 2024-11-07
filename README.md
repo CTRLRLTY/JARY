@@ -3,7 +3,7 @@ JARY is a **standalone module** that can ingest normalized data and match it aga
 
 Here is an example of a `.jary` rule:  
 
-```php
+```
 ingress duty {
   field:
     person string
@@ -31,6 +31,55 @@ rule work_activity {
 
 This rule essentially states that when there’s a person named John Doe, between the age of 9–30, who is on cleaning duty within the last 10 minutes, output the string "John Doe is working on cleaning duty".
 
+## List of core features!
+<details>
+<summary>Data correlation engine in a single library!</summary>
+
+Jary is a compact library, less than 150 KB, yet it provides both data correlation and rule creation.
+
+As a library, it offers these advantages:
+- No need for multiple processes to host the correlation engine.
+- No network communication needed to send raw data to the engine.
+- Everything is done through a simple function call!
+</details>
+
+<details>
+<summary>Standardized rule definition!</summary>
+
+Every rule follows a consistent, minimal format, without introducing too many concepts. A standard jary rule has this structure:
+
+```txt
+rule <name> {
+  match:
+  condition:
+  output:
+  action:
+}
+```
+
+Once you understand these components, you grasp the flow of any jary rule. 
+
+> Jary lets you focus on why a rule gets triggered and what action it will perform when triggered
+
+</details>
+
+<details>
+<summary>Designed with flexibility in mind!</summary>
+
+Jary aims to be the **the** [Lua](https://www.lua.org/) of embedded correlation engines. To achieve this, it is designed to accommodate the key requirements for analyzing and correlating diverse data.
+
+Here’s how Jary addresses these core issues:
+| Issue | Answer |
+| ---   | ---    |
+| Data can come from different sources by different providers | Users already have these data sources in their pipeline and understand their data, so they can normalize it and send it to Jary. |
+| Different data patterns require unique analysis methods | Users can create custom Jary modules to analyze unique patterns, or they can use Jary for correlation and write the analysis logic as a callback. |
+| Its not obvious if there is or isn't a correlation between data | It's never obvious; that’s why Jary provides the basic building blocks to write your own query logic, so it’s on you to find it. |
+| Different respond for different data | Jary enables the user to define custom responses to specific data by creating custom actions in Jary or piping the output to a callback function. |
+| Everyones data pipeline is unique | Jary is only a library, so it’s not limited to any pipeline. As long as the library can be compiled on that system, you can just use it. |
+
+
+</details>
+
 ## Supported Platform
 - GNU/Linux on AMD64 
 
@@ -43,7 +92,7 @@ This could either mean creating a binding to the [ABI](https://en.wikipedia.org/
 >
 > **NOTE:** I'd be happy to list any bindings you've created for `Jary` on this repository.
 
-## Use case
+## What JARY tries to solve
 The JARY module was created to help me automate data correlation from logs I've gathered on my home server. Unfortunately there were no tools that really met my needs. I've used `Yara` to perform malware analysis and it's really great, so why is there nothing similar for data correlation? That's where `Jary` comes in to fill that gap, and it must tackle the following concern:
 1. A small dependency to anything, while providing everything.
 2. The syntax that's either easy or natural enough to work with.
@@ -100,6 +149,7 @@ You can either feed more events or execute the `jary` rules to process the new e
 execute(jary)
 ```
 This is the core design of the library, which aims to stay out of the user’s way as much as possible by doing only what’s necessary.
+
 ### Problem domain - 2
 If I am working on a ship with two other people and the three of us speak different languages such that person `A` speaks English, person `B` Italian, and I Klingon, what is the likelihood of me and them surviving if there's an iceberg up ahead? 
 
@@ -180,6 +230,7 @@ This is the first implementation of `JARY`, and not a lot of time has passed sin
 The language only have two phases to generate the bytecode: `parsing` and `compilation`. There's no optimizer nor a replacement for the default `malloc/free` allocation. But it can already compile the rule file like a champ.
 
 > Measurement will be added in the future
+
 
 ## Additional Resource
 - Get started: [Start writing Jary](https://github.com/CTRLRLTY/JARY/wiki/Get-Started)

@@ -54,7 +54,7 @@ case JARY_ERR_OOM:
 };
 ```
 
-## `int jary_close`
+### `int jary_close`
 ```c
 int jary_close(struct jary *ctx)
 ```
@@ -64,7 +64,7 @@ This function must be called to properly close an open `ctx`.
 - `JARY_OK` everything went well, and no error.
 - `JARY_ERR_SQLITE3` closing the sqlite3 db went wrong. Check `jary_errmsg()` to see the `sqlite3_errmsg()`. 
 
-## `int jary_modulepath`
+### `int jary_modulepath`
 ```c
 int `jary_modulepath(struct jary *ctx, const char *path)
 ```
@@ -91,7 +91,7 @@ case JARY_ERR_OOM:
 }
 ```
 
-## `int jary_event`
+### `int jary_event`
 ```c
 int jary_event(struct jary *ctx, const char *name, unsigned int *event)
 ```
@@ -116,7 +116,7 @@ case JARY_ERR_OOM
 	break;
 }
 ```
-## `int jary_field_*`
+### `int jary_field_*`
 ```c
 int jary_field_str(struct jary *ctx, unsigned int event, const char *field, const char *value)
 int jary_field_long(struct jary *ctx, unsigned int event, const char *field, long value)
@@ -152,7 +152,7 @@ case JARY_ERR_OOM:
 }
 ```
 
-## `int jary_rule_clbk`
+### `int jary_rule_clbk`
 ```c
 int jary_rule_clbk(struct jary *ctx, const char *name, int (*callback)(void *, const struct jyOutput *), void *data)
 ```
@@ -182,7 +182,7 @@ if (jary_clbk(jary, "my_rule", callback, "hello world") != JARY_OK)
 	;
 ```
 
-## `int jary_compile_file`
+### `int jary_compile_file`
 ```c
 int jary_compile_file(struct jary *ctx, const char *path, char **errmsg)
 ```
@@ -215,7 +215,7 @@ case JARY_ERR_OOM:
 }
 ```
 
-## `int jary_compile`
+### `int jary_compile`
 ```c
 int jary_compile(struct jary *ctx, unsigned int size, const char *source, char **errmsg)
 ```
@@ -227,7 +227,7 @@ Compile the string within `source` as a jary rule file where `size` is the lengt
 - `JARY_ERR_COMPILE` rule compile/parsing error, `errmsg` will be allocated.
 - `JARY_ERR_OOM` out of memory
 
-## `int jary_execute`
+### `int jary_execute`
 ```c
 int jary_execute(struct jary *ctx)
 ```
@@ -267,13 +267,13 @@ for (int i = 0; i < 10; ++i) {
 }
 ```
 
-## `void jary_output_len`
+### `void jary_output_len`
 ```c
 void jary_output_len(const struct jyOutput *output, unsigned int *length)
 ```
 Get the total size of values outputted by a rule and store it into the `length` argument. This should only be used within a rule callback function.
 
-## `int jary_output_*`
+### `int jary_output_*`
 ```c
 int jary_output_str(const struct jyOutput *output, unsigned int index, const char **value)
 int jary_output_long(const struct jyOutput *output, unsigned int index, long *value)
@@ -317,7 +317,7 @@ int callback(void *data, const struct jyOutput *output) {
 }
 ```
 
-## `const char* jary_errmsg`
+### `const char* jary_errmsg`
 ```c
 const char* jary_errmsg(struct jary *ctx)
 ```
@@ -326,7 +326,7 @@ Get the error message, if any, after calling a `jary_*` function that returns an
 #### Return value
 Return the last error message.
 
-## `void jary_free`
+### `void jary_free`
 ```c
 void jary_free(void *ptr)
 ```

@@ -1,4 +1,7 @@
+<div align="center"><img src="logo_no_bg.png" height=50% width=50% /> </div> 
+
 ## What is JARY?
+
 JARY is a **standalone module** that can ingest normalized data and match it againts a `.jary` rule. The `.jary` rule is written in a syntax derived from the YARA language developed by VirusTotal. 
 
 Here is an example of a `.jary` rule:  

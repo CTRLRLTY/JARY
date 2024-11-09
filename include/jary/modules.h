@@ -32,8 +32,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef JAYVM_MODULES_H
 #define JAYVM_MODULES_H
 
-#include "jary/types.h"
-
 #include <stdint.h>
 
 #ifndef JAY_API
@@ -44,6 +42,32 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define JAY_ERR_OOM	 0x101
 #define JAY_ERR_MISMATCH 0x102
 
+// Crash the runtime
+#define JAY_INT_CRASH	 0x103
+
+enum jy_ktype {
+	JY_K_LONG   = 1,
+	JY_K_ULONG  = 2,
+	JY_K_STR    = 3,
+	JY_K_BOOL   = 4,
+	JY_K_ACTION = 5,
+};
+
+// generic view for all qualified Jary values
+union jy_value {
+	struct jy_str *str;
+	long	       i64;
+	unsigned long  u64;
+};
+
+struct jy_str {
+	// size does not include '\0'
+	uint32_t size;
+	// null terminated string
+	char	 cstr[];
+};
+
+struct jy_state;
 struct jy_module;
 
 JAY_API int jay_def_func(struct jy_module    *ctx,

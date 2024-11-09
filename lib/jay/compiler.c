@@ -117,6 +117,7 @@ static inline int emit_push(uint32_t constant, uint8_t **code, uint32_t *codesz)
 
 OUT_OF_MEMORY:
 	res = 1;
+	goto FINISH;
 
 INVARIANT:
 	res = 2;
@@ -1987,10 +1988,12 @@ static void free_jay(struct jy_jay *ctx)
 		enum jy_ktype  type = ctx->names->types[i];
 
 		switch (type) {
-		case JY_K_MODULE:
+		case JY_K_MODULE: {
 			// TODO: seperate unloading from free
-			jry_dlunload(v.module, NULL);
+			const char *msg = NULL;
+			jry_dlunload(v.module, &msg);
 			break;
+		}
 		default:
 			continue;
 		}

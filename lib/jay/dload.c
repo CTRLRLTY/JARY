@@ -39,12 +39,18 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "jary/defs.h"
 #include "jary/memory.h"
-#include "jary/modules.h"
 
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define JAY_OK		 0x0
+#define JAY_ERR_OOM	 0x101
+#define JAY_ERR_MISMATCH 0x102
+
+// Crash the runtime
+#define JAY_INT_CRASH	 0x103
 
 struct jy_module {
 	struct jy_defs *def;
@@ -195,7 +201,7 @@ JAY_API int jay_del_func(struct jy_module *ctx, const char *key)
 	uint32_t id;
 
 	if (!def_find(ctx->def, key, &id))
-		goto OUT_OF_MEMORY;
+		goto INV_FUNC;
 
 	if (ctx->def->types[id] != JY_K_FUNC)
 		goto INV_FUNC;
@@ -208,11 +214,6 @@ JAY_API int jay_del_func(struct jy_module *ctx, const char *key)
 INV_FUNC:
 	ctx->errmsg = "not function";
 	ret	    = JAY_ERR_MISMATCH;
-	goto FINISH;
-
-OUT_OF_MEMORY:
-	ctx->errmsg = "out of memory";
-	ret	    = JAY_ERR_OOM;
 	goto FINISH;
 
 FINISH:

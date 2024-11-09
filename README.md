@@ -83,7 +83,11 @@ Here’s how Jary addresses these core issues:
 </details>
 
 ## Supported Platform
-- GNU/Linux on AMD64 
+- GNU/Linux on AMD64
+
+## Where can I use it?
+JARY is a library that can be used in any case where automation is needed. For example, if you have a web server with multiple REST APIs, you can use JARY to protect it from brute force attacks and other security criteria. You simply need to write rules, such as tracking client IP addresses and creating rate limit rules for burst requests.
+
 
 ## How do I use it?
 At the time of writing, JARY is provided as a `.so` file which exposes multiple functions for interfacing with the JARY library. This `.so` file must be linked to your main program using the method provided by the preferred language of your program. 

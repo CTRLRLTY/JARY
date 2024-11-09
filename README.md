@@ -120,7 +120,7 @@ If you `import` any Jary module, you are essentially loading another `.so` file 
 import somelibrary
 ```
 
-Anyone can create their own jary library by defining the `module_load` and `module_unload` functions in their `.so` file. Read [custom_module.md](https://github.com/CTRLRLTY/JARY/blob/master/doc/custom_module.md) to learn more. 
+Anyone can create their own jary library by defining the `module_load` and `module_unload` functions in their `.so` file. Read [custom_module.md](https://github.com/CTRLRLTY/JARY/blob/0.x/doc/custom_module.md) to learn more. 
 > You can use Jary without any imports. There's no standard libraries at the moment. I'll figure out what to add later. **Feedback needed**.
 
 ### Jary as a solution - 1b
@@ -240,7 +240,7 @@ The language only have two phases to generate the bytecode: `parsing` and `compi
 
 ## Additional Resource
 - Get started: [Start writing Jary](https://github.com/CTRLRLTY/JARY/wiki/Get-Started)
-- C API reference: [JARY/doc/c_api_reference.md](https://github.com/CTRLRLTY/JARY/blob/master/doc/c_api_reference.md)
-- Rule reference: [JARY/doc/rule_reference.md](https://github.com/CTRLRLTY/JARY/blob/master/doc/rule_reference.md)
-- Create a module: [JARY/doc/custom_module.md](https://github.com/CTRLRLTY/JARY/blob/master/doc/custom_module.md)
+- C API reference: [JARY/doc/c_api_reference.md](https://github.com/CTRLRLTY/JARY/blob/0.x/doc/c_api_reference.md)
+- Rule reference: [JARY/doc/rule_reference.md](https://github.com/CTRLRLTY/JARY/blob/0.x/doc/rule_reference.md)
+- Create a module: [JARY/doc/custom_module.md](https://github.com/CTRLRLTY/JARY/blob/0.x/doc/custom_module.md)
 

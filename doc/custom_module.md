@@ -76,10 +76,9 @@ import log
 // define the expected structure of the user event
 ingress user {
   field:
-     name string
-     activity string
+    name string
+    activity string
 }
-
 
 rule auth_brute_force {
   match:
@@ -87,10 +86,10 @@ rule auth_brute_force {
     $user within 10s
 
 condition:
-        1 == 1
+    1 == 1
 
-  action:
-        log.info("hello world!")
+action:
+    log.info("hello world!")
 }
 ```
 
@@ -226,13 +225,13 @@ FINISH:
 
 To compile it:
 ```sh
-gcc./example2.c -ljary -o example
+gcc ./example.c -ljary -o example
 ```
 
 Finally, to test the module, run:
 
 ```sh
-LD_LIBRARY_PATH=. ./example example2.jary 
+LD_LIBRARY_PATH=. ./example example.jary 
 ```
 
 If everything is set up correctly, you should see the following output:

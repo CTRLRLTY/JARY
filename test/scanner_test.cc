@@ -107,43 +107,42 @@ TEST(ScannerTest, ScanSymbol)
 
 TEST(ScannerTest, ScanKeyword)
 {
-	const char *str[] = {
-		"all",	 "and",	   "any",	"false",  "true",    "or",
-		"not",	 "input",  "rule",	"import", "ingress", "include",
-		"match", "action", "condition", "field",
-	};
-
-	enum jy_tkn types[] {
-		TKN_ALL,
-		TKN_AND,
-		TKN_ANY,
-		TKN_FALSE,
-		TKN_TRUE,
-		TKN_OR,
-		TKN_NOT,
-		TKN_INPUT,
-		TKN_RULE,
-		TKN_IMPORT,
-		TKN_INGRESS,
-		TKN_INCLUDE,
-		TKN_MATCH,
-		TKN_JUMP,
-		TKN_CONDITION,
-		TKN_FIELD,
-	};
-
-	ASSERT_EQ(sizeof(str) / sizeof(str[0]),
-		  sizeof(types) / sizeof(types[0]));
-
-	for (uint32_t i = 0; i < sizeof(str) / sizeof(str[0]); ++i) {
+	struct {
+		const char *lex;
 		enum jy_tkn type;
-		const char *start = str[i], *end = NULL;
+	} keyword[] = {
+		{ "all", TKN_ALL },	    { "as", TKN_ALIAS },
+		{ "and", TKN_AND },	    { "any", TKN_ANY },
+		{ "false", TKN_FALSE },	    { "true", TKN_TRUE },
+		{ "or", TKN_OR },	    { "not", TKN_NOT },
+		{ "input", TKN_INPUT },	    { "rule", TKN_RULE },
+		{ "import", TKN_IMPORT },   { "ingress", TKN_INGRESS },
+		{ "include", TKN_INCLUDE }, { "match", TKN_MATCH },
+		{ "action", TKN_JUMP },	    { "condition", TKN_CONDITION },
+		{ "output", TKN_OUTPUT },   { "field", TKN_FIELD },
+		{ "between", TKN_BETWEEN }, { "join", TKN_JOINX },
+		{ "exact", TKN_EXACT },	    { "equal", TKN_EQUAL },
+		{ "regex", TKN_REGEX },	    { "string", TKN_STRING_TYPE },
+		{ "long", TKN_LONG_TYPE },  { "bool", TKN_BOOL_TYPE },
+		{ "if", TKN_RESERVED },	    { "else", TKN_RESERVED },
+		{ "elif", TKN_RESERVED },   { "fi", TKN_RESERVED },
+		{ "then", TKN_RESERVED },   { "range", TKN_RESERVED },
+		{ "gt", TKN_RESERVED },	    { "lt", TKN_RESERVED },
+		{ "gte", TKN_RESERVED },    { "lte", TKN_RESERVED },
+		{ "in", TKN_RESERVED },
+	};
+
+	int keywordsz = sizeof(keyword) / sizeof(keyword[0]);
+
+	for (int i = 0; i < keywordsz; ++i) {
+		enum jy_tkn type;
+		const char *start = keyword[i].lex, *end = NULL;
 		// + 1 include '\0'
-		size_t	    strsz = strlen(str[i]) + 1;
+		size_t	    strsz = strlen(keyword[i].lex) + 1;
 		end		  = jry_scan(start, strsz, &type);
 
-		ASSERT_EQ(type, types[i]) << "i: " << i;
-		ASSERT_EQ(memcmp(str[i], start, end - start), 0);
+		ASSERT_EQ(type, keyword[i].type) << keyword[i].lex;
+		ASSERT_EQ(memcmp(keyword[i].lex, start, end - start), 0);
 		ASSERT_EQ(strsz - 1, end - start) << "i: " << i;
 	}
 }

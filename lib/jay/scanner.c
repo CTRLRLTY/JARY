@@ -258,6 +258,10 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 			*type = TKN_EXACT;
 		else if (KEYWORD(start + 1, "qual", 4))
 			*type = TKN_EQUAL;
+		else if (KEYWORD(start + 1, "lse", 3))
+			*type = TKN_RESERVED;
+		else if (KEYWORD(start + 1, "lif", 3))
+			*type = TKN_RESERVED;
 		else
 			goto IDENTIFIER;
 
@@ -265,8 +269,22 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 	case 'f':
 		if (KEYWORD(start + 1, "alse", 4))
 			*type = TKN_FALSE;
+		// fi
+		else if (KEYWORD(start + 1, "i", 1))
+			*type = TKN_RESERVED;
 		else if (KEYWORD(start + 1, "ield", 4))
 			*type = TKN_FIELD;
+		else
+			goto IDENTIFIER;
+
+		goto FINISH;
+	case 'g':
+		// gt
+		if (KEYWORD(start + 1, "t", 1))
+			*type = TKN_RESERVED;
+		// gte
+		else if (KEYWORD(start + 1, "te", 2))
+			*type = TKN_RESERVED;
 		else
 			goto IDENTIFIER;
 
@@ -274,6 +292,12 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 	case 'l':
 		if (KEYWORD(start + 1, "ong", 3))
 			*type = TKN_LONG_TYPE;
+		// lt
+		else if (KEYWORD(start + 1, "t", 1))
+			*type = TKN_RESERVED;
+		// lte
+		else if (KEYWORD(start + 1, "te", 2))
+			*type = TKN_RESERVED;
 		else
 			goto IDENTIFIER;
 
@@ -288,7 +312,9 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 
 		goto FINISH;
 	case 'i':
-		if (KEYWORD(start + 1, "nclude", 6))
+		if (KEYWORD(start + 1, "n", 1))
+			*type = TKN_RESERVED;
+		else if (KEYWORD(start + 1, "nclude", 6))
 			*type = TKN_INCLUDE;
 		else if (KEYWORD(start + 1, "ngress", 6))
 			*type = TKN_INGRESS;
@@ -296,6 +322,9 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 			*type = TKN_INPUT;
 		else if (KEYWORD(start + 1, "mport", 5))
 			*type = TKN_IMPORT;
+		// if
+		else if (KEYWORD(start + 1, "f", 1))
+			*type = TKN_RESERVED;
 		else
 			goto IDENTIFIER;
 
@@ -310,6 +339,9 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 	case 't':
 		if (KEYWORD(start + 1, "rue", 3))
 			*type = TKN_TRUE;
+		// then
+		else if (KEYWORD(start + 1, "hen", 3))
+			*type = TKN_RESERVED;
 		else
 			goto IDENTIFIER;
 
@@ -319,6 +351,9 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 			*type = TKN_RULE;
 		else if (KEYWORD(start + 1, "egex", 4))
 			*type = TKN_REGEX;
+		// range
+		else if (KEYWORD(start + 1, "ange", 4))
+			*type = TKN_RESERVED;
 		else
 			goto IDENTIFIER;
 

@@ -13,7 +13,7 @@ JARY is a runtime for creating `.jary` rules to search and correlate log data fr
 
 ### Why JARY is different
 <details open>
-<summary><b>It's a data correlation engine with tiny a footprint</b></summary>
+<summary><b>It's a data correlation engine with a tiny footprint</b></summary>
 
 Jary is a compact library, less than 150 KB, yet it provides both data correlation and rule creation.
 

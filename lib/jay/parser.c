@@ -229,22 +229,6 @@ static inline void next(struct jy_tkns *tkns,
 	char	*lex;
 
 	switch (type) {
-	case TKN_STRING:
-		// -2 to not include  \"\"
-		lexsz = read - 2;
-		lex   = jry_alloc(lexsz + 1);
-
-		// you are screwed.
-		if (lex == NULL)
-			goto PANIC;
-
-		// +1 to skip \" prefix
-		memcpy(lex, start + 1, lexsz);
-
-		lex[lexsz] = '\0';
-		*tkn	   = tkns->size;
-
-		break;
 	case TKN_NEWLINE:
 		line += read - 1;
 		// INTENTIONAL FALLTHROUGH

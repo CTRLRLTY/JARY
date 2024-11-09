@@ -301,6 +301,12 @@ static inline bool _string_expr(const struct jy_asts *asts,
 	char	*lexeme = tkns->lexemes[tkn];
 	uint32_t lexsz	= tkns->lexsz[tkn];
 
+	// -2 to not inlucde ""
+	uint32_t cstrsz = lexsz - 2;
+	char	*cstr	= jry_alloc(cstrsz);
+
+	memcpy(cstr, lexeme + 1, cstrsz);
+
 	size_t		valsz = *ctx->valsz;
 	union jy_value *vals  = *ctx->vals;
 	enum jy_ktype  *types = *ctx->types;
@@ -311,7 +317,7 @@ static inline bool _string_expr(const struct jy_asts *asts,
 
 		struct jy_str *v = vals[i].str;
 
-		if (v->size != lexsz || memcmp(v->cstr, lexeme, lexsz))
+		if (v->size != cstrsz || memcmp(v->cstr, cstr, cstrsz))
 			continue;
 
 		expr->id = i;
@@ -319,16 +325,16 @@ static inline bool _string_expr(const struct jy_asts *asts,
 		goto EMIT;
 	}
 
-	uint32_t       allocsz = sizeof(struct jy_str) + lexsz + 1;
+	uint32_t       allocsz = sizeof(struct jy_str) + cstrsz + 1;
 	union jy_value value   = { .str = jry_alloc(allocsz) };
 
 	if (value.str == NULL)
 		goto PANIC;
 
-	value.str->size = lexsz;
-	memcpy(value.str->cstr, lexeme, lexsz);
-	value.str->cstr[lexsz] = '\0';
-	expr->id	       = valsz;
+	value.str->size = cstrsz;
+	memcpy(value.str->cstr, cstr, cstrsz);
+	value.str->cstr[cstrsz] = '\0';
+	expr->id		= valsz;
 
 	if (emit_cnst(value, JY_K_STR, ctx->vals, ctx->types, ctx->valsz))
 		goto PANIC;
@@ -340,6 +346,7 @@ EMIT:
 
 	return false;
 PANIC:
+	jry_free(cstr);
 	return true;
 }
 

@@ -40,6 +40,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <assert.h>
 #include <sqlite3.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 
 typedef int(q_clbk)(void *, int, char **, char **);
@@ -122,6 +123,147 @@ static inline bool exists(int			 length,
 	return false;
 }
 
+static inline int prslcq(int bufsz,
+			 char *restrict buf,
+			 int			  eventsz,
+			 int			  joinsz,
+			 int			  binsz,
+			 int			  withinsz,
+			 int			  betweensz,
+			 const struct jy_defs	**events,
+			 const char		**evnames,
+			 const struct QMjoin	**joins,
+			 const struct QMbinary	**binary,
+			 const struct QMbetween **between,
+			 const struct QMwithin	**within)
+{
+#define SIZE() bufsz ? bufsz - sz : 0
+#define PTR()  sz ? buf + sz : buf
+	int	      sz   = 0;
+	struct sc_mem bump = { .buf = NULL };
+
+	sz += snprintf(PTR(), SIZE(), "SELECT");
+
+	for (int i = 0; i < eventsz; ++i) {
+		const struct jy_defs *event = events[i];
+		char **keys = sc_alloc(&bump, sizeof(void *) * event->size);
+
+		if (keys == NULL)
+			goto OUT_OF_MEMORY;
+
+		const char *t	= evnames[i];
+		int	    len = def_keys(event, event->size, keys);
+
+		const char fmt[] = " %s.%s AS '%s.%s',";
+
+		for (int j = 0; j < len; ++j) {
+			const char *c = keys[j];
+			sz += snprintf(PTR(), SIZE(), fmt, t, c, t, c);
+		}
+	}
+
+	if (buf)
+		buf[sz - 1] = ' ';
+
+	sz += snprintf(PTR(), SIZE(), "FROM");
+
+	for (int i = 0; i < eventsz; ++i) {
+		const char *tbl = evnames[i];
+
+		if (i + 1 < eventsz)
+			sz += snprintf(PTR(), SIZE(), " %s,", tbl);
+		else
+			sz += snprintf(PTR(), SIZE(), " %s WHERE", tbl);
+	}
+
+	for (int i = 0; i < joinsz; ++i) {
+		const struct QMjoin *Q	= joins[i];
+		const char	    *lt = Q->tbl_left;
+		const char	    *lc = Q->col_left;
+		const char	    *rt = Q->tbl_right;
+		const char	    *rc = Q->col_right;
+
+		const char *fmt = " %s.%s = %s.%s AND";
+
+		sz += snprintf(PTR(), SIZE(), fmt, lt, lc, rt, rc);
+	}
+
+	for (int i = 0; i < binsz; ++i) {
+		const struct QMbinary *Q  = binary[i];
+		const char	      *lt = Q->table;
+		const char	      *lc = Q->column;
+		const char	      *fmt;
+
+		switch (Q->value.type) {
+		case QME_REGEXP: {
+			const char *r = Q->value.as.regex;
+
+			// TODO: potential SQL injection? maybe later...
+			fmt  = " %s.%s REGEXP '%s' AND";
+			sz  += snprintf(PTR(), SIZE(), fmt, lt, lc, r);
+			break;
+		}
+
+		case QME_CSTR: {
+			const char *r = Q->value.as.cstr;
+
+			// TODO: potential SQL injection? maybe later...
+			fmt  = " %s.%s = '%s' AND";
+			sz  += snprintf(PTR(), SIZE(), fmt, lt, lc, r);
+			break;
+		}
+		case QME_LONG: {
+			long r = Q->value.as.i64;
+
+			fmt  = " %s.%s = '%ld' AND";
+			sz  += snprintf(PTR(), SIZE(), fmt, lt, lc, r);
+			break;
+		}
+		}
+	}
+
+	for (int i = 0; i < withinsz; ++i) {
+		const struct QMwithin *Q = within[i];
+		long ofs		 = Q->timeofs.offset * Q->timeofs.time;
+
+		const char fmt[] = " unixepoch() - %s.%s <= %ld AND";
+
+		sz += snprintf(PTR(), SIZE(), fmt, Q->table, Q->column, ofs);
+	}
+
+	for (int i = 0; i < betweensz; ++i) {
+		const struct QMbetween *Q   = between[i];
+		const char	       *t   = Q->table;
+		const char	       *c   = Q->column;
+		long			min = Q->min;
+		long			max = Q->max;
+
+		const char fmt[] = " %s.%s > %ld AND %s.%s < %ld AND";
+
+		sz += snprintf(PTR(), SIZE(), fmt, t, c, min, t, c, max);
+	}
+
+	if (buf) {
+		buf[sz - 4] = ';';
+		buf[sz - 3] = '\0';
+	}
+
+	sc_free(&bump);
+
+	return sz;
+
+OUT_OF_MEMORY:
+	sc_free(&bump);
+
+	if (buf)
+		*buf = '\0';
+
+	return 0;
+
+#undef SIZE
+#undef PTR
+}
+
 static inline int q_match(struct sqlite3 *db,
 			  char		**errmsg,
 			  q_clbk	 *callback,
@@ -129,14 +271,12 @@ static inline int q_match(struct sqlite3 *db,
 			  struct Qmatch	  Q)
 {
 	int	      ret = 0;
-	int	      sz  = 0;
 	struct sc_mem buf = { .buf = NULL };
 
 	int		qlen  = Q.qlen;
 	struct QMbase **qs    = Q.qlist;
 	struct jy_defs *names = Q.names;
 
-	char		     *sql;
 	size_t		      arsz  = sizeof(void *) * qlen;
 	const struct QMjoin **joins = sc_alloc(&buf, arsz);
 
@@ -234,128 +374,23 @@ static inline int q_match(struct sqlite3 *db,
 		}
 	}
 
-	assert(joinsz > 0 || binsz > 0 || withinsz > 0 || betweensz > 0);
+	int sz = prslcq(0, NULL, eventsz, joinsz, binsz, withinsz, betweensz,
+			events, eventnames, joins, binary, between, within);
 
-	sc_strfmt(&buf, &sql, "SELECT");
+	if (sz == 0)
+		goto OUT_OF_MEMORY;
+
+	char *sql = sc_alloc(&buf, sz);
 
 	if (sql == NULL)
 		goto OUT_OF_MEMORY;
 
-	for (int i = 0; i < eventsz; ++i) {
-		const struct jy_defs *event = events[i];
-		char **keys = sc_alloc(&buf, sizeof(void *) * event->size);
+	prslcq(sz, sql, eventsz, joinsz, binsz, withinsz, betweensz, events,
+	       eventnames, joins, binary, between, within);
 
-		const char *t	= eventnames[i];
-		int	    len = def_keys(event, event->size, keys);
-
-		const char fmt[] = "%s %s.%s AS '%s.%s',";
-
-		for (int j = 0; j < len; ++j) {
-			const char *c = keys[j];
-			sz = sc_strfmt(&buf, &sql, fmt, sql, t, c, t, c);
-		}
-
-		if (sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	sql[sz - 1] = ' ';
-
-	sc_strfmt(&buf, &sql, "%sFROM", sql);
-
-	if (sql == NULL)
+	// This shouldn't happen, but just to make sure...
+	if (*sql == '\0')
 		goto OUT_OF_MEMORY;
-
-	for (int i = 0; i < eventsz; ++i) {
-		const char *tbl = eventnames[i];
-
-		if (i + 1 < eventsz)
-			sz = sc_strfmt(&buf, &sql, "%s %s,", sql, tbl);
-		else
-			sz = sc_strfmt(&buf, &sql, "%s %s WHERE", sql, tbl);
-
-		if (sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	for (int i = 0; i < joinsz; ++i) {
-		const struct QMjoin *Q	= joins[i];
-		const char	    *lt = Q->tbl_left;
-		const char	    *lc = Q->col_left;
-		const char	    *rt = Q->tbl_right;
-		const char	    *rc = Q->col_right;
-
-		const char *fmt = "%s %s.%s = %s.%s AND";
-
-		sz = sc_strfmt(&buf, &sql, fmt, sql, lt, lc, rt, rc);
-
-		if (sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	for (int i = 0; i < binsz; ++i) {
-		const struct QMbinary *Q  = binary[i];
-		const char	      *lt = Q->table;
-		const char	      *lc = Q->column;
-		const char	      *fmt;
-
-		switch (Q->value.type) {
-		case QME_REGEXP: {
-			const char *r = Q->value.as.regex;
-			// TODO: potential SQL injection? maybe later...
-			fmt	      = "%s %s.%s REGEXP '%s' AND";
-			sz = sc_strfmt(&buf, &sql, fmt, sql, lt, lc, r);
-			break;
-		}
-
-		case QME_CSTR: {
-			const char *r = Q->value.as.cstr;
-			// TODO: potential SQL injection? maybe later...
-			fmt	      = "%s %s.%s = '%s' AND";
-			sz = sc_strfmt(&buf, &sql, fmt, sql, lt, lc, r);
-			break;
-		}
-		case QME_LONG: {
-			long r = Q->value.as.i64;
-			fmt    = "%s %s.%s = '%ld' AND";
-			sz     = sc_strfmt(&buf, &sql, fmt, sql, lt, lc, r);
-			break;
-		}
-		}
-
-		if (sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	for (int i = 0; i < withinsz; ++i) {
-		const struct QMwithin *Q = within[i];
-		long ofs		 = Q->timeofs.offset * Q->timeofs.time;
-
-		const char fmt[] = "%s unixepoch() - %s.%s <= %ld AND";
-
-		sz = sc_strfmt(&buf, &sql, fmt, sql, Q->table, Q->column, ofs);
-
-		if (sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	for (int i = 0; i < betweensz; ++i) {
-		const struct QMbetween *Q   = between[i];
-		const char	       *t   = Q->table;
-		const char	       *c   = Q->column;
-		long			min = Q->min;
-		long			max = Q->max;
-
-		const char fmt[] = "%s %s.%s > %ld AND %s.%s < %ld AND";
-
-		sz = sc_strfmt(&buf, &sql, fmt, sql, t, c, min, t, c, max);
-
-		if (sql == NULL)
-			goto OUT_OF_MEMORY;
-	}
-
-	sql[sz - 4] = ';';
-	sql[sz - 3] = '\0';
 
 	if (sqlite3_exec(db, sql, callback, data, errmsg) != SQLITE_OK)
 		goto INV_QUERY;

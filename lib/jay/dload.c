@@ -57,16 +57,17 @@ struct jy_module {
 	const char     *errmsg;
 };
 
-typedef int (*loadfn_t)(struct jy_module *, const char **errmsg);
-typedef int (*unloadfn_t)(struct jy_module *, const char **errmsg);
-
 #ifdef __unix__
 #	include <dlfcn.h>
 
 int jry_dlload(const char *path, struct jy_defs *def, const char **msg)
 {
-	int	 ret = 0;
-	loadfn_t load;
+	int ret = 0;
+
+	union {
+		void *func;
+		int (*load)(struct jy_module *, const char **errmsg);
+	} dlfn;
 
 	int  pathsz   = strlen(path);
 	char suffix[] = ".so";
@@ -83,9 +84,9 @@ int jry_dlload(const char *path, struct jy_defs *def, const char **msg)
 	if (handle.handle == NULL)
 		goto DLOAD_ERROR;
 
-	load = (loadfn_t) (uintptr_t) dlsym(handle.handle, "module_load");
+	dlfn.func = dlsym(handle.handle, "module_load");
 
-	if (load == NULL)
+	if (dlfn.func == NULL)
 		goto DLOAD_ERROR;
 
 	const char k[] = "__handle__";
@@ -95,8 +96,12 @@ int jry_dlload(const char *path, struct jy_defs *def, const char **msg)
 
 	struct jy_module ctx = { .def = def, .errmsg = "not an error" };
 
-	if (load(&ctx, msg) != JAY_OK)
-		goto LOAD_FAIL;
+	switch (dlfn.load(&ctx, msg)) {
+	case JAY_OK:
+		break;
+	case JAY_INT_CRASH:
+		goto CRASH;
+	}
 
 	goto FINISH;
 
@@ -105,7 +110,7 @@ OUT_OF_MEMORY:
 	*msg = "out of memory";
 	goto FINISH;
 
-LOAD_FAIL:
+CRASH:
 	ret = 2;
 	goto FINISH;
 
@@ -121,6 +126,11 @@ int jry_dlunload(struct jy_defs *def, const char **errmsg)
 {
 	int status = 0;
 
+	union {
+		void *func;
+		int (*unload)(struct jy_module *, const char **errmsg);
+	} dlfn;
+
 	union jy_value handle;
 
 	const char k[] = "__handle__";
@@ -134,15 +144,18 @@ int jry_dlunload(struct jy_defs *def, const char **errmsg)
 	if (handle.handle == NULL)
 		goto FINISH;
 
-	unloadfn_t unload;
+	dlfn.func = dlsym(handle.handle, "module_unload");
 
-	unload = (unloadfn_t) (uintptr_t) dlsym(handle.handle, "module_unload");
-
-	if (unload == NULL)
+	if (dlfn.func == NULL)
 		goto CLOSE;
 
 	struct jy_module ctx = { .def = def };
-	status		     = unload(&ctx, errmsg);
+
+	// TODO: implement more interrupt code
+	switch (dlfn.unload(&ctx, errmsg)) {
+	case JAY_OK:
+		break;
+	}
 
 CLOSE: {
 	dlclose(handle.handle);

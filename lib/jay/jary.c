@@ -83,12 +83,12 @@ struct jary {
 	uint16_t  r_clbk_sz;
 };
 
-static inline int prtknln(char		**lexemes,
+static inline int prtknln(int		  bufsz,
+			  char		 *buf,
+			  char		**lexemes,
 			  const uint32_t *lines,
 			  uint32_t	  lexn,
-			  uint32_t	  line,
-			  int		  bufsz,
-			  char		 *buf)
+			  uint32_t	  line)
 {
 #define SIZE() bufsz ? bufsz - count : 0
 #define PTR()  count ? buf + count : buf
@@ -121,11 +121,11 @@ FINISH:
 #undef PTR
 }
 
-static inline int prerrors(const struct tkn_errs *errs,
+static inline int prerrors(int bufsz,
+			   char *restrict buf,
+			   const struct tkn_errs *errs,
 			   const struct jy_tkns	 *tkns,
-			   const char		 *path,
-			   int			  bufsz,
-			   char			 *buf)
+			   const char		 *path)
 {
 #define SIZE() bufsz ? bufsz - sz : 0
 #define PTR()  sz ? buf + sz : buf
@@ -150,7 +150,7 @@ static inline int prerrors(const struct tkn_errs *errs,
 
 		sz += snprintf(PTR(), SIZE(), "%5d | ", pline);
 
-		sz += prtknln(lexemes, lines, tknsz, pline, SIZE(), PTR());
+		sz += prtknln(SIZE(), PTR(), lexemes, lines, tknsz, pline);
 
 		sz += snprintf(PTR(), SIZE(), "\n");
 
@@ -162,8 +162,8 @@ static inline int prerrors(const struct tkn_errs *errs,
 
 			sz += snprintf(PTR(), SIZE(), "%5d | ", line);
 
-			sz += prtknln(lexemes, lines, tknsz, line, SIZE(),
-				      PTR());
+			sz += prtknln(SIZE(), PTR(), lexemes, lines, tknsz,
+				      line);
 			sz += snprintf(PTR(), SIZE(), "\n");
 NEXT_TKN:
 			pline = line;
@@ -177,22 +177,16 @@ NEXT_TKN:
 #undef PTR
 }
 
-static inline int crt_evtbl(struct sqlite3	 *db,
-			    const char		 *name,
-			    const struct jy_defs *event)
+static inline int prcrtevt(int bufsz,
+			   char *restrict buf,
+			   const char		*name,
+			   const struct jy_defs *event)
 {
-	int	      ret = JARY_OK;
-	struct sc_mem m	  = { .buf = NULL };
+#define SIZE() bufsz ? bufsz - sz : 0
+#define PTR()  sz ? buf + sz : buf
+	int sz = 0;
 
-	char *sql;
-	int   sqlsz = 0;
-
-	sc_strfmt(&m, &sql, "CREATE TABLE IF NOT EXISTS %s (", name);
-
-	if (sql == NULL) {
-		ret = JARY_ERR_OOM;
-		goto FINISH;
-	}
+	sz += snprintf(PTR(), SIZE(), "CREATE TABLE IF NOT EXISTS %s (", name);
 
 	for (size_t i = 0; i < event->capacity; ++i) {
 		const char *type   = NULL;
@@ -217,53 +211,33 @@ static inline int crt_evtbl(struct sqlite3	 *db,
 		if (strcmp(column, "__arrival__") == 0)
 			type = "INTEGER DEFAULT (unixepoch())";
 
-		sqlsz = sc_strfmt(&m, &sql, "%s%s %s,", sql, column, type);
-
-		if (sql == NULL) {
-			ret = JARY_ERR_OOM;
-			goto FINISH;
-		}
+		sz += snprintf(PTR(), SIZE(), "%s %s,", column, type);
 	}
 
-	assert(sqlsz > 0);
-
-	sql[sqlsz - 1] = ')';
-
-	sc_strfmt(&m, &sql, "%s;", sql);
-
-	if (sql == NULL) {
-		ret = JARY_ERR_OOM;
-		goto FINISH;
+	if (buf) {
+		buf[sz - 1]  = ')';
+		buf[sz]	     = ';';
+		sz	    += 1;
 	}
 
-	switch (sqlite3_exec(db, sql, NULL, NULL, NULL)) {
-	case SQLITE_OK:
-		break;
-	default:
-		ret = JARY_ERR_SQLITE3;
-	}
+	return sz;
 
-FINISH:
-	sc_free(&m);
-	return ret;
+#undef SIZE
+#undef PTR
 }
 
-static inline int ins_evt(struct sqlite3 *db,
-			  const char	 *name,
-			  uint32_t	  length,
-			  const char	**keys,
-			  const char	**values)
+static inline int prinsevt(int bufsz,
+			   char *restrict buf,
+			   const char  *name,
+			   uint32_t	length,
+			   const char **keys,
+			   const char **values)
 {
-	int	      ret = JARY_OK;
-	struct sc_mem m	  = { .buf = NULL };
+#define SIZE() bufsz ? bufsz - sz : 0
+#define PTR()  sz ? buf + sz : buf
+	int sz = 0;
 
-	char *sql;
-	int   sqlsz = 0;
-
-	sc_strfmt(&m, &sql, "INSERT INTO %s (", name);
-
-	if (sql == NULL)
-		goto OUT_OF_MEMORY;
+	sz += snprintf(PTR(), SIZE(), "INSERT INTO %s (", name);
 
 	for (uint32_t i = 0; i < length; ++i) {
 		const char *column = keys[i];
@@ -271,20 +245,13 @@ static inline int ins_evt(struct sqlite3 *db,
 		if (column == NULL)
 			continue;
 
-		sqlsz = sc_strfmt(&m, &sql, "%s%s,", sql, column);
-
-		if (sql == NULL)
-			goto OUT_OF_MEMORY;
+		sz += snprintf(PTR(), SIZE(), "%s,", column);
 	}
 
-	assert(sqlsz > 0);
+	if (buf)
+		buf[sz - 1] = ')';
 
-	sql[sqlsz - 1] = ')';
-
-	sc_strfmt(&m, &sql, "%s VALUES (", sql);
-
-	if (sql == NULL)
-		goto OUT_OF_MEMORY;
+	sz += snprintf(PTR(), SIZE(), " VALUES (");
 
 	for (uint32_t i = 0; i < length; ++i) {
 		const char *value = values[i];
@@ -292,36 +259,18 @@ static inline int ins_evt(struct sqlite3 *db,
 		if (value == NULL)
 			continue;
 
-		sqlsz = sc_strfmt(&m, &sql, "%s%s,", sql, value);
-
-		if (sql == NULL)
-			goto OUT_OF_MEMORY;
+		sz += snprintf(PTR(), SIZE(), "%s,", value);
 	}
 
-	assert(sqlsz > 0);
-
-	sql[sqlsz - 1] = ')';
-
-	sc_strfmt(&m, &sql, "%s;", sql);
-
-	if (sql == NULL)
-		goto OUT_OF_MEMORY;
-
-	switch (sqlite3_exec(db, sql, NULL, NULL, NULL)) {
-	case SQLITE_OK:
-		break;
-	default:
-		ret = JARY_ERR_SQLITE3;
+	if (buf) {
+		buf[sz - 1]  = ')';
+		buf[sz]	     = ';';
+		sz	    += 1;
 	}
 
-	goto FINISH;
-
-OUT_OF_MEMORY:
-	ret = JARY_ERR_OOM;
-
-FINISH:
-	sc_free(&m);
-	return ret;
+	return sz;
+#undef SIZE
+#undef PTR
 }
 
 static inline int rule_clbks(size_t		    rule,
@@ -967,9 +916,23 @@ int jary_compile(struct jary *jary,
 		}
 	}
 
-	for (size_t i = 0; i < eventsz; ++i)
-		if (crt_evtbl(jary->db, table[i], events[i]))
+	for (size_t i = 0; i < eventsz; ++i) {
+		int sz = prcrtevt(0, NULL, table[i], events[i]);
+
+		char *sql = sc_alloc(&bump, sz);
+
+		if (sql == NULL)
+			goto OUT_OF_MEMORY;
+
+		prcrtevt(sz, sql, table[i], events[i]);
+
+		switch (sqlite3_exec(jary->db, sql, NULL, NULL, NULL)) {
+		case SQLITE_OK:
+			break;
+		default:
 			goto CREATE_TABLE_FAIL;
+		}
+	}
 
 	goto FINISH;
 
@@ -980,13 +943,13 @@ COMPILE_FAIL: {
 	if (errmsg == NULL)
 		goto FINISH;
 
-	int   bufsz = prerrors(errs, tkns, code->path, 0, NULL);
+	int   bufsz = prerrors(0, NULL, errs, tkns, code->path);
 	char *buf   = calloc(bufsz, 1);
 
 	if (buf == NULL)
 		goto OUT_OF_MEMORY;
 
-	prerrors(errs, tkns, code->path, bufsz, buf);
+	prerrors(bufsz, buf, errs, tkns, code->path);
 	*errmsg = buf;
 
 	goto FINISH;
@@ -1115,8 +1078,21 @@ int jary_execute(struct jary *jary)
 		const char **vals  = jary->ev_vals[i];
 		uint8_t	     colsz = jary->ev_colsz[i];
 
-		if (ins_evt(jary->db, table, colsz, cols, vals))
+		int sz = prinsevt(0, NULL, table, colsz, cols, vals);
+
+		char *sql = sc_alloc(&sc, sz);
+
+		if (sql == NULL)
+			goto OUT_OF_MEMORY;
+
+		prinsevt(sz, sql, table, colsz, cols, vals);
+
+		switch (sqlite3_exec(jary->db, sql, NULL, NULL, NULL)) {
+		case SQLITE_OK:
+			break;
+		default:
 			goto INSERT_FAIL;
+		}
 	}
 
 	const uint16_t *ords   = jary->r_clbk_ords;

@@ -47,6 +47,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 static const char *tkn2string(enum jy_tkn type)
 {
 	switch (type) {
+	case TKN_RESERVED:
+		return "TKN_RESERVED";
 	case TKN_OUTPUT:
 		return "TKN_OUTPUT";
 	case TKN_REGEX:

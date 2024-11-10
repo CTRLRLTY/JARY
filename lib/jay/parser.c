@@ -68,6 +68,7 @@ struct parser {
 	uint32_t    tkn;
 };
 
+// high to low
 enum prec {
 	PREC_NONE,
 	PREC_ASSIGNMENT,
@@ -81,19 +82,7 @@ enum prec {
 	PREC_CALL,	 // . () ~
 };
 
-typedef bool (*parsefn_t)(struct parser *,
-			  struct jy_asts *,
-			  struct jy_tkns *,
-			  struct tkn_errs *,
-			  uint32_t *);
-
-struct rule {
-	parsefn_t prefix;
-	parsefn_t infix;
-	enum prec prec;
-};
-
-static inline struct rule *rule(enum jy_tkn type);
+static inline enum prec tkn_prec(enum jy_tkn type);
 
 static bool _precedence(struct parser	*p,
 			struct jy_asts	*asts,
@@ -101,12 +90,6 @@ static bool _precedence(struct parser	*p,
 			struct tkn_errs *errs,
 			uint32_t	*topast,
 			enum prec	 rbp);
-
-static bool _expression(struct parser	*p,
-			struct jy_asts	*asts,
-			struct jy_tkns	*tkns,
-			struct tkn_errs *errs,
-			uint32_t	*topast);
 
 static inline __use_result int push_ast(struct jy_asts *asts,
 					enum jy_ast	type,
@@ -353,180 +336,32 @@ PANIC:
 	return true;
 }
 
-static bool _err(struct parser	 *p,
-		 struct jy_asts	 *__unused(asts),
-		 struct jy_tkns	 *__unused(tkns),
-		 struct tkn_errs *errs,
-		 uint32_t	 *__unused(root))
+static inline bool _expr(struct parser	 *p,
+			 struct jy_asts	 *asts,
+			 struct jy_tkns	 *tkns,
+			 struct tkn_errs *errs,
+			 uint32_t	 *root)
 {
-	tkn_error(errs, "not a token", p->tkn, p->tkn);
+	uint32_t lastast = asts->size - 1;
 
-	return true;
-}
+	if (_precedence(p, asts, tkns, errs, root, PREC_ASSIGNMENT)) {
+		// clean until last valid (non inclusive)
+		while (lastast + 1 < asts->size)
+			pop_ast(asts);
 
-static bool _err_str(struct parser   *p,
-		     struct jy_asts  *__unused(asts),
-		     struct jy_tkns  *__unused(tkns),
-		     struct tkn_errs *errs,
-		     uint32_t	     *__unused(root))
-{
-	tkn_error(errs, "unterminated string", p->tkn, p->tkn);
-
-	return true;
-}
-
-static bool _literal(struct parser   *p,
-		     struct jy_asts  *asts,
-		     struct jy_tkns  *tkns,
-		     struct tkn_errs *errs,
-		     uint32_t	     *root)
-{
-	enum jy_tkn type = tkns->types[p->tkn];
-
-	enum jy_ast root_type;
-	switch (type) {
-	case TKN_NUMBER:
-		root_type = AST_LONG;
-		break;
-	case TKN_STRING:
-		root_type = AST_STRING;
-		break;
-	case TKN_HOUR:
-		root_type = AST_HOUR;
-		break;
-	case TKN_MINUTE:
-		root_type = AST_MINUTE;
-		break;
-	case TKN_SECOND:
-		root_type = AST_SECOND;
-		break;
-	case TKN_FALSE:
-		root_type = AST_FALSE;
-		break;
-	case TKN_TRUE:
-		root_type = AST_TRUE;
-		break;
-	case TKN_REGEXP:
-		root_type = AST_REGEXP;
-		break;
-
-	default: {
-		tkn_error(errs, "not a literal", p->tkn, p->tkn);
 		goto PANIC;
 	}
-	}
 
-	if (push_ast(asts, root_type, p->tkn, root) != 0)
-		goto PANIC;
-
-	// consume literal
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	return ended(tkns->types, tkns->size);
-
+	return false;
 PANIC:
 	return true;
 }
 
-static bool _name(struct parser	  *p,
-		  struct jy_asts  *asts,
-		  struct jy_tkns  *tkns,
-		  struct tkn_errs *__unused(errs),
-		  uint32_t	  *root)
-{
-	if (push_ast(asts, AST_NAME, p->tkn, root) != 0)
-		return true;
-
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	return ended(tkns->types, tkns->size);
-}
-
-static bool _not(struct parser	 *p,
-		 struct jy_asts	 *asts,
-		 struct jy_tkns	 *tkns,
-		 struct tkn_errs *errs,
-		 uint32_t	 *root)
-{
-	if (push_ast(asts, AST_NOT, p->tkn, root) != 0)
-		goto PANIC;
-
-	uint32_t topast = 0;
-
-	// consume not
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	if (_precedence(p, asts, tkns, errs, &topast, PREC_UNARY))
-		goto PANIC;
-
-	if (push_child(asts, *root, topast) != 0)
-		goto PANIC;
-
-	return ended(tkns->types, tkns->size);
-
-PANIC:
-	return true;
-}
-
-static bool _event(struct parser   *p,
-		   struct jy_asts  *asts,
-		   struct jy_tkns  *tkns,
-		   struct tkn_errs *errs,
-		   uint32_t	   *root)
-{
-	uint32_t dlrtkn = p->tkn;
-	// consume $
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	enum jy_tkn type = tkns->types[p->tkn];
-
-	if (type != TKN_IDENTIFIER) {
-		tkn_error(errs, "not an identifier", dlrtkn, p->tkn);
-		goto PANIC;
-	}
-
-	if (push_ast(asts, AST_EVENT, p->tkn, root) != 0)
-		goto PANIC;
-
-	// consume name
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	return ended(tkns->types, tkns->size);
-PANIC:
-	return true;
-}
-
-static bool _grouping(struct parser   *p,
-		      struct jy_asts  *asts,
-		      struct jy_tkns  *tkns,
-		      struct tkn_errs *errs,
-		      uint32_t	      *root)
-{
-	uint32_t grptkn = p->tkn;
-	// consume (
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	if (_expression(p, asts, tkns, errs, root))
-		goto PANIC;
-
-	if (tkns->types[p->tkn] != TKN_RIGHT_PAREN) {
-		tkn_error(errs, "missing ')'", grptkn, p->tkn);
-		goto PANIC;
-	}
-
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	return ended(tkns->types, tkns->size);
-
-PANIC:
-	return true;
-}
-
-static bool _call(struct parser	  *p,
-		  struct jy_asts  *asts,
-		  struct jy_tkns  *tkns,
-		  struct tkn_errs *errs,
-		  uint32_t	  *root)
+static inline bool _call(struct parser	 *p,
+			 struct jy_asts	 *asts,
+			 struct jy_tkns	 *tkns,
+			 struct tkn_errs *errs,
+			 uint32_t	 *root)
 {
 	uint32_t    left    = *root;
 	enum jy_ast type    = asts->types[left];
@@ -559,7 +394,7 @@ static bool _call(struct parser	  *p,
 			goto PANIC;
 		}
 
-		if (_expression(p, asts, tkns, errs, &topast))
+		if (_expr(p, asts, tkns, errs, &topast))
 			goto PANIC;
 
 		if (push_child(asts, *root, topast) != 0)
@@ -666,155 +501,6 @@ PANIC:
 	return true;
 }
 
-static bool _binary(struct parser   *p,
-		    struct jy_asts  *asts,
-		    struct jy_tkns  *tkns,
-		    struct tkn_errs *errs,
-		    uint32_t	    *root)
-{
-	uint32_t left  = *root;
-	uint32_t right = left;
-	uint32_t optkn = p->tkn;
-
-	enum jy_tkn  optype = tkns->types[p->tkn];
-	struct rule *oprule = rule(optype);
-
-	enum jy_ast root_type;
-	switch (optype) {
-	case TKN_PLUS:
-		root_type = AST_ADDITION;
-		break;
-	case TKN_CONCAT:
-		root_type = AST_CONCAT;
-		break;
-	case TKN_MINUS:
-		root_type = AST_SUBTRACT;
-		break;
-	case TKN_STAR:
-		root_type = AST_MULTIPLY;
-		break;
-	case TKN_SLASH:
-		root_type = AST_DIVIDE;
-		break;
-	case TKN_EQ:
-		root_type = AST_EQUALITY;
-		break;
-	case TKN_LESSTHAN:
-		root_type = AST_LESSER;
-		break;
-	case TKN_GREATERTHAN:
-		root_type = AST_GREATER;
-		break;
-	case TKN_AND:
-		root_type = AST_AND;
-		break;
-	case TKN_OR:
-		root_type = AST_OR;
-		break;
-	case TKN_EQUAL:
-		root_type = AST_EQUAL;
-		break;
-	case TKN_JOINX:
-		root_type = AST_JOINX;
-		break;
-	case TKN_EXACT:
-		root_type = AST_EXACT;
-		break;
-	case TKN_BETWEEN:
-		root_type = AST_BETWEEN;
-		break;
-	case TKN_WITHIN:
-		root_type = AST_WITHIN;
-		break;
-	case TKN_REGEX:
-		root_type = AST_REGEX;
-		break;
-	case TKN_TILDE:
-		root_type = AST_REGMATCH;
-		break;
-
-	default:
-		goto PANIC;
-	}
-
-	if (push_ast(asts, root_type, optkn, root) != 0)
-		goto PANIC;
-
-	// consume binary operator
-	next(tkns, &p->src, &p->srcsz, &p->tkn);
-
-	if (_precedence(p, asts, tkns, errs, &right, oprule->prec))
-		goto PANIC;
-
-	if (push_child(asts, *root, left) != 0)
-		goto PANIC;
-
-	if (push_child(asts, *root, right) != 0)
-		goto PANIC;
-
-	return ended(tkns->types, tkns->size);
-
-PANIC:
-	return true;
-}
-
-static bool _precedence(struct parser	*p,
-			struct jy_asts	*asts,
-			struct jy_tkns	*tkns,
-			struct tkn_errs *errs,
-			uint32_t	*root,
-			enum prec	 rbp)
-{
-	enum jy_tkn  pretype	= tkns->types[p->tkn];
-	struct rule *prefixrule = rule(pretype);
-	parsefn_t    prefixfn	= prefixrule->prefix;
-
-	if (prefixfn == NULL) {
-		tkn_error(errs, "not an expression", asts->tkns[*root], p->tkn);
-		goto PANIC;
-	}
-
-	if (prefixfn(p, asts, tkns, errs, root))
-		goto PANIC;
-
-	enum prec nextprec = rule(tkns->types[p->tkn])->prec;
-
-	while (rbp < nextprec) {
-		parsefn_t infixfn = rule(tkns->types[p->tkn])->infix;
-
-		if (infixfn(p, asts, tkns, errs, root))
-			goto PANIC;
-
-		nextprec = rule(tkns->types[p->tkn])->prec;
-	}
-
-	return ended(tkns->types, tkns->size);
-
-PANIC:
-	return true;
-}
-
-static inline bool _expression(struct parser   *p,
-			       struct jy_asts  *asts,
-			       struct jy_tkns  *tkns,
-			       struct tkn_errs *errs,
-			       uint32_t	       *root)
-{
-	uint32_t lastast = asts->size - 1;
-
-	if (_precedence(p, asts, tkns, errs, root, PREC_ASSIGNMENT)) {
-		// clean until last valid (non inclusive)
-		while (lastast + 1 < asts->size)
-			pop_ast(asts);
-
-		goto PANIC;
-	}
-
-	return false;
-PANIC:
-	return true;
-}
-
 static bool _types(struct parser   *p,
 		   struct jy_asts  *asts,
 		   struct jy_tkns  *tkns,
@@ -900,7 +586,7 @@ static bool _section(struct parser   *p,
 			goto INVALID_SECTION;
 
 		asts->types[sectast] = AST_JUMP_SECT;
-		listfn		     = _expression;
+		listfn		     = _expr;
 		break;
 	case TKN_INPUT:
 		if (decltype != AST_INGRESS_DECL)
@@ -914,20 +600,20 @@ static bool _section(struct parser   *p,
 			goto INVALID_SECTION;
 
 		asts->types[sectast] = AST_MATCH_SECT;
-		listfn		     = _expression;
+		listfn		     = _expr;
 		break;
 	case TKN_CONDITION:
 		if (decltype != AST_RULE_DECL)
 			goto INVALID_SECTION;
 
 		asts->types[sectast] = AST_CONDITION_SECT;
-		listfn		     = _expression;
+		listfn		     = _expr;
 		break;
 	case TKN_OUTPUT:
 		if (decltype != AST_RULE_DECL)
 			goto INVALID_SECTION;
 		asts->types[sectast] = AST_OUTPUT_SECT;
-		listfn		     = _expression;
+		listfn		     = _expr;
 		break;
 	case TKN_FIELD:
 		if (decltype != AST_INGRESS_DECL)
@@ -1004,11 +690,11 @@ FINISH:
 	return ret;
 }
 
-static bool _block(struct parser   *p,
-		   struct jy_asts  *asts,
-		   struct jy_tkns  *tkns,
-		   struct tkn_errs *errs,
-		   uint32_t	    declast)
+static inline bool _block(struct parser	  *p,
+			  struct jy_asts  *asts,
+			  struct jy_tkns  *tkns,
+			  struct tkn_errs *errs,
+			  uint32_t	   declast)
 {
 	uint32_t decltkn = asts->tkns[declast];
 
@@ -1090,10 +776,10 @@ PANIC:
 	return true;
 }
 
-static bool _declstmt(struct parser   *p,
-		      struct jy_asts  *asts,
-		      struct jy_tkns  *tkns,
-		      struct tkn_errs *errs)
+static inline bool _declstmt(struct parser   *p,
+			     struct jy_asts  *asts,
+			     struct jy_tkns  *tkns,
+			     struct tkn_errs *errs)
 {
 	uint32_t    declast = asts->size - 1;
 	uint32_t    decltkn = p->tkn;
@@ -1215,52 +901,562 @@ static int _entry(struct parser	  *p,
 	return 0;
 }
 
-static struct rule rules[TOTAL_TKN_TYPES] = {
-	[TKN_ERR]     = { _err, NULL, PREC_NONE },
-	[TKN_ERR_STR] = { _err_str, NULL, PREC_NONE },
-
-	[TKN_LEFT_PAREN] = { _grouping, _call, PREC_CALL },
-	[TKN_DOT]	 = { NULL, _dot, PREC_CALL },
-
-	[TKN_PLUS]   = { NULL, _binary, PREC_TERM },
-	[TKN_CONCAT] = { NULL, _binary, PREC_TERM },
-	[TKN_MINUS]  = { NULL, _binary, PREC_TERM },
-	[TKN_SLASH]  = { NULL, _binary, PREC_FACTOR },
-	[TKN_STAR]   = { NULL, _binary, PREC_FACTOR },
-
-	[TKN_JOINX]   = { NULL, _binary, PREC_CALL - 1 },
-	[TKN_EXACT]   = { NULL, _binary, PREC_EQUALITY },
-	[TKN_BETWEEN] = { NULL, _binary, PREC_EQUALITY },
-	[TKN_WITHIN]  = { NULL, _binary, PREC_EQUALITY },
-	[TKN_REGEX]   = { NULL, _binary, PREC_EQUALITY },
-	[TKN_EQUAL]   = { NULL, _binary, PREC_EQUALITY },
-	[TKN_TILDE]   = { NULL, _binary, PREC_EQUALITY },
-
-	[TKN_EQ]	  = { NULL, _binary, PREC_EQUALITY },
-	[TKN_LESSTHAN]	  = { NULL, _binary, PREC_COMPARISON },
-	[TKN_GREATERTHAN] = { NULL, _binary, PREC_COMPARISON },
-
-	[TKN_AND] = { NULL, _binary, PREC_AND },
-	[TKN_OR]  = { NULL, _binary, PREC_OR },
-
-	[TKN_NOT] = { _not, NULL, PREC_NONE },
-
-	[TKN_STRING] = { _literal, NULL, PREC_NONE },
-	[TKN_NUMBER] = { _literal, NULL, PREC_NONE },
-	[TKN_REGEXP] = { _literal, NULL, PREC_NONE },
-	[TKN_FALSE]  = { _literal, NULL, PREC_NONE },
-	[TKN_TRUE]   = { _literal, NULL, PREC_NONE },
-	[TKN_HOUR]   = { _literal, NULL, PREC_NONE },
-	[TKN_MINUTE] = { _literal, NULL, PREC_NONE },
-	[TKN_SECOND] = { _literal, NULL, PREC_NONE },
-
-	[TKN_IDENTIFIER] = { _name, NULL, PREC_NONE },
-	[TKN_DOLLAR]	 = { _event, NULL, PREC_NONE },
-};
-
-static inline struct rule *rule(enum jy_tkn type)
+static inline bool _prefix(enum jy_tkn	    type,
+			   struct parser   *p,
+			   struct jy_asts  *asts,
+			   struct jy_tkns  *tkns,
+			   struct tkn_errs *errs,
+			   uint32_t	   *root)
 {
-	return &rules[type];
+	switch (type) {
+	case TKN_ERR:
+		tkn_error(errs, "not a token", p->tkn, p->tkn);
+
+		return true;
+	case TKN_ERR_STR:
+		tkn_error(errs, "unterminated string", p->tkn, p->tkn);
+
+		return true;
+
+	case TKN_LEFT_PAREN: {
+		uint32_t grptkn = p->tkn;
+		// consume (
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_expr(p, asts, tkns, errs, root))
+			goto PANIC;
+
+		if (tkns->types[p->tkn] != TKN_RIGHT_PAREN) {
+			tkn_error(errs, "missing ')'", grptkn, p->tkn);
+			goto PANIC;
+		}
+
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		return ended(tkns->types, tkns->size);
+	}
+
+	case TKN_NOT: {
+		if (push_ast(asts, AST_NOT, p->tkn, root) != 0)
+			goto PANIC;
+
+		uint32_t topast = 0;
+
+		// consume not
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &topast, PREC_UNARY))
+			goto PANIC;
+
+		if (push_child(asts, *root, topast) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+
+	case TKN_IDENTIFIER:
+		if (push_ast(asts, AST_NAME, p->tkn, root) != 0)
+			return true;
+
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		return ended(tkns->types, tkns->size);
+
+	case TKN_DOLLAR: {
+		uint32_t dlrtkn = p->tkn;
+		// consume $
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		enum jy_tkn type = tkns->types[p->tkn];
+
+		if (type != TKN_IDENTIFIER) {
+			tkn_error(errs, "not an identifier", dlrtkn, p->tkn);
+			goto PANIC;
+		}
+
+		if (push_ast(asts, AST_EVENT, p->tkn, root) != 0)
+			goto PANIC;
+
+		// consume name
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		return ended(tkns->types, tkns->size);
+	}
+
+	case TKN_STRING:
+		if (push_ast(asts, AST_STRING, p->tkn, root) != 0)
+			goto PANIC;
+
+		// consume string
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		return ended(tkns->types, tkns->size);
+
+	case TKN_NUMBER:
+		if (push_ast(asts, AST_LONG, p->tkn, root) != 0)
+			goto PANIC;
+
+		// consume number
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		return ended(tkns->types, tkns->size);
+
+	case TKN_REGEXP:
+		if (push_ast(asts, AST_REGEXP, p->tkn, root) != 0)
+			goto PANIC;
+
+		// consume regexp
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		return ended(tkns->types, tkns->size);
+
+	case TKN_FALSE:
+		if (push_ast(asts, AST_FALSE, p->tkn, root) != 0)
+			goto PANIC;
+
+		// consume false
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		return ended(tkns->types, tkns->size);
+
+	case TKN_TRUE:
+		if (push_ast(asts, AST_TRUE, p->tkn, root) != 0)
+			goto PANIC;
+
+		// consume true
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		return ended(tkns->types, tkns->size);
+
+	case TKN_HOUR:
+		if (push_ast(asts, AST_HOUR, p->tkn, root) != 0)
+			goto PANIC;
+
+		// consume hour
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		return ended(tkns->types, tkns->size);
+
+	case TKN_MINUTE:
+		if (push_ast(asts, AST_MINUTE, p->tkn, root) != 0)
+			goto PANIC;
+
+		// consume minute
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		return ended(tkns->types, tkns->size);
+
+	case TKN_SECOND:
+		if (push_ast(asts, AST_SECOND, p->tkn, root) != 0)
+			goto PANIC;
+
+		// consume number
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		return ended(tkns->types, tkns->size);
+
+	default:
+PANIC:
+		return true;
+	}
+}
+
+static inline bool _infix(enum jy_tkn	   type,
+			  struct parser	  *p,
+			  struct jy_asts  *asts,
+			  struct jy_tkns  *tkns,
+			  struct tkn_errs *errs,
+			  uint32_t	  *root)
+{
+	uint32_t left  = *root;
+	uint32_t right = left;
+	uint32_t optkn = p->tkn;
+
+	switch (type) {
+	case TKN_LEFT_PAREN:
+		return _call(p, asts, tkns, errs, root);
+	case TKN_DOT:
+		return _dot(p, asts, tkns, errs, root);
+	case TKN_PLUS: {
+		if (push_ast(asts, AST_ADDITION, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_CONCAT: {
+		if (push_ast(asts, AST_CONCAT, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_MINUS: {
+		if (push_ast(asts, AST_SUBTRACT, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_SLASH: {
+		if (push_ast(asts, AST_DIVIDE, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_STAR: {
+		if (push_ast(asts, AST_MULTIPLY, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_JOINX: {
+		if (push_ast(asts, AST_JOINX, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_EXACT: {
+		if (push_ast(asts, AST_EXACT, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_BETWEEN: {
+		if (push_ast(asts, AST_BETWEEN, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_WITHIN: {
+		if (push_ast(asts, AST_WITHIN, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_REGEX: {
+		if (push_ast(asts, AST_REGEX, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_EQUAL: {
+		if (push_ast(asts, AST_EQUAL, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_TILDE: {
+		if (push_ast(asts, AST_REGMATCH, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_EQ: {
+		if (push_ast(asts, AST_EQUALITY, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_LESSTHAN: {
+		if (push_ast(asts, AST_LESSER, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_GREATERTHAN: {
+		if (push_ast(asts, AST_GREATER, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_AND: {
+		if (push_ast(asts, AST_AND, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	case TKN_OR: {
+		if (push_ast(asts, AST_OR, optkn, root) != 0)
+			goto PANIC;
+
+		// consume binary operator
+		next(tkns, &p->src, &p->srcsz, &p->tkn);
+
+		if (_precedence(p, asts, tkns, errs, &right, tkn_prec(type)))
+			goto PANIC;
+
+		if (push_child(asts, *root, left) != 0)
+			goto PANIC;
+
+		if (push_child(asts, *root, right) != 0)
+			goto PANIC;
+
+		return ended(tkns->types, tkns->size);
+	}
+	default:
+PANIC:
+		return true;
+	}
+}
+
+static inline enum prec tkn_prec(enum jy_tkn type)
+{
+	switch (type) {
+	case TKN_LEFT_PAREN:
+	case TKN_DOT:
+		return PREC_CALL;
+	case TKN_PLUS:
+	case TKN_MINUS:
+	case TKN_CONCAT:
+		return PREC_TERM;
+	case TKN_SLASH:
+	case TKN_STAR:
+		return PREC_FACTOR;
+	case TKN_JOINX:
+		return PREC_CALL - 1;
+
+	case TKN_EXACT:
+	case TKN_BETWEEN:
+	case TKN_WITHIN:
+	case TKN_REGEX:
+	case TKN_EQUAL:
+	case TKN_TILDE:
+	case TKN_EQ:
+		return PREC_EQUALITY;
+
+	case TKN_LESSTHAN:
+	case TKN_GREATERTHAN:
+		return PREC_COMPARISON;
+
+	case TKN_AND:
+		return PREC_AND;
+	case TKN_OR:
+		return PREC_OR;
+
+	default:
+		return PREC_NONE;
+	}
+}
+
+static bool _precedence(struct parser	*p,
+			struct jy_asts	*asts,
+			struct jy_tkns	*tkns,
+			struct tkn_errs *errs,
+			uint32_t	*root,
+			enum prec	 rbp)
+{
+	enum jy_tkn pretype = tkns->types[p->tkn];
+
+	if (_prefix(pretype, p, asts, tkns, errs, root)) {
+		tkn_error(errs, "not an expression", asts->tkns[*root], p->tkn);
+		goto PANIC;
+	}
+
+	enum jy_tkn inftype  = tkns->types[p->tkn];
+	enum prec   nextprec = tkn_prec(inftype);
+
+	while (rbp < nextprec) {
+		if (_infix(inftype, p, asts, tkns, errs, root))
+			goto PANIC;
+
+		inftype	 = tkns->types[p->tkn];
+		nextprec = tkn_prec(inftype);
+	}
+
+	return ended(tkns->types, tkns->size);
+
+PANIC:
+	return true;
 }
 
 static inline void free_asts(struct jy_asts *asts)

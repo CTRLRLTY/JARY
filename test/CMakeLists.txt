@@ -60,6 +60,7 @@ target_compile_definitions( exec_test
         JOIN_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_join.jary" 
         WITHIN_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_within.jary"
         BETWEEN_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_between.jary"
+        EXACT_EQUAL_JARY_PATH="$<TARGET_FILE_DIR:exec_test>/exec_exact_equal.jary"
 )
 target_compile_definitions( jary_test 
         PUBLIC 

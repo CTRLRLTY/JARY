@@ -424,3 +424,53 @@ TEST(ExecTest, Between)
 	sqlite3_close_v2(db);
 	sc_free(&alloc);
 }
+
+TEST(ExecTest, ExactEqual)
+{
+	struct jy_asts	asts  = { .tkns = NULL };
+	struct jy_tkns	tkns  = { .lexemes = NULL };
+	struct tkn_errs errs  = { .from = NULL };
+	struct jy_jay	jay   = { .codes = NULL };
+	struct sc_mem	alloc = { .buf = NULL };
+	struct sb_mem	bump  = { .buf = NULL };
+	struct sqlite3 *db    = NULL;
+	char	       *src   = NULL;
+	size_t		srcsz = read_file(EXACT_EQUAL_JARY_PATH, &src);
+
+	sc_reap(&alloc, src, free);
+
+	const char mdir[] = "../modules/";
+
+	jry_parse(&alloc, &asts, &tkns, &errs, src, srcsz);
+
+	ASSERT_EQ(errs.size, 0);
+
+	jry_compile(&alloc, &jay, &errs, mdir, &asts, &tkns);
+
+	ASSERT_EQ(errs.size, 0);
+
+	int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE
+		 | SQLITE_OPEN_READWRITE;
+
+	int err = sqlite3_open_v2("test.db", &db, flag, NULL);
+
+	ASSERT_EQ(err, SQLITE_OK) << "msg: " << sqlite3_errmsg(db);
+
+	char *sql = "CREATE TABLE data (name TEXT, age INTEGER);"
+		    "INSERT INTO data (name, age) VALUES ('root', 18);";
+	char *msg = NULL;
+	err	  = sqlite3_exec(db, sql, NULL, NULL, &msg);
+
+	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
+
+	struct jy_state state = { .buf = &alloc, .outm = &bump };
+
+	ASSERT_EQ(jry_exec(db, &jay, jay.codes, &state), 0);
+
+	ASSERT_EQ(state.outsz, 1);
+	ASSERT_EQ(state.out[0].i64, 42);
+
+	sqlite3_close_v2(db);
+	sc_free(&alloc);
+	sb_free(&bump);
+}

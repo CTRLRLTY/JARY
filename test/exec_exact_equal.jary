@@ -1,0 +1,16 @@
+import mark
+
+ingress data {
+        field:
+                name string
+                age long
+}
+
+rule bye {
+        match:
+                $data.name exact "root"
+                $data.age equal 18
+
+        output:
+                42
+}

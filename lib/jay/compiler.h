@@ -45,6 +45,8 @@ enum jy_opcode {
 	JY_OP_PUSH8,
 	JY_OP_PUSH16,
 
+	JY_OP_SETBF8,
+
 	JY_OP_LOAD,
 	JY_OP_JOIN,
 	JY_OP_EQUAL,

@@ -324,6 +324,8 @@ static const char *k2string(enum jy_ktype type)
 static const char *codestring(enum jy_opcode code)
 {
 	switch (code) {
+	case JY_OP_SETBF8:
+		return "OP_SETBF8";
 	case JY_OP_REGEX:
 		return "OP_REGEX";
 	case JY_OP_OUTPUT:
@@ -775,6 +777,7 @@ static uint32_t print_chunk(uint8_t *codes, uint32_t pc, int indent)
 		} arg = { .bytes = codes + pc + 1 };
 
 		switch (opcode) {
+		case JY_OP_SETBF8:
 		case JY_OP_OUTPUT:
 		case JY_OP_REGEX:
 		case JY_OP_LOAD:

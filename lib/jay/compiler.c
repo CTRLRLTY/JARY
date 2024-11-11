@@ -154,34 +154,6 @@ OUT_OF_MEMORY:
 	return 1;
 }
 
-static inline bool _bool_expr(const struct jy_asts *asts,
-			      uint32_t		    ast,
-			      struct compiler	   *ctx,
-			      struct expr	   *expr)
-{
-	enum jy_ast type = asts->types[ast];
-
-	switch (type) {
-	case AST_FALSE:
-		expr->id = 1;
-		break;
-	case AST_TRUE:
-		expr->id = 2;
-		break;
-	default:
-		goto PANIC;
-	}
-
-	if (emit_push(expr->id, ctx->codes, ctx->codesz) != 0)
-		goto PANIC;
-
-	expr->type = JY_K_BOOL;
-	return false;
-
-PANIC:
-	return true;
-}
-
 static inline bool _time_expr(const struct jy_asts *asts,
 			      const struct jy_tkns *tkns,
 			      uint32_t		    ast,
@@ -1295,14 +1267,31 @@ static inline bool _expr(const struct jy_asts *asts,
 	case AST_SECOND:
 		return _time_expr(asts, tkns, id, ctx, errs, expr);
 
-	case AST_TRUE:
-	case AST_FALSE:
-		return _bool_expr(asts, id, ctx, expr);
+	case AST_FALSE: {
+		expr->id = 1;
 
+		if (emit_push(expr->id, ctx->codes, ctx->codesz) != 0)
+			goto OUT_OF_MEMORY;
+
+		expr->type = JY_K_BOOL;
+		return false;
+	}
+	case AST_TRUE: {
+		expr->id = 2;
+
+		if (emit_push(expr->id, ctx->codes, ctx->codesz) != 0)
+			goto OUT_OF_MEMORY;
+
+		expr->type = JY_K_BOOL;
+		return false;
+	}
 	default:
 		tkn_error(errs, "not an expression", tkn, tkn);
 		return true;
 	}
+
+OUT_OF_MEMORY:
+	return true;
 }
 
 static inline bool _match_sect(const struct jy_asts *asts,
@@ -1353,6 +1342,7 @@ static inline bool _condition_sect(const struct jy_asts *asts,
 	for (uint32_t i = 0; i < childsz; ++i) {
 		uint32_t    chid  = child[i];
 		uint32_t    chtkn = asts->tkns[chid];
+		enum jy_ast type  = asts->types[chid];
 		struct expr expr  = { 0 };
 
 		if (_expr(asts, tkns, chid, ctx, errs, ctx->names, &expr))
@@ -1362,6 +1352,16 @@ static inline bool _condition_sect(const struct jy_asts *asts,
 			tkn_error(errs, "invalid condition expression", sectkn,
 				  chtkn);
 			continue;
+		}
+
+		switch (type) {
+		case AST_TRUE:
+		case AST_FALSE:
+		case AST_CALL:
+			if (emit_byte(JY_OP_SETBF8, ctx->codes, ctx->codesz))
+				goto PANIC;
+		default:
+			break;
 		}
 
 		if (emit_byte(JY_OP_JMPF, ctx->codes, ctx->codesz) != 0)

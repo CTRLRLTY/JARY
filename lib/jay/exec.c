@@ -283,6 +283,11 @@ static inline int interpret(struct runtime *ctx,
 		// shouldnt come here
 		assert(opcode != JY_OP_END);
 		break;
+	case JY_OP_SETBF8:
+		flag->bits.b8  = pop(stack).i64;
+		pc	      += 1;
+		break;
+
 	case JY_OP_PUSH8: {
 		union jy_value v = vals[*arg.u8];
 
@@ -670,6 +675,8 @@ static inline int interpret(struct runtime *ctx,
 		pc += 1;
 		break;
 	}
+	default:
+		goto INVARIANT;
 	}
 
 	goto FINISH;

@@ -75,23 +75,20 @@ TEST(ScannerTest, ScanWhitespace)
 
 TEST(ScannerTest, ScanSymbol)
 {
-	char str[] = "(){}==~<>:,$";
+	char str[] = "()[]{}==~<>:.,$^|\\?\\t\\r\\n\\f";
 
 	enum jy_tkn types[] = {
-		// group
-		TKN_LEFT_PAREN,
-		TKN_RIGHT_PAREN,
-		// block
-		TKN_LEFT_BRACE,
-		TKN_RIGHT_BRACE,
-		// operator
-		TKN_EQ,
-		TKN_TILDE,
-		TKN_LESSTHAN,
-		TKN_GREATERTHAN,
-		TKN_COLON,
-		TKN_COMMA,
-		TKN_DOLLAR,
+		TKN_LEFT_PAREN,	  TKN_RIGHT_PAREN,
+		TKN_LEFT_BRACKET, TKN_RIGHT_BRACKET,
+		TKN_LEFT_BRACE,	  TKN_RIGHT_BRACE,
+		TKN_EQ,		  TKN_TILDE,
+		TKN_LESSTHAN,	  TKN_GREATERTHAN,
+		TKN_COLON,	  TKN_DOT,
+		TKN_COMMA,	  TKN_DOLLAR,
+		TKN_CARET,	  TKN_VERTBAR,
+		TKN_BACKSLASH,	  TKN_QMARK,
+		TKN_HT,		  TKN_CR,
+		TKN_LF,		  TKN_FF,
 	};
 
 	uint32_t length = sizeof(types) / sizeof(types[0]);

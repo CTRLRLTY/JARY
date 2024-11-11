@@ -47,6 +47,26 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 static const char *tkn2string(enum jy_tkn type)
 {
 	switch (type) {
+	case TKN_CR:
+		return "TKN_CR";
+	case TKN_LF:
+		return "TKN_LF";
+	case TKN_FF:
+		return "TKN_FF";
+	case TKN_HT:
+		return "TKN_HT";
+	case TKN_QMARK:
+		return "TKN_QMARK";
+	case TKN_BACKSLASH:
+		return "TKN_BACKSLASH";
+	case TKN_VERTBAR:
+		return "TKN_VERTBAR";
+	case TKN_LEFT_BRACKET:
+		return "TKN_LEFT_BRACKET";
+	case TKN_RIGHT_BRACKET:
+		return "TKN_RIGHT_BRACKET";
+	case TKN_CARET:
+		return "TKN_CARET";
 	case TKN_RESERVED:
 		return "TKN_RESERVED";
 	case TKN_OUTPUT:
@@ -167,9 +187,6 @@ static const char *tkn2string(enum jy_tkn type)
 		return "TKN_CUSTOM";
 	case TKN_EOF:
 		return "TKN_EOF";
-
-	case TOTAL_TKN_TYPES:
-		break;
 	}
 
 	return "UNKOWN";
@@ -276,8 +293,6 @@ static const char *ast2string(enum jy_ast type)
 		return "QACCESS";
 	case AST_EACCESS:
 		return "EACCESS";
-	case TOTAL_AST_TYPES:
-		break;
 	}
 
 	return "UNKNOWN";

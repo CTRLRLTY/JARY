@@ -108,6 +108,38 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 	case '*':
 		*type = TKN_STAR;
 		goto FINISH;
+	case '|':
+		*type = TKN_VERTBAR;
+		goto FINISH;
+	case '\\':
+		switch (*current) {
+		case 'n':
+			*type	 = TKN_LF;
+			current += 1;
+			goto FINISH;
+		case 't':
+			*type	 = TKN_HT;
+			current += 1;
+			goto FINISH;
+		case 'r':
+			*type	 = TKN_CR;
+			current += 1;
+			goto FINISH;
+		case 'f':
+			*type	 = TKN_FF;
+			current += 1;
+			goto FINISH;
+		default:
+			*type = TKN_BACKSLASH;
+			goto FINISH;
+		}
+
+	case '^':
+		*type = TKN_CARET;
+		goto FINISH;
+	case '?':
+		*type = TKN_QMARK;
+		goto FINISH;
 	case '.':
 		if (*current == '.') {
 			*type	 = TKN_CONCAT;
@@ -116,6 +148,12 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 			*type = TKN_DOT;
 		}
 
+		goto FINISH;
+	case '[':
+		*type = TKN_LEFT_BRACKET;
+		goto FINISH;
+	case ']':
+		*type = TKN_RIGHT_BRACKET;
 		goto FINISH;
 	case ',':
 		*type = TKN_COMMA;

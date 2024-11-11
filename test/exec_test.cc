@@ -192,27 +192,18 @@ TEST(ExecTest, MarkModule)
 
 TEST(ExecTest, Join)
 {
-	union jy_value key;
-	struct jy_str *str;
-
 	struct jy_asts	asts  = { .tkns = NULL };
 	struct jy_tkns	tkns  = { .lexemes = NULL };
 	struct tkn_errs errs  = { .from = NULL };
 	struct jy_jay	jay   = { .codes = NULL };
 	struct sc_mem	alloc = { .buf = NULL };
-	struct jy_defs *mark  = NULL;
+	struct sb_mem	bump  = { .buf = NULL };
 	struct sqlite3 *db    = NULL;
 	char	       *src   = NULL;
 	size_t		srcsz = read_file(JOIN_JARY_PATH, &src);
 
-	str = (jy_str *) sc_alloc(&alloc, sizeof(*str) + 6);
 	sc_reap(&alloc, src, free);
 
-	str->size = 5;
-
-	strcpy(str->cstr, "hello");
-
-	key.str		  = str;
 	const char mdir[] = "../modules/";
 
 	jry_parse(&alloc, &asts, &tkns, &errs, src, srcsz);
@@ -222,12 +213,6 @@ TEST(ExecTest, Join)
 	jry_compile(&alloc, &jay, &errs, mdir, &asts, &tkns);
 
 	ASSERT_EQ(errs.size, 0);
-
-	uint32_t id;
-
-	ASSERT_TRUE(def_find(jay.names, "mark", &id));
-
-	mark = jay.names->vals[id].module;
 
 	int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE
 		 | SQLITE_OPEN_READWRITE;
@@ -248,59 +233,38 @@ TEST(ExecTest, Join)
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
 	sql = "INSERT INTO data1 (yes, nein) VALUES ('hello', 'goodbye'), "
-	      "('hello', 'bye?')";
+	      "                                     ('hello', 'bye?');"
+	      "INSERT INTO data2 (no) VALUES ('hello')";
 	err = sqlite3_exec(db, sql, NULL, NULL, &msg);
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	sql = "INSERT INTO data2 (no) VALUES (\"hello\")";
-	err = sqlite3_exec(db, sql, NULL, NULL, &msg);
+	struct jy_state state = { .buf = &alloc, .outm = &bump };
 
-	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
+	ASSERT_EQ(jry_exec(db, &jay, jay.codes, &state), 0);
 
-	ASSERT_EQ(jry_exec(db, &jay, jay.codes, NULL), 0);
-
-	{
-		uint32_t	id;
-		union jy_value	result;
-		struct jy_func *ofunc;
-
-		ASSERT_TRUE(def_find(mark, "count", &id));
-
-		ofunc = mark->vals[id].func;
-
-		// calling count function -> mark.count()
-		ASSERT_EQ(ofunc->func(NULL, 1, &key, &result), 0);
-		ASSERT_EQ(result.i64, 2);
-	}
+	ASSERT_EQ(state.outsz, 2);
+	ASSERT_EQ(state.out[0].i64, 42);
 
 	sqlite3_close_v2(db);
 	sc_free(&alloc);
+	sb_free(&bump);
 }
 
 TEST(ExecTest, Within)
 {
-	union jy_value key;
-	struct jy_str *str;
-
 	struct jy_asts	asts  = { .tkns = NULL };
 	struct jy_tkns	tkns  = { .lexemes = NULL };
 	struct tkn_errs errs  = { .from = NULL };
 	struct jy_jay	jay   = { .codes = NULL };
 	struct sc_mem	alloc = { .buf = NULL };
-	struct jy_defs *mark  = NULL;
+	struct sb_mem	bump  = { .buf = NULL };
 	struct sqlite3 *db    = NULL;
 	char	       *src   = NULL;
 	size_t		srcsz = read_file(WITHIN_JARY_PATH, &src);
 
-	str = (jy_str *) sc_alloc(&alloc, sizeof(*str) + 6);
 	sc_reap(&alloc, src, free);
 
-	str->size = 5;
-
-	strcpy(str->cstr, "hello");
-
-	key.str		  = str;
 	const char mdir[] = "../modules/";
 
 	jry_parse(&alloc, &asts, &tkns, &errs, src, srcsz);
@@ -310,12 +274,6 @@ TEST(ExecTest, Within)
 	jry_compile(&alloc, &jay, &errs, mdir, &asts, &tkns);
 
 	ASSERT_EQ(errs.size, 0);
-
-	uint32_t id;
-
-	ASSERT_TRUE(def_find(jay.names, "mark", &id));
-
-	mark = jay.names->vals[id].module;
 
 	int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE
 		 | SQLITE_OPEN_READWRITE;
@@ -323,58 +281,48 @@ TEST(ExecTest, Within)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << sqlite3_errmsg(db);
 
-	char *sql = "CREATE TABLE data (yes TEXT, __arrival__ "
-		    "INTEGER DEFAULT (unixepoch()));";
+	char *sql = "CREATE TABLE data ("
+		    "   yes TEXT, __arrival__ "
+		    "   INTEGER DEFAULT (unixepoch())"
+		    ");"
+		    "INSERT INTO data (yes) VALUES ('hello');";
 	char *msg = NULL;
 	err	  = sqlite3_exec(db, sql, NULL, NULL, &msg);
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	sql = "INSERT INTO data (yes) VALUES ('hello')";
-	err = sqlite3_exec(db, sql, NULL, NULL, &msg);
+	struct jy_state state = { .buf = &alloc, .outm = &bump };
+	ASSERT_EQ(jry_exec(db, &jay, jay.codes, &state), 0);
 
-	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
+	ASSERT_EQ(state.outsz, 1);
+	ASSERT_EQ(state.out[0].i64, 42);
 
-	ASSERT_EQ(jry_exec(db, &jay, jay.codes, NULL), 0);
+	sleep(2);
 
-	union jy_value	result;
-	struct jy_func *ofunc;
+	ASSERT_EQ(jry_exec(db, &jay, jay.codes, &state), 0);
 
-	ASSERT_TRUE(def_find(mark, "count", &id));
-
-	ofunc = mark->vals[id].func;
-
-	// calling count function -> mark.count()
-	ASSERT_EQ(ofunc->func(NULL, 1, &key, &result), 0);
-	ASSERT_EQ(result.i64, 1);
+	ASSERT_EQ(state.outsz, 1);
+	ASSERT_EQ(state.out[0].i64, 42);
 
 	sqlite3_close_v2(db);
 	sc_free(&alloc);
+	sb_free(&bump);
 }
 
 TEST(ExecTest, Between)
 {
-	union jy_value key;
-	struct jy_str *str;
-
 	struct jy_asts	asts  = { .tkns = NULL };
 	struct jy_tkns	tkns  = { .lexemes = NULL };
 	struct tkn_errs errs  = { .from = NULL };
 	struct jy_jay	jay   = { .codes = NULL };
 	struct sc_mem	alloc = { .buf = NULL };
-	struct jy_defs *mark  = NULL;
+	struct sb_mem	bump  = { .buf = NULL };
 	struct sqlite3 *db    = NULL;
 	char	       *src   = NULL;
 	size_t		srcsz = read_file(BETWEEN_JARY_PATH, &src);
 
-	str = (jy_str *) sc_alloc(&alloc, sizeof(*str) + 6);
 	sc_reap(&alloc, src, free);
 
-	str->size = 5;
-
-	strcpy(str->cstr, "hello");
-
-	key.str		  = str;
 	const char mdir[] = "../modules/";
 
 	jry_parse(&alloc, &asts, &tkns, &errs, src, srcsz);
@@ -384,12 +332,6 @@ TEST(ExecTest, Between)
 	jry_compile(&alloc, &jay, &errs, mdir, &asts, &tkns);
 
 	ASSERT_EQ(errs.size, 0);
-
-	uint32_t id;
-
-	ASSERT_TRUE(def_find(jay.names, "mark", &id));
-
-	mark = jay.names->vals[id].module;
 
 	int flag = SQLITE_OPEN_MEMORY | SQLITE_OPEN_PRIVATECACHE
 		 | SQLITE_OPEN_READWRITE;
@@ -408,21 +350,16 @@ TEST(ExecTest, Between)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	ASSERT_EQ(jry_exec(db, &jay, jay.codes, NULL), 0);
+	struct jy_state state = { .buf = &alloc, .outm = &bump };
 
-	union jy_value	result;
-	struct jy_func *ofunc;
+	ASSERT_EQ(jry_exec(db, &jay, jay.codes, &state), 0);
 
-	ASSERT_TRUE(def_find(mark, "count", &id));
-
-	ofunc = mark->vals[id].func;
-
-	// calling count function -> mark.count()
-	ASSERT_EQ(ofunc->func(NULL, 1, &key, &result), 0);
-	ASSERT_EQ(result.i64, 1);
+	ASSERT_EQ(state.outsz, 1);
+	ASSERT_EQ(state.out[0].i64, 42);
 
 	sqlite3_close_v2(db);
 	sc_free(&alloc);
+	sb_free(&bump);
 }
 
 TEST(ExecTest, ExactEqual)

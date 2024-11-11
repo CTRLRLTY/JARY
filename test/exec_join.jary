@@ -1,23 +1,23 @@
 import mark
 
 ingress data1 {
-       field:
-               yes string
-               nein string
+        field:
+                yes string
+                nein string
 }
 
 ingress data2 {
-       field:
-               no string
+        field:
+                no string
 }
 
 rule bye {
-       match:
+        match:
                 $data1.yes join $data2.no 
 
-       condition:
+        condition:
                 $data1.yes == "hello"
 
-       action:
-               mark.mark("hello")
+        output:
+                42
 }

@@ -2,14 +2,15 @@ import mark
 
 ingress data {
        field:
-               yes string
+                yes string
 }
 
 rule bye {
-       match:
+        match:
                 $data.yes exact "hello" 
-                $data within 10s 
+                $data within 1s 
 
-       action:
-               mark.mark("hello")
+
+        output:
+                42
 }

@@ -208,27 +208,29 @@ static inline void next(struct jy_tkns *tkns,
 	*src   = end;
 	*srcsz = (*srcsz > read) ? *srcsz - read : 0;
 
-	uint32_t lexsz;
-	char	*lex;
+	uint32_t lexsz = read;
 
 	switch (type) {
+	case TKN_IDENTIFIER:
+		type = jry_keyword(start, lexsz);
+		break;
 	case TKN_NEWLINE:
 		line += read - 1;
-		// INTENTIONAL FALLTHROUGH
+		break;
 	default:
-		lexsz = read;
-		lex   = jry_alloc(lexsz + 1);
-
-		// you are screwed.
-		if (lex == NULL)
-			goto PANIC;
-
-		memcpy(lex, start, lexsz);
-
-		lex[lexsz] = '\0';
-		*tkn	   = tkns->size;
 		break;
 	}
+
+	char *lex = jry_alloc(lexsz + 1);
+
+	// you are screwed.
+	if (lex == NULL)
+		goto PANIC;
+
+	memcpy(lex, start, lexsz);
+
+	lex[lexsz] = '\0';
+	*tkn	   = tkns->size;
 
 	if (push_tkn(tkns, type, line, ofs, lex, lexsz) != 0)
 		goto PANIC;

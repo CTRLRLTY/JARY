@@ -255,180 +255,160 @@ const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type)
 	while (!ENDED() && (isalnum(CURRENT()) || CURRENT() == '_'))
 		(void) NEXT();
 
-#define KEYWORD(__base, __target, __len)                                       \
-	current == (__base) + (__len)                                          \
-		&& memcmp((__base), (__target), (__len)) == 0
-
-	switch (start[0]) {
-	case 'a':
-		if (start[1] == 's')
-			*type = TKN_ALIAS;
-		else if (KEYWORD(start + 1, "ll", 2))
-			*type = TKN_ALL;
-		else if (KEYWORD(start + 1, "nd", 2))
-			*type = TKN_AND;
-		else if (KEYWORD(start + 1, "ny", 2))
-			*type = TKN_ANY;
-		else if (KEYWORD(start + 1, "ction", 5))
-			*type = TKN_JUMP;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'b':
-		if (KEYWORD(start + 1, "ool", 3))
-			*type = TKN_BOOL_TYPE;
-		else if (KEYWORD(start + 1, "etween", 6))
-			*type = TKN_BETWEEN;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'c':
-		if (KEYWORD(start + 1, "ondition", 8))
-			*type = TKN_CONDITION;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'e':
-		if (KEYWORD(start + 1, "xact", 4))
-			*type = TKN_EXACT;
-		else if (KEYWORD(start + 1, "qual", 4))
-			*type = TKN_EQUAL;
-		else if (KEYWORD(start + 1, "lse", 3))
-			*type = TKN_RESERVED;
-		else if (KEYWORD(start + 1, "lif", 3))
-			*type = TKN_RESERVED;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'f':
-		if (KEYWORD(start + 1, "alse", 4))
-			*type = TKN_FALSE;
-		// fi
-		else if (KEYWORD(start + 1, "i", 1))
-			*type = TKN_RESERVED;
-		else if (KEYWORD(start + 1, "ield", 4))
-			*type = TKN_FIELD;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'g':
-		// gt
-		if (KEYWORD(start + 1, "t", 1))
-			*type = TKN_RESERVED;
-		// gte
-		else if (KEYWORD(start + 1, "te", 2))
-			*type = TKN_RESERVED;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'l':
-		if (KEYWORD(start + 1, "ong", 3))
-			*type = TKN_LONG_TYPE;
-		// lt
-		else if (KEYWORD(start + 1, "t", 1))
-			*type = TKN_RESERVED;
-		// lte
-		else if (KEYWORD(start + 1, "te", 2))
-			*type = TKN_RESERVED;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'o':
-		if (start[1] == 'r')
-			*type = TKN_OR;
-		else if (KEYWORD(start + 1, "utput", 5))
-			*type = TKN_OUTPUT;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'i':
-		if (KEYWORD(start + 1, "n", 1))
-			*type = TKN_RESERVED;
-		else if (KEYWORD(start + 1, "nclude", 6))
-			*type = TKN_INCLUDE;
-		else if (KEYWORD(start + 1, "ngress", 6))
-			*type = TKN_INGRESS;
-		else if (KEYWORD(start + 1, "nput", 4))
-			*type = TKN_INPUT;
-		else if (KEYWORD(start + 1, "mport", 5))
-			*type = TKN_IMPORT;
-		// if
-		else if (KEYWORD(start + 1, "f", 1))
-			*type = TKN_RESERVED;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'j':
-		if (KEYWORD(start + 1, "oin", 3))
-			*type = TKN_JOINX;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 't':
-		if (KEYWORD(start + 1, "rue", 3))
-			*type = TKN_TRUE;
-		// then
-		else if (KEYWORD(start + 1, "hen", 3))
-			*type = TKN_RESERVED;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'r':
-		if (KEYWORD(start + 1, "ule", 3))
-			*type = TKN_RULE;
-		else if (KEYWORD(start + 1, "egex", 4))
-			*type = TKN_REGEX;
-		// range
-		else if (KEYWORD(start + 1, "ange", 4))
-			*type = TKN_RESERVED;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'm':
-		if (KEYWORD(start + 1, "atch", 4))
-			*type = TKN_MATCH;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'n':
-		if (KEYWORD(start + 1, "ot", 2))
-			*type = TKN_NOT;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 'w':
-		if (KEYWORD(start + 1, "ithin", 5))
-			*type = TKN_WITHIN;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	case 's':
-		if (KEYWORD(start + 1, "tring", 5))
-			*type = TKN_STRING_TYPE;
-		else
-			goto IDENTIFIER;
-
-		goto FINISH;
-	}
-
-IDENTIFIER:
 	*type = TKN_IDENTIFIER;
 
 FINISH:
 	return current;
+
+#undef READ
+#undef ENDED
+#undef PREV
+#undef CURRENT
+#undef NEXT
+}
+
+enum jy_tkn jry_keyword(const char *ident, uint32_t length)
+{
+#define KEYWORD(__base, __target, __len)                                       \
+	length - ((__base) - ident) == (__len)                                 \
+		&& memcmp((__base), (__target), (__len)) == 0
+
+	switch (ident[0]) {
+	case 'a':
+		if (ident[1] == 's')
+			return TKN_ALIAS;
+		else if (KEYWORD(ident + 1, "ll", 2))
+			return TKN_ALL;
+		else if (KEYWORD(ident + 1, "nd", 2))
+			return TKN_AND;
+		else if (KEYWORD(ident + 1, "ny", 2))
+			return TKN_ANY;
+		else if (KEYWORD(ident + 1, "ction", 5))
+			return TKN_JUMP;
+
+		break;
+	case 'b':
+		if (KEYWORD(ident + 1, "ool", 3))
+			return TKN_BOOL_TYPE;
+		else if (KEYWORD(ident + 1, "etween", 6))
+			return TKN_BETWEEN;
+
+		break;
+	case 'c':
+		if (KEYWORD(ident + 1, "ondition", 8))
+			return TKN_CONDITION;
+
+		break;
+	case 'e':
+		if (KEYWORD(ident + 1, "xact", 4))
+			return TKN_EXACT;
+		else if (KEYWORD(ident + 1, "qual", 4))
+			return TKN_EQUAL;
+		else if (KEYWORD(ident + 1, "lse", 3))
+			return TKN_RESERVED;
+		else if (KEYWORD(ident + 1, "lif", 3))
+			return TKN_RESERVED;
+
+		break;
+	case 'f':
+		if (KEYWORD(ident + 1, "alse", 4))
+			return TKN_FALSE;
+		// fi
+		else if (KEYWORD(ident + 1, "i", 1))
+			return TKN_RESERVED;
+		else if (KEYWORD(ident + 1, "ield", 4))
+			return TKN_FIELD;
+
+		break;
+	case 'g':
+		// gt
+		if (KEYWORD(ident + 1, "t", 1))
+			return TKN_RESERVED;
+		// gte
+		else if (KEYWORD(ident + 1, "te", 2))
+			return TKN_RESERVED;
+
+		break;
+	case 'l':
+		if (KEYWORD(ident + 1, "ong", 3))
+			return TKN_LONG_TYPE;
+		// lt
+		else if (KEYWORD(ident + 1, "t", 1))
+			return TKN_RESERVED;
+		// lte
+		else if (KEYWORD(ident + 1, "te", 2))
+			return TKN_RESERVED;
+
+		break;
+	case 'o':
+		if (ident[1] == 'r')
+			return TKN_OR;
+		else if (KEYWORD(ident + 1, "utput", 5))
+			return TKN_OUTPUT;
+
+		break;
+	case 'i':
+		if (KEYWORD(ident + 1, "n", 1))
+			return TKN_RESERVED;
+		else if (KEYWORD(ident + 1, "nclude", 6))
+			return TKN_INCLUDE;
+		else if (KEYWORD(ident + 1, "ngress", 6))
+			return TKN_INGRESS;
+		else if (KEYWORD(ident + 1, "nput", 4))
+			return TKN_INPUT;
+		else if (KEYWORD(ident + 1, "mport", 5))
+			return TKN_IMPORT;
+		// if
+		else if (KEYWORD(ident + 1, "f", 1))
+			return TKN_RESERVED;
+
+		break;
+	case 'j':
+		if (KEYWORD(ident + 1, "oin", 3))
+			return TKN_JOINX;
+
+		break;
+	case 't':
+		if (KEYWORD(ident + 1, "rue", 3))
+			return TKN_TRUE;
+		// then
+		else if (KEYWORD(ident + 1, "hen", 3))
+			return TKN_RESERVED;
+
+		break;
+	case 'r':
+		if (KEYWORD(ident + 1, "ule", 3))
+			return TKN_RULE;
+		else if (KEYWORD(ident + 1, "egex", 4))
+			return TKN_REGEX;
+		// range
+		else if (KEYWORD(ident + 1, "ange", 4))
+			return TKN_RESERVED;
+
+		break;
+	case 'm':
+		if (KEYWORD(ident + 1, "atch", 4))
+			return TKN_MATCH;
+
+		break;
+	case 'n':
+		if (KEYWORD(ident + 1, "ot", 2))
+			return TKN_NOT;
+
+		break;
+	case 'w':
+		if (KEYWORD(ident + 1, "ithin", 5))
+			return TKN_WITHIN;
+
+		break;
+	case 's':
+		if (KEYWORD(ident + 1, "tring", 5))
+			return TKN_STRING_TYPE;
+
+		break;
+	}
+
+	return TKN_IDENTIFIER;
+
+#undef KEYWORD
 }

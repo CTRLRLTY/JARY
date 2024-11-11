@@ -37,5 +37,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdint.h>
 
 const char *jry_scan(const char *start, uint32_t length, enum jy_tkn *type);
+enum jy_tkn jry_keyword(const char *ident, uint32_t length);
 
 #endif // JAYVM_SCAN_H

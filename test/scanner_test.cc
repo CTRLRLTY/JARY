@@ -133,10 +133,13 @@ TEST(ScannerTest, ScanKeyword)
 
 	for (int i = 0; i < keywordsz; ++i) {
 		enum jy_tkn type;
-		const char *start = keyword[i].lex, *end = NULL;
+		const char *start = keyword[i].lex;
 		// + 1 include '\0'
 		size_t	    strsz = strlen(keyword[i].lex) + 1;
-		end		  = jry_scan(start, strsz, &type);
+		const char *end	  = jry_scan(start, strsz, &type);
+		uint32_t    read  = end - start;
+
+		type = jry_keyword(start, read);
 
 		ASSERT_EQ(type, keyword[i].type) << keyword[i].lex;
 		ASSERT_EQ(memcmp(keyword[i].lex, start, end - start), 0);

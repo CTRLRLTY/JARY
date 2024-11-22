@@ -32,7 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <gtest/gtest.h>
 
 extern "C" {
-#include "scanner.h"
+#include "jay/scanner.h"
 }
 
 TEST(ScannerTest, ScanEOF)

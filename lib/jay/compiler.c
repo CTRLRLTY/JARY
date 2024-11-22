@@ -1716,7 +1716,6 @@ static inline bool _rule_decl(const struct jy_asts *asts,
 	// patch jumps to END
 	for (uint32_t i = 0; i < patchsz; ++i) {
 		uint32_t ofs = patchofs[i];
-		// TODO: Handle long jump scenario
 		short	 jmp = (short) (*ctx.codesz - ofs + 1);
 
 		memcpy(*ctx.codes + ofs, &jmp, sizeof(jmp));

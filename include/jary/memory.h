@@ -111,4 +111,14 @@ int   sc_strfmt(struct sc_mem *alloc, char **str, const char *fmt, ...);
 int   sc_reap(struct sc_mem *alloc, void *buf, free_t expire);
 void  sc_free(struct sc_mem *alloc);
 
+static inline struct sb_mem *sc_linbuf(struct sc_mem *alloc)
+{
+	void *ptr = sc_alloc(alloc, sizeof(struct sb_mem));
+
+	if (sc_reap(alloc, ptr, (free_t) sb_free))
+		return 0;
+
+	return (struct sb_mem *) ptr;
+}
+
 #endif // JAYVM_MEM_H

@@ -28,17 +28,39 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 add_executable( jassy )
+add_executable( regdmp )
 
-target_sources( jassy PRIVATE jassy/jassy.c )
+target_sources( jassy PRIVATE jassy.c )
+target_sources( regdmp 
+        PRIVATE 
+        regdmp.c
+
+        ${CMAKE_SOURCE_DIR}/lib/jay/memory.c
+)
+
+target_include_directories( regdmp 
+        PRIVATE
+        ${CMAKE_SOURCE_DIR}/lib/
+        ${CMAKE_SOURCE_DIR}/include
+)
+
+target_include_directories( jassy 
+        PRIVATE
+        ${CMAKE_SOURCE_DIR}/lib/
+        ${CMAKE_SOURCE_DIR}/include
+)
 
 target_link_libraries( jassy PRIVATE compiler )
 
 if ( SCRUTINY AND CMAKE_C_COMPILER_ID STREQUAL "GNU" )
         target_compile_options( jassy BEFORE PRIVATE -fanalyzer )
+        target_compile_options( regdmp BEFORE PRIVATE -fanalyzer )
 endif()
 
 if ( SANITIZE AND UNIX AND CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$" )
         target_link_options( jassy BEFORE PRIVATE -fsanitize=address -fno-omit-frame-pointer )
+        target_link_options( regdmp BEFORE PRIVATE -fsanitize=address -fno-omit-frame-pointer )
 endif()
 
 set_target_properties( jassy PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/ )
+set_target_properties( regdmp PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/ )

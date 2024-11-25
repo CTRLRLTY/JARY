@@ -116,6 +116,9 @@ IfMacros:
   - KJ_IF_MAYBE
 IncludeBlocks:   Regroup
 IncludeCategories:
+  - Regex: '^"jay/'
+    Priority: 1
+    CaseSensitive: true
   - Regex: '^"jary/'
     Priority: 2
     CaseSensitive: true

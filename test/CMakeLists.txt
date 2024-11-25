@@ -50,6 +50,30 @@ add_executable( compiler_test compiler_test.cc )
 add_executable( exec_test exec_test.cc )
 add_executable( jary_test jary_test.cc )
 
+target_include_directories( scanner_test
+        PRIVATE
+        ${CMAKE_SOURCE_DIR}/lib/
+)
+
+target_include_directories( parser_test 
+        PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/lib/
+)
+
+target_include_directories( compiler_test 
+        PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/lib/
+)
+
+target_include_directories( exec_test 
+        PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/lib/
+)
+
+
 target_compile_definitions( compiler_test 
         PUBLIC 
         BASIC_JARY_PATH="$<TARGET_FILE_DIR:compiler_test>/compiler_basic.jary" 

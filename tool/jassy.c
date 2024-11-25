@@ -29,12 +29,12 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "ast.h"
-#include "compiler.h"
-#include "dload.h"
-#include "error.h"
-#include "parser.h"
-#include "token.h"
+#include "jay/ast.h"
+#include "jay/compiler.h"
+#include "jay/dload.h"
+#include "jay/error.h"
+#include "jay/parser.h"
+#include "jay/token.h"
 
 #include "jary/defs.h"
 #include "jary/memory.h"
@@ -999,7 +999,6 @@ static void run_file(const char *path, const char *dirpath)
 	printf("\n");
 
 	if (errs.size) {
-		/*int sz	= print_errors(&errs, &tkns, path);*/
 		int sz = prerrors(0, NULL, &errs, &tkns, path);
 
 		char buf[sz];

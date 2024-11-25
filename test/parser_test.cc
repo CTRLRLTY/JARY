@@ -32,10 +32,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <gtest/gtest.h>
 
 extern "C" {
-#include "ast.h"
-#include "error.h"
-#include "parser.h"
-#include "token.h"
+#include "jay/ast.h"
+#include "jay/error.h"
+#include "jay/parser.h"
+#include "jay/token.h"
 
 #include "jary/memory.h"
 }

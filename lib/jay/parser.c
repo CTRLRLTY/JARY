@@ -1444,15 +1444,15 @@ static bool _precedence(struct parser	*p,
 		goto PANIC;
 	}
 
-	enum jy_tkn inftype  = tkns->types[p->tkn];
-	enum prec   nextprec = tkn_prec(inftype);
+	enum jy_tkn inftype = tkns->types[p->tkn];
+	enum prec   lbp	    = tkn_prec(inftype);
 
-	while (rbp < nextprec) {
+	while (rbp < lbp) {
 		if (_infix(inftype, p, asts, tkns, errs, root))
 			goto PANIC;
 
-		inftype	 = tkns->types[p->tkn];
-		nextprec = tkn_prec(inftype);
+		inftype = tkns->types[p->tkn];
+		lbp	= tkn_prec(inftype);
 	}
 
 	return ended(tkns->types, tkns->size);

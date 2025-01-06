@@ -84,6 +84,7 @@ TEST(ExecTest, MarkModule)
 	struct tkn_errs errs  = { .from = NULL };
 	struct jy_jay	jay   = { .codes = NULL };
 	struct sc_mem	alloc = { .buf = NULL };
+	struct sb_mem	bump  = { .buf = NULL };
 	struct jy_defs *mark  = NULL;
 	struct sqlite3 *db    = NULL;
 	char	       *src   = NULL;
@@ -170,7 +171,8 @@ TEST(ExecTest, MarkModule)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	ASSERT_EQ(jry_exec(db, &jay, jay.codes, NULL), 0);
+	struct jy_state state = { .lifetime = &alloc, .outm = &bump };
+	ASSERT_EQ(jry_exec(db, &jay, jay.codes, &state), 0);
 
 	{
 		uint32_t	id;
@@ -239,7 +241,7 @@ TEST(ExecTest, Join)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	struct jy_state state = { .buf = &alloc, .outm = &bump };
+	struct jy_state state = { .lifetime = &alloc, .outm = &bump };
 
 	ASSERT_EQ(jry_exec(db, &jay, jay.codes, &state), 0);
 
@@ -291,7 +293,7 @@ TEST(ExecTest, Within)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	struct jy_state state = { .buf = &alloc, .outm = &bump };
+	struct jy_state state = { .lifetime = &alloc, .outm = &bump };
 	ASSERT_EQ(jry_exec(db, &jay, jay.codes, &state), 0);
 
 	ASSERT_EQ(state.outsz, 1);
@@ -350,7 +352,7 @@ TEST(ExecTest, Between)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	struct jy_state state = { .buf = &alloc, .outm = &bump };
+	struct jy_state state = { .lifetime = &alloc, .outm = &bump };
 
 	ASSERT_EQ(jry_exec(db, &jay, jay.codes, &state), 0);
 
@@ -400,7 +402,7 @@ TEST(ExecTest, ExactEqual)
 
 	ASSERT_EQ(err, SQLITE_OK) << "msg: " << msg;
 
-	struct jy_state state = { .buf = &alloc, .outm = &bump };
+	struct jy_state state = { .lifetime = &alloc, .outm = &bump };
 
 	ASSERT_EQ(jry_exec(db, &jay, jay.codes, &state), 0);
 

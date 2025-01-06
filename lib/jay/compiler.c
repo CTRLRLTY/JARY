@@ -293,7 +293,6 @@ static inline bool _string_expr(const struct jy_asts *asts,
 			continue;
 
 		expr->id = i;
-
 		goto EMIT;
 	}
 
@@ -315,6 +314,7 @@ EMIT:
 		goto PANIC;
 
 	expr->type = JY_K_STR;
+	jry_free(cstr);
 
 	return false;
 PANIC:

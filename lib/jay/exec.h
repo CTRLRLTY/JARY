@@ -39,7 +39,7 @@ struct jy_jay;
 
 struct jy_state {
 	union jy_value *out;
-	struct sc_mem  *buf;
+	struct sc_mem  *lifetime;
 	struct sb_mem  *outm;
 	uint16_t	outsz;
 };

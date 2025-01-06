@@ -68,7 +68,6 @@ struct stack {
 struct match_data {
 	struct jy_defs	     *names;
 	const uint8_t	     *codes;
-	struct sc_mem	     *alloc;
 	const union jy_value *vals;
 	struct jy_state *restrict state;
 };
@@ -179,8 +178,8 @@ static inline int match_clbk(struct match_data *data,
 {
 	int		      ret   = SQLITE_OK;
 	struct jy_defs	     *names = data->names;
-	struct sc_mem	     *alloc = data->alloc;
 	const uint8_t	     *codes = data->codes;
+	struct jy_state	     *state = data->state;
 	const union jy_value *vals  = data->vals;
 	struct runtime	      ctx   = {
 			 .names = names,
@@ -221,14 +220,13 @@ static inline int match_clbk(struct match_data *data,
 			goto PANIC;
 
 		// TODO: Handle error message
-		if (value_from_cstr(alloc, &view, type, values[i]))
+		if (value_from_cstr(state->lifetime, &view, type, values[i]))
 			goto PANIC;
 
 		if (def_set(event, member, view, type))
 			goto PANIC;
 	}
 
-	struct jy_state *state = data->state;
 	for (; **ctx.pc != JY_OP_END;)
 		switch (interpret(&ctx, state)) {
 		case 0:
@@ -265,8 +263,7 @@ static inline int interpret(struct runtime *ctx,
 	struct stack  *stack  = &ctx->stack;
 	union flag8   *flag   = &ctx->flag;
 	struct sc_mem *rbuf   = &ctx->buf;
-	struct sc_mem *sbuf   = state ? state->buf : rbuf;
-	struct sc_mem  bump   = { .buf = NULL };
+	struct sc_mem *sbuf   = state ? state->lifetime : rbuf;
 	const uint8_t *pc     = *code;
 	enum jy_opcode opcode = *pc;
 
@@ -334,7 +331,6 @@ static inline int interpret(struct runtime *ctx,
 
 		break;
 	}
-
 	case JY_OP_JMPF:
 		if (!flag->bits.b8)
 			pc += *arg.i16;
@@ -362,7 +358,6 @@ static inline int interpret(struct runtime *ctx,
 		pc += 1;
 		break;
 	}
-
 	case JY_OP_OUTPUT: {
 		uint64_t       length = pop(stack).u64;
 		union jy_value values[length];
@@ -555,7 +550,6 @@ static inline int interpret(struct runtime *ctx,
 
 		struct match_data data = {
 			.names = names,
-			.alloc = &bump,
 			.codes = chunk,
 			.vals  = vals,
 			.state = state,
@@ -692,8 +686,6 @@ INVARIANT:
 	ret = 3;
 
 FINISH:
-	sc_free(&bump);
-
 	// PC is not moving...
 	assert(pc != *code);
 

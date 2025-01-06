@@ -215,10 +215,11 @@ static inline int prcrtevt(int bufsz,
 	}
 
 	if (buf) {
-		buf[sz - 1]  = ')';
-		buf[sz]	     = ';';
-		sz	    += 1;
+		buf[sz - 1] = ')';
+		buf[sz]	    = ';';
 	}
+
+	sz += 1;
 
 	return sz;
 
@@ -263,10 +264,11 @@ static inline int prinsevt(int bufsz,
 	}
 
 	if (buf) {
-		buf[sz - 1]  = ')';
-		buf[sz]	     = ';';
-		sz	    += 1;
+		buf[sz - 1] = ')';
+		buf[sz]	    = ';';
 	}
+
+	sz += 1;
 
 	return sz;
 #undef SIZE
@@ -1101,7 +1103,7 @@ int jary_execute(struct jary *jary)
 	int (*const *clbks)(void *, const struct jyOutput *) = jary->r_clbks;
 
 	for (size_t i = 0; i < jay->rulesz; ++i) {
-		struct jy_state state = { .buf = &sc, .outm = &outmem };
+		struct jy_state state = { .lifetime = &sc, .outm = &outmem };
 		size_t		ofs   = jay->rulecofs[i];
 		uint8_t	       *code  = jay->codes + ofs;
 

@@ -51,22 +51,22 @@ if( CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$" )
 endif()
 
 target_include_directories( scanner 
-        PUBLIC 
+        PRIVATE 
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/lib/jay
 )
 target_include_directories( parser 
-        PUBLIC 
+        PRIVATE 
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/lib/jay
 )
 target_include_directories( compiler 
-        PUBLIC 
+        PRIVATE 
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/lib/jay
 )
 target_include_directories( exec 
-        PUBLIC 
+        PRIVATE 
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/lib/jay
 )

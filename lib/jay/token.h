@@ -65,6 +65,7 @@ enum jy_tkn {
 	TKN_IMPORT,
 	TKN_INCLUDE,
 	TKN_INGRESS,
+	TKN_EVENT,
 
 	// > SECTIONS
 	TKN_JUMP,

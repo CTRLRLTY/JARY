@@ -31,6 +31,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "scanner.h"
 
+#include "token.h"
+
 #include <ctype.h>
 #include <stdbool.h>
 #include <string.h>
@@ -302,6 +304,9 @@ enum jy_tkn jry_keyword(const char *ident, uint32_t length)
 	case 'e':
 		if (KEYWORD(ident + 1, "xact", 4))
 			return TKN_EXACT;
+		// event
+		else if (KEYWORD(ident + 1, "vent", 4))
+			return TKN_EVENT;
 		else if (KEYWORD(ident + 1, "qual", 4))
 			return TKN_EQUAL;
 		else if (KEYWORD(ident + 1, "lse", 3))

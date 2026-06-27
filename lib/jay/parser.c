@@ -34,6 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ast.h"
 #include "error.h"
 #include "scanner.h"
+#include "token.h"
 
 #include "jary/common.h"
 #include "jary/memory.h"
@@ -55,6 +56,7 @@ TKN_INPUT:                                                                     \
 
 #define CASE_TKN_DECL                                                          \
 TKN_RULE:                                                                      \
+	case TKN_EVENT:                                                        \
 	case TKN_IMPORT:                                                       \
 	case TKN_INGRESS:                                                      \
 	case TKN_INCLUDE
@@ -797,6 +799,7 @@ static inline bool _declstmt(struct parser   *p,
 			goto PANIC;
 
 		break;
+	case TKN_EVENT:
 	case TKN_INGRESS:
 		asts->types[declast] = AST_INGRESS_DECL;
 

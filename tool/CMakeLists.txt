@@ -34,7 +34,7 @@ target_sources( jassy PRIVATE jassy/jassy.c )
 target_link_libraries( jassy PRIVATE compiler )
 
 if ( SCRUTINY AND CMAKE_C_COMPILER_ID STREQUAL "GNU" )
-        target_compile_options( jassy BEFORE PRIVATE -fanalyzer )
+        target_compile_options( jassy BEFORE PRIVATE -Xanalyzer )
 endif()
 
 if ( SANITIZE AND UNIX AND CMAKE_C_COMPILER_ID MATCHES "^(Clang|GNU)$" )

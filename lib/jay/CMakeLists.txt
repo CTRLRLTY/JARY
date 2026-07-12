@@ -90,11 +90,11 @@ endif()
 
 
 if ( SCRUTINY AND CMAKE_C_COMPILER_ID STREQUAL "GNU" )
-        target_compile_options( parser BEFORE PRIVATE -fanalyzer )
-        target_compile_options( scanner BEFORE PRIVATE -fanalyzer )
-        target_compile_options( compiler BEFORE PRIVATE -fanalyzer )
-        target_compile_options( exec BEFORE PRIVATE -fanalyzer )
-        target_compile_options( jary BEFORE PRIVATE -fanalyzer )
+        target_compile_options( parser BEFORE PRIVATE -Xanalyzer )
+        target_compile_options( scanner BEFORE PRIVATE -Xanalyzer )
+        target_compile_options( compiler BEFORE PRIVATE -Xanalyzer )
+        target_compile_options( exec BEFORE PRIVATE -Xanalyzer )
+        target_compile_options( jary BEFORE PRIVATE -Xanalyzer )
 endif()
 
 

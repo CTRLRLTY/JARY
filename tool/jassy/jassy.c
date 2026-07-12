@@ -113,6 +113,8 @@ static const char *tkn2string(enum jy_tkn type)
 		return "TKN_NEWLINE";
 	case TKN_IMPORT:
 		return "TKN_IMPORT";
+	case TKN_EVENT:
+		return "TKN_EVENT";
 	case TKN_RULE:
 		return "TKN_RULE";
 	case TKN_INCLUDE:
